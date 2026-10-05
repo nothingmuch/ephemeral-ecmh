@@ -74,6 +74,10 @@ FAMILIES = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
+    "fp127": ("fp127", 127),
+    "edwards127": ("edwards127", 127),
+    "weier127": ("weier127", 127),
+    "weier127-jacobian": ("weier127", 127),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -92,9 +96,15 @@ SPELLINGS = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
+    "edwards.127": "edwards127",
+    "weier.127": "weier127",
+    "weier-jacobian.127": "weier127-jacobian",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
+    "fp": "fp127",
+    "edwards": "edwards127",
+    "weier": "weier127",
 }
 # (regex on the group, spelling, family): spellings some groups use for
 # another family: Ristretto's input digest is a step of its hash.
@@ -125,6 +135,9 @@ def curve(family: str) -> str:
 # vision deficiencies; the baseline is grey.
 COLORS = {
     "gf2_127": "#4e79a7",
+    "weier127": "#f28e2b",
+    "edwards127": "#59a14f",
+    "fp127": "#b6992d",
     "xor": "#79706e",
     "ristretto255": "#b07aa1",
     "secp256k1": "#9d7660",
@@ -132,6 +145,9 @@ COLORS = {
 }
 LIGHT = {
     "gf2_127": "#a0cbe8",
+    "weier127": "#ffbe7d",
+    "edwards127": "#8cd17d",
+    "fp127": "#f1ce63",
     "xor": "#bab0ac",
     "ristretto255": "#d4a6c8",
     "secp256k1": "#d7b5a6",
@@ -141,6 +157,9 @@ LIGHT = {
 FAMILY_ORDER = [
     "xor",
     "gf2_127",
+    "fp127",
+    "edwards127",
+    "weier127",
     "ristretto255",
     "secp256k1",
     OTHER,
@@ -189,8 +208,10 @@ OPERATIONS = [
     (r"^digest", r"", "digest"),
     (r"^curvegen/verify_accept", r"", "accept certificate"),
     (r"^curvegen/verify_full", r"", "verify certificate"),
+    (r"^curvegen/embedding", r"", "embedding-degree bound"),
     (r"^curvegen/find", r"agm", "find (Rust: AGM + sieve)"),
     (r"^curvegen/certify", r"agm", "certify (Rust: AGM + sieve + order witnesses)"),
+    (r"^curvegen/count", r"", "point count (PARI)"),
     (r"^agm", r"order", "point count (Rust AGM)"),
     (r"^agm", r"", "AGM steps"),
     (r"^zq", r"", "Z_q ring op"),
@@ -268,6 +289,7 @@ ALSO = {
 # curves with
 FIELDS = {
     "gf2_127": "gf2_127",
+    "fp127": "fp127",
 }
 CURVES = [
     "xor",
@@ -275,6 +297,9 @@ CURVES = [
     "gf2_127-lambda",
     "gf2_127-w",
     "gf2_127-u",
+    "edwards127",
+    "weier127",
+    "weier127-jacobian",
     "ristretto255",
     "secp256k1",
 ]
@@ -307,6 +332,14 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "F_p, p = 2^127 − 1, 16 bytes",
+        [
+            ("edwards127", "a = 1 Edwards, extended += cached"),
+            ("weier127", "short Weierstrass, projective += affine"),
+            ("weier127-jacobian", "short Weierstrass, Jacobian += affine"),
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -314,13 +347,19 @@ CURVE_GROUPS = [
         ],
     ),
 ]
-FIELD_GROUPS = [("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")])]
+FIELD_GROUPS = [
+    ("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")]),
+    ("prime", [("fp127", "p = 2^127 − 1")]),
+]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {
     "gf2_127": "gf2_127",
     "gf2_127-lambda": "gf2_127",
     "gf2_127-w": "gf2_127",
     "gf2_127-u": "gf2_127",
+    "edwards127": "fp127",
+    "weier127": "fp127",
+    "weier127-jacobian": "fp127",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

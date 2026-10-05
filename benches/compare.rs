@@ -4,21 +4,23 @@
 //!   nix develop -c cargo bench --bench compare
 //!
 //! Curve fixtures have seed-derived dense parameters from
-//! `tests/common/kats.rs`.
+//! `tests/common/kats.rs`; `curvegen.rs` times their certificate verification.
 //! Most iterations process N synthetic 36-byte items. Criterion records the
 //! iteration time and element throughput; the report normalizes per element.
 //! Ristretto255, libsecp256k1, and XOR-SHA256 provide fixed-group and hash
 //! references with the specific APIs measured below.
 
 mod common;
-use common::{each, whole};
+use common::{each, packing, whole};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use ephemeral_ecmh::curve::h2c::map1;
-use ephemeral_ecmh::curve::{binary, binary127};
+use ephemeral_ecmh::curve::h2c::{Elligator2, map1};
+use ephemeral_ecmh::curve::weier::Sswu;
+use ephemeral_ecmh::curve::{binary, binary127, edwards127, weier127};
 use ephemeral_ecmh::ecmh::digest_batch;
-use ephemeral_ecmh::field::gf2_127::{self, Gf, from_u128};
+use ephemeral_ecmh::field::fp127::Fp;
+use ephemeral_ecmh::field::gf2_127::{self, Gf, MASK127, from_u128};
 use ephemeral_ecmh::hash::{Salted, halves};
 use secp256k1::PublicKey;
 use secp256k1::ellswift::ElligatorSwift;
@@ -32,6 +34,8 @@ const ACCS: usize = 8;
 struct Setup {
     seed: [u8; 32],
     bin: binary127::Curve,
+    ed: edwards127::Curve,
+    wei: weier127::OddCurve,
     salt: Salted,
     items: Vec<[u8; 36]>,
     /// the first digest half of each item: a hash-to-curve candidate
@@ -40,7 +44,11 @@ struct Setup {
 
 fn setup() -> Setup {
     let bin = common::families::binary127();
+    let ed = common::families::edwards127();
+    let wei = common::families::weier127();
     let seed = bin.seed;
+    assert_eq!(seed, ed.seed);
+    assert_eq!(seed, wei.seed);
     let salt = Salted::new(ephemeral_ecmh::ecmh::TAG_ITEM, &seed);
     let items = common::items(&[], N);
     let cands = items
@@ -50,6 +58,8 @@ fn setup() -> Setup {
     Setup {
         seed,
         bin: bin.group,
+        ed: ed.group,
+        wei: wei.group,
         salt,
         items,
         cands,
@@ -63,7 +73,11 @@ impl Setup {
     fn gf2_127_xs(&self) -> Vec<Gf> {
         self.cands.iter().map(|&c| from_u128(c | 1)).collect()
     }
+    fn fp127_xs(&self) -> Vec<Fp> {
+        self.cands.iter().map(|&c| Fp::new(c & MASK127)).collect()
+    }
 }
+
 /// Try-and-increment through libsecp256k1's compressed-point parser.
 /// The fixed 0x02 prefix selects one y-coordinate sign, so the output
 /// covers one representative of each sign pair.
@@ -91,7 +105,7 @@ fn secp_ellswift(h: &Salted, m: &[u8]) -> PublicKey {
 fn field(c: &mut Criterion) {
     let s = setup();
     let mut g = c.benchmark_group("field");
-    let gx = s.gf2_127_xs();
+    let (gx, fx) = (s.gf2_127_xs(), s.fp127_xs());
     // Latency: one chain of dependent products. Throughput: ACCS chains.
     macro_rules! mul_chains {
         ($name:expr, $v:expr, $w:expr) => {
@@ -114,6 +128,7 @@ fn field(c: &mut Criterion) {
         };
     }
     mul_chains!("gf2_127", gx[0], gx[1]);
+    mul_chains!("fp127", fx[0], fx[1]);
     // squarings chain in a sqrt or an inversion's addition chain
     g.bench_function("gf2_127/square latency (dependent chain)", |bn| {
         bn.iter(|| (0..64).fold(black_box(gx[0]), |acc, _| acc.square()))
@@ -129,6 +144,27 @@ fn field(c: &mut Criterion) {
             acc
         })
     });
+    g.bench_function("fp127/square latency (dependent chain)", |bn| {
+        bn.iter(|| (0..64).fold(black_box(fx[0]), |acc, _| acc.square()))
+    });
+    g.bench_function("fp127/square throughput (8 chains)", |bn| {
+        bn.iter(|| {
+            let mut acc = black_box([fx[0]; ACCS]);
+            for _ in 0..64 / ACCS {
+                for a in acc.iter_mut() {
+                    *a = a.square();
+                }
+            }
+            acc
+        })
+    });
+    let fy: Vec<(Fp, Fp)> = fx
+        .iter()
+        .zip(fx.iter().rev())
+        .map(|(&a, &b)| (a, b))
+        .collect();
+    each(&mut g, "fp127/add", &fy, |&(a, b)| a + b);
+    each(&mut g, "fp127/neg", &fx, |&a| -a);
     each(&mut g, "gf2_127/invert", &gx, |v| v.invert());
     each(&mut g, "gf2_127/sqrt", &gx, |v| v.sqrt());
     each(&mut g, "gf2_127/halftrace", &gx, |v| v.halftrace());
@@ -143,6 +179,18 @@ fn field(c: &mut Criterion) {
         gf2_127::to_u128(v)
     });
     whole(&mut g, "gf2_127/batch invert (product tree)", &gx, |v| {
+        let mut w = v.to_vec();
+        ephemeral_ecmh::field::batch::invert(&mut w);
+        w
+    });
+    each(&mut g, "fp127/invert", &fx, |v| v.invert());
+    each(&mut g, "fp127/sqrt (x^(2^125))", &fx, |v| v.sqrt());
+    each(&mut g, "fp127/sqrt_ratio", &fy, |&(n, d)| {
+        Fp::sqrt_ratio(n, d)
+    });
+    packing(&mut g, "fp127", &fx);
+    each(&mut g, "fp127/pow_p34 (x^(2^125-1))", &fx, |v| v.pow_p34());
+    whole(&mut g, "fp127/batch invert (product tree)", &fx, |v| {
         let mut w = v.to_vec();
         ephemeral_ecmh::field::batch::invert(&mut w);
         w
@@ -263,6 +311,20 @@ fn hash_to_curve(c: &mut Criterion) {
     each(&mut g, "gf2_127/pornin map x2", &refs, |m| {
         s.bin.hash_to_curve_map2(&s.salt, m)
     });
+    each(
+        &mut g,
+        "edwards127/edwards-native try-and-increment",
+        &refs,
+        |m| s.ed.hash_to_edwards(&s.salt, m),
+    );
+    let ell = Elligator2::new(s.ed).unwrap();
+    each(&mut g, "edwards127/elligator2 x1", &refs, |m| {
+        map1(&ell, &s.salt, m)
+    });
+    let sswu = Sswu::search(s.wei.curve(), 256).expect("fixture admits SSWU setup");
+    each(&mut g, "weier127/sswu x1", &refs, |m| {
+        map1(&sswu, &s.salt, m)
+    });
     each(&mut g, "ristretto255/hash_from_bytes<Sha512>", &refs, |m| {
         RistrettoPoint::hash_from_bytes::<Sha512>(m)
     });
@@ -301,6 +363,19 @@ fn negate(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
     let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
+    let hm: Vec<_> = refs
+        .iter()
+        .map(|m| s.ed.hash_to_curve(&s.salt, m))
+        .collect();
+    let em: Vec<_> = hm.iter().map(|p| s.ed.from_affine(p)).collect();
+    let hw: Vec<_> = refs
+        .iter()
+        .map(|m| s.wei.curve().hash_to_curve(&s.salt, m))
+        .collect();
+    let ew: Vec<_> = hw
+        .iter()
+        .map(|p| s.wei.curve().add_affine(&weier127::Point::IDENTITY, p))
+        .collect();
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
@@ -308,6 +383,8 @@ fn negate(c: &mut Criterion) {
     let hs: Vec<_> = refs.iter().map(|m| secp_hash(&s.salt, m)).collect();
     let mut g = c.benchmark_group("negate");
     each(&mut g, "gf2_127/affine (y += x)", &hb, |p| p.neg());
+    each(&mut g, "edwards127/extended (-X, -T)", &em, |p| p.neg());
+    each(&mut g, "weier127/projective (-Y)", &ew, |p| p.neg());
     each(&mut g, "ristretto255/-P", &hr, |p| -p);
     each(&mut g, "secp256k1/PublicKey::negate", &hs, |p| p.negate());
     g.finish();
@@ -317,10 +394,19 @@ fn add(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
     let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
+    let hm: Vec<_> = refs
+        .iter()
+        .map(|m| s.ed.hash_to_curve(&s.salt, m))
+        .collect();
+    let hw: Vec<_> = refs
+        .iter()
+        .map(|m| s.wei.curve().hash_to_curve(&s.salt, m))
+        .collect();
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
         .collect();
+    let hs: Vec<_> = refs.iter().map(|m| secp_hash(&s.salt, m)).collect();
     let hx: Vec<[u64; 4]> = refs
         .iter()
         .map(|m| {
@@ -379,6 +465,18 @@ fn add(c: &mut Criterion) {
     throughput!("gf2_127/extended += affine", s.bin.neutral(), hb, |a, p| s
         .bin
         .add_affine(a, p));
+    g.bench_function("edwards127/batch montgomery affine (tree sum)", |bn| {
+        bn.iter(|| s.ed.sum_batch(black_box(&hm)))
+    });
+    throughput!(
+        "edwards127/+= montgomery affine",
+        edwards127::Point::IDENTITY,
+        hm,
+        |a, p| s.ed.add_ext(a, &s.ed.from_affine(p))
+    );
+    g.bench_function("weier127/batch affine (tree sum)", |bn| {
+        bn.iter(|| s.wei.curve().sum_batch(black_box(&hw)))
+    });
     streaming!(
         "ristretto255/+=",
         RistrettoPoint::default(),
@@ -391,6 +489,12 @@ fn add(c: &mut Criterion) {
         hr,
         |a: &RistrettoPoint, p| a - p
     );
+    // libsecp256k1's public API: combine_keys adds in Jacobian coordinates
+    // and normalizes once.
+    let hsr: Vec<&PublicKey> = hs.iter().collect();
+    g.bench_function("secp256k1/combine_keys (jacobian += affine)", |bn| {
+        bn.iter(|| PublicKey::combine_keys(black_box(&hsr)).unwrap())
+    });
     g.finish();
 }
 
@@ -416,12 +520,26 @@ fn digest(c: &mut Criterion) {
     g.bench_function("gf2_127/batch", |bn| {
         bn.iter(|| digest_batch(s.bin, &s.seed, &refs))
     });
+    g.bench_function("edwards127/batch", |bn| {
+        bn.iter(|| digest_batch(s.ed, &s.seed, &refs))
+    });
+    g.bench_function("weier127/batch", |bn| {
+        bn.iter(|| digest_batch(s.wei, &s.seed, &refs))
+    });
     g.bench_function("ristretto255/streaming", |bn| {
         bn.iter(|| {
             let acc = refs.iter().fold(RistrettoPoint::default(), |acc, m| {
                 acc + RistrettoPoint::hash_from_bytes::<Sha512>(m)
             });
             acc.compress()
+        })
+    });
+    g.bench_function("secp256k1/try-and-increment + combine_keys", |bn| {
+        bn.iter(|| {
+            let hs: Vec<PublicKey> = refs.iter().map(|m| secp_hash(&s.salt, m)).collect();
+            PublicKey::combine_keys(&hs.iter().collect::<Vec<_>>())
+                .unwrap()
+                .serialize()
         })
     });
     g.finish();

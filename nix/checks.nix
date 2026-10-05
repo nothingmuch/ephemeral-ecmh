@@ -35,7 +35,14 @@
       rustChecks = {
         # every test, the `pari` feature's included: one compile of the
         # crate rather than one per feature set (the feature only adds code)
-        tests = craneLib.cargoNextest (checkArgs // { cargoNextestExtraArgs = "--no-tests=warn"; });
+        tests = craneLib.cargoNextest (
+          checkArgs
+          // pariEnv
+          // {
+            buildInputs = [ pkgs.pari ];
+            cargoNextestExtraArgs = "--features pari --no-tests=warn";
+          }
+        );
 
         clippy = craneLib.cargoClippy (
           checkArgs

@@ -136,6 +136,7 @@ fn cert16(index: u32, r: u128, rejections: &[(u128, u128)]) -> Certificate<16> {
     }
 }
 
+const P127: u128 = (1 << 127) - 1;
 const Q127: u128 = 1 << 127;
 
 #[test]
@@ -160,6 +161,20 @@ fn malformed_certificates_keep_their_outcomes() {
         kats::GF2_127_CERTS,
         cert16,
         select::verify_gf2_127
+    );
+    family!(
+        "edwards127",
+        P127,
+        kats::FP127_CERTS,
+        cert16,
+        select::verify_fp127
+    );
+    family!(
+        "weier127",
+        P127,
+        kats::WEIER127_CERTS,
+        cert16,
+        select::verify_weier127
     );
 
     let got = format!("{HEADER}{}\n", out.join("\n"));

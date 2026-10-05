@@ -24,11 +24,11 @@
 
 use super::agm::Agm;
 use super::criteria::{Count, Filter, Found, OrderError, find};
-use crate::curve::binary127;
-use crate::curvegen::select::{self, Certificate, Policy, is_prime};
+use crate::curve::{binary127, edwards127, weier127};
+use crate::curvegen::select::{self, Certificate, Policy, affine_mul, is_prime};
 use crate::hash::Salted;
 
-pub use crate::curvegen::select::Binary127;
+pub use crate::curvegen::select::{Binary127, Edwards127, Weier127};
 
 pub const TAG_WITNESS: &[u8] = b"ephemeral-ecmh/prove/witness";
 
@@ -85,6 +85,19 @@ pub struct SmallL(pub u32);
 impl Sieve<binary127::Curve> for SmallL {
     fn reject(&mut self, c: &binary127::Curve) -> Option<Rejection> {
         crate::curvegen::sieve::gf2_127(c, self.0)
+    }
+}
+
+/// `Edwards127::quick_reject` has tried 8.
+impl Sieve<edwards127::Curve> for SmallL {
+    fn reject(&mut self, c: &edwards127::Curve) -> Option<Rejection> {
+        crate::curvegen::sieve::edwards_odd(c, self.0)
+    }
+}
+
+impl Sieve<weier127::Curve> for SmallL {
+    fn reject(&mut self, c: &weier127::Curve) -> Option<Rejection> {
+        crate::curvegen::sieve::weier(c, self.0)
     }
 }
 
@@ -241,6 +254,41 @@ impl Family for Binary127 {
     }
 }
 
+impl Family for Edwards127 {
+    fn witness(c: &Self::Curve, h: &Salted, j: u32, n: u128, l: u128) -> [u8; 16] {
+        // complete: the Edwards law has no exceptions on any of E(F_p)
+        torsion_point(
+            n,
+            l,
+            |i| c.hash_to_curve(h, &msg(j, i)),
+            |p, k| c.to_affine(&c.mul(&c.from_affine(p), k)),
+            edwards127::Affine::is_identity,
+        )
+        .encode()
+    }
+
+    /// 8 | #E iff 1 - d is a square: two square roots (`sieve::edwards_order8`).
+    fn quick_reject(c: &Self::Curve) -> Option<Rejection> {
+        crate::curvegen::sieve::edwards_order8(c).map(|p| (8, p))
+    }
+}
+
+impl Family for Weier127 {
+    fn witness(c: &Self::Curve, h: &Salted, j: u32, n: u128, l: u128) -> [u8; 16] {
+        let hash = |i| c.hash_to_curve(h, &msg(j, i));
+        let is_o = weier127::Affine::is_identity;
+        let p = if !n.is_multiple_of(2) {
+            // no 2-torsion, so RCB is complete
+            let mul = |p: &weier127::Affine, k| c.to_affine(&c.mul(&c.from_affine(p), k));
+            torsion_point(n, l, hash, mul, is_o)
+        } else {
+            // the affine chord law is complete on every candidate
+            torsion_point(n, l, hash, |p, k| affine_mul(c, p, k), is_o)
+        };
+        p.encode()
+    }
+}
+
 /// The first order-admissible candidate and its certificate, if this
 /// format can witness the preceding rejections and its acceptance point
 /// passes. Failure panics rather than silently choosing a later candidate;
@@ -324,10 +372,29 @@ pub fn prove_gf2_127(
     prove::<Binary127>(seed, count, factor, sieve)
 }
 
+pub fn prove_fp127(
+    seed: &[u8; 32],
+    count: &mut impl Count<edwards127::Curve>,
+    factor: &mut impl Factor,
+    sieve: &mut impl Sieve<edwards127::Curve>,
+) -> (Certificate, edwards127::Curve) {
+    prove::<Edwards127>(seed, count, factor, sieve)
+}
+
+pub fn prove_weier127(
+    seed: &[u8; 32],
+    count: &mut impl Count<weier127::Curve>,
+    factor: &mut impl Factor,
+    sieve: &mut impl Sieve<weier127::Curve>,
+) -> (Certificate, weier127::Curve) {
+    prove::<Weier127>(seed, count, factor, sieve)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::curvegen::criteria::{AdmissibleR, Criteria};
+    use crate::field::fp127::Fp;
     use proptest::prelude::*;
 
     /// Z/a x Z/b, the non-cyclic case included.
@@ -373,6 +440,21 @@ mod tests {
 
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]
+
+        /// A point of order 8 when 1 - d is a square; that there is none
+        /// otherwise is checked against Sage's orders (tests/prove.rs).
+        #[test]
+        fn edwards127_quick_reject_has_order_8(c in edwards127::tests::curve()) {
+            let got = Edwards127::quick_reject(&c);
+            prop_assert_eq!(got.is_some(), (Fp::ONE - c.d).is_square());
+            prop_assert_eq!(Edwards127::reject_without_count(&c), got.is_some());
+            if let Some((l, enc)) = got {
+                let p = c.from_affine(&c.decode(enc).unwrap());
+                let o = edwards127::Point::IDENTITY;
+                prop_assert_eq!(l, 8);
+                prop_assert!(!c.mul(&p, 4).equals(&o) && c.mul(&p, 8).equals(&o));
+            }
+        }
     }
 
     /// In a quotient by rational two-torsion, the marker 8 witnesses order

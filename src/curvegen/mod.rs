@@ -9,11 +9,16 @@
 //! - `sieve`: rejects candidates by small torsion, before counting points.
 //! - `agm`: counts points on binary curves (canonical lift, with `agm::zq`).
 //! - `poly`: the polynomial arithmetic the sieve's division polynomials use.
+//! - `pari`: point counting with PARI/GP, behind the `pari` feature.
 
 pub mod agm;
 pub mod criteria;
 mod number;
+#[cfg(feature = "pari")]
+pub mod pari;
 pub mod poly;
 pub mod prove;
 pub mod select;
 pub mod sieve;
+
+pub use number::embedding_degree_ok;

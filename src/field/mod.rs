@@ -2,12 +2,14 @@
 //!
 //! - `gf2_127`: GF(2^127) = F_2\[z\]/(z^127 + z^63 + 1), crrl's, for
 //!   `binary127`.
+//! - `fp127`: F_p, p = 2^127 - 1, portable, for `edwards127` and `weier127`.
 //! - `batch`: Montgomery's batch inversion, for any of them.
 
 pub mod batch;
+pub mod fp127;
 pub mod gf2_127;
 use core::fmt::Debug;
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Neg, Sub};
 
 /// A finite field, as every curve law uses it: representations may be
 /// redundant (`fp107`, `gf2_127`, `gf2_109` and `gf2_122` reduce lazily),
@@ -19,6 +21,123 @@ pub trait Field: batch::Invert + Debug + Add<Output = Self> {
     fn square(self) -> Self;
 }
 
+/// A field of odd characteristic, F_p or an extension of it, as the odd
+/// curve laws and their maps use it; `==` is `equals`.
+pub trait OddField: Field + Eq + Sub<Output = Self> + Neg<Output = Self> {
+    /// q, the number of elements.
+    const ORDER: u128;
+    /// A fixed non-square. Not by itself a map's constant: each map checks
+    /// its own conditions on it.
+    const NON_SQUARE: Self;
+    /// Some square root if `self` is a square.
+    fn sqrt(self) -> Option<Self>;
+    /// 0 counts as a square.
+    fn is_square(self) -> bool;
+    /// Some square root of n/d, if d != 0 and n/d is a square. This default
+    /// inverts d; fields with a faster exponentiation override it.
+    fn sqrt_ratio(n: Self, d: Self) -> Option<Self> {
+        if d.is_zero() {
+            return None;
+        }
+        (n * d.inv()).sqrt()
+    }
+    /// RFC 9380's sgn0: the parity of the first nonzero canonical
+    /// coefficient, lowest first. For x != 0, sgn0(-x) != sgn0(x).
+    fn sgn0(self) -> bool;
+}
+
+/// F_p for an odd prime p.
+pub trait Prime: OddField {
+    /// Reduces v mod p.
+    fn new(v: u128) -> Self;
+}
+
+/// An odd field's elements as distinct integers below 2^BITS: `pack` is
+/// canonical, and `unpack` accepts exactly what `pack` returns. The
+/// all-ones integer of BITS bits is not a valid packing, so codecs may reserve it.
+pub trait Packed: OddField {
+    const BITS: u32;
+    fn pack(self) -> u128;
+    fn unpack(v: u128) -> Option<Self>;
+    /// Some element for every v below 2^BITS, `unpack`'s where that has
+    /// one: hashes cut digests to field elements by it. Not uniform: the
+    /// integers past each modulus fold onto the low residues.
+    fn reduce(v: u128) -> Self;
+}
+
+/// `Field` for a type whose inherent methods have the trait's names, and
+/// whose `==` is field equality; `#[inline]` so generic callers see through
+/// the delegation across codegen units.
+macro_rules! field {
+    ($f:ty) => {
+        impl crate::field::Field for $f {
+            const ZERO: Self = <$f>::ZERO;
+            #[inline]
+            fn is_zero(self) -> bool {
+                <$f>::is_zero(self)
+            }
+            #[inline]
+            fn equals(self, o: Self) -> bool {
+                self == o
+            }
+            #[inline]
+            fn square(self) -> Self {
+                <$f>::square(self)
+            }
+        }
+    };
+}
+
+macro_rules! prime {
+    ($m:ident, $non_square:expr, $bits:expr) => {
+        field!($m::Fp);
+
+        impl crate::field::OddField for $m::Fp {
+            const ORDER: u128 = $m::P;
+            const NON_SQUARE: Self = $non_square;
+            #[inline]
+            fn sqrt(self) -> Option<Self> {
+                $m::Fp::sqrt(self)
+            }
+            #[inline]
+            fn is_square(self) -> bool {
+                $m::Fp::is_square(self)
+            }
+            #[inline]
+            fn sqrt_ratio(n: Self, d: Self) -> Option<Self> {
+                $m::Fp::sqrt_ratio(n, d)
+            }
+            #[inline]
+            fn sgn0(self) -> bool {
+                $m::Fp::is_odd(self)
+            }
+        }
+
+        impl crate::field::Prime for $m::Fp {
+            #[inline]
+            fn new(v: u128) -> Self {
+                $m::Fp::new(v)
+            }
+        }
+
+        impl crate::field::Packed for $m::Fp {
+            const BITS: u32 = $bits;
+            #[inline]
+            fn pack(self) -> u128 {
+                $m::Fp::value(self)
+            }
+            #[inline]
+            fn unpack(v: u128) -> Option<Self> {
+                (v < $m::P).then(|| $m::Fp::new(v))
+            }
+            #[inline]
+            fn reduce(v: u128) -> Self {
+                $m::Fp::new(v)
+            }
+        }
+    };
+}
+prime!(fp127, fp127::Fp::new(fp127::P - 1), 127);
 /// GF(2^m), as the binary curve laws use it: the arithmetic, and a
 /// canonical integer for each element. + is also -.
 pub trait Binary: Field + AddAssign {
@@ -111,6 +230,54 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    fn pow<F: Field>(x: F, e: u128) -> F {
+        (0..128 - e.leading_zeros()).rev().fold(F::ONE, |r, i| {
+            if e >> i & 1 == 1 {
+                r.square() * x
+            } else {
+                r.square()
+            }
+        })
+    }
+
+    /// Shared field and codec laws; k coefficients occupy BITS/k bits each.
+    fn odd<F: Packed>(k: u32, x: F, y: F, v: u128) -> Result<(), TestCaseError> {
+        prop_assert!(pow(x, F::ORDER).equals(x));
+        prop_assert!(!F::NON_SQUARE.is_square());
+        prop_assert_eq!(x.is_square(), x.sqrt().is_some());
+        if let Some(s) = x.sqrt() {
+            prop_assert_eq!(s.square(), x);
+        }
+        prop_assert!((x * x).is_square());
+        prop_assert!(F::sqrt_ratio(x, F::ZERO).is_none());
+        if !y.is_zero() {
+            let r = F::sqrt_ratio(x, y);
+            prop_assert_eq!(r.is_some(), (x * y.inv()).is_square());
+            if let Some(s) = r {
+                prop_assert_eq!(s.square() * y, x);
+            }
+        }
+        let w = F::BITS / k;
+        let c = x.pack();
+        prop_assert_eq!(c >> (F::BITS - 1) >> 1, 0);
+        let first = (0..k)
+            .map(|i| c >> (w * i) & (u128::MAX >> (128 - w)))
+            .find(|&a| a != 0);
+        prop_assert_eq!(x.sgn0(), first.is_some_and(|a| a & 1 == 1));
+        if !x.is_zero() {
+            prop_assert_ne!((-x).sgn0(), x.sgn0());
+        }
+        prop_assert_eq!(F::unpack(c), Some(x));
+        let ones = u128::MAX >> (128 - F::BITS);
+        prop_assert!(F::unpack(ones).is_none());
+        let v = v & ones;
+        if let Some(z) = F::unpack(v) {
+            prop_assert_eq!(z.pack(), v);
+            prop_assert_eq!(F::reduce(v), z);
+        }
+        Ok(())
+    }
+
     /// `new` keeps the bits of `MASK`, and `solve` finds a root on its
     /// domain Tr(c) = 0, which every c^2 + c is in.
     fn solve<F: Binary>(v: u128) -> Result<(), TestCaseError> {
@@ -122,7 +289,41 @@ mod tests {
         Ok(())
     }
 
+    /// Zero denominators and packing boundaries can be missed by round trips.
+    /// The field has k coefficients of BITS/k bits each.
+    fn boundaries<F: Packed>(k: u32, p: u128) {
+        let (zero, one) = (F::ZERO, F::ONE);
+        assert!(zero.inv().is_zero());
+        assert!(F::sqrt_ratio(zero, zero).is_none());
+        assert!(F::sqrt_ratio(one, zero).is_none());
+        assert_eq!(F::sqrt_ratio(zero, one), Some(zero));
+        assert_eq!(one.pack(), 1);
+        let w = F::BITS / k;
+        let top = (0..k).fold(0, |c, i| c | (p - 1) << (w * i));
+        assert_eq!(F::unpack(top).map(F::pack), Some(top));
+        for i in 0..k {
+            assert!(F::unpack(p << (w * i)).is_none());
+        }
+        for b in F::BITS..128 {
+            assert!(F::unpack(1 << b).is_none());
+        }
+        let ones = u128::MAX >> (128 - w);
+        let folded = (0..k).fold(0, |c, i| c | (ones % p) << (w * i));
+        let all = (0..k).fold(0, |c, i| c | ones << (w * i));
+        assert_eq!(F::reduce(all).pack(), folded);
+    }
+
+    #[test]
+    fn boundaries_prime() {
+        boundaries::<fp127::Fp>(1, fp127::P);
+    }
+
     proptest! {
+        #[test]
+        fn odd_fp127(x in fp127::tests::fp(), y in fp127::tests::fp(), v in any::<u128>()) {
+            odd(1, x, y, v)?;
+        }
+
         #[test]
         fn solve_gf2_127(v in any::<u128>()) {
             solve::<gf2_127::Gf>(v)?;

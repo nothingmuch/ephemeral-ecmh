@@ -3,6 +3,7 @@
 //! The usual prefix-chain implementation is limited by multiplication latency.
 //! A product tree exposes independent multiplications at each level.
 
+use crate::field::fp127::Fp;
 use crate::field::gf2_127::Gf;
 use std::ops::Mul;
 
@@ -13,6 +14,13 @@ pub trait Invert: Copy + Mul<Output = Self> {
 
 impl Invert for Gf {
     const ONE: Self = Gf::ONE;
+    fn inv(self) -> Self {
+        self.invert()
+    }
+}
+
+impl Invert for Fp {
+    const ONE: Self = Fp::ONE;
     fn inv(self) -> Self {
         self.invert()
     }
@@ -74,5 +82,35 @@ fn down<F: Invert>(lvl: &mut [F], parents: &[F]) {
     }
     if let [t] = tail {
         *t = parents[parents.len() - 1];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::field::fp127::tests::fp;
+    use crate::field::gf2_127::tests::fe;
+    use crate::field::gf2_127::{eq, from_u128};
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn gf2_127_matches_single(v in prop::collection::vec(fe().prop_filter("nonzero", |&x| x & crate::field::gf2_127::MASK127 != 0), 0..40)) {
+            let v: Vec<Gf> = v.into_iter().map(from_u128).collect();
+            let mut w = v.clone();
+            invert(&mut w);
+            for (x, y) in v.iter().zip(&w) {
+                prop_assert!(eq(x.invert(), *y));
+            }
+        }
+
+        #[test]
+        fn fp127_matches_single(v in prop::collection::vec(fp().prop_filter("nonzero", |x| !x.is_zero()), 0..40)) {
+            let mut w = v.clone();
+            invert(&mut w);
+            for (x, y) in v.iter().zip(&w) {
+                prop_assert_eq!(x.invert(), *y);
+            }
+        }
     }
 }

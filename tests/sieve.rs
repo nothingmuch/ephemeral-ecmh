@@ -5,6 +5,7 @@ mod common;
 
 use common::kats::{self, CertKat};
 use common::sieve_vectors as sv;
+use ephemeral_ecmh::curve::edwards127;
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
 use ephemeral_ecmh::curvegen::sieve::{self, Rejection};
 use ephemeral_ecmh::field::gf2_127::is_zero;
@@ -60,6 +61,30 @@ fn gf2_127_certificates_from_the_sieve() {
     }
 }
 
+#[test]
+fn edwards127_certificates_from_the_sieve() {
+    for k in kats::FP127_CERTS {
+        let c = rebuild(
+            k,
+            |j| select::fp127_candidate(&k.seed, j).is_some(),
+            sieve::next_fp127,
+        );
+        select::verify_fp127(&k.seed, &c).unwrap();
+    }
+}
+
+#[test]
+fn weier127_certificates_from_the_sieve() {
+    for k in kats::WEIER127_CERTS {
+        let c = rebuild(
+            k,
+            |j| select::weier127_candidate(&k.seed, j).is_some(),
+            sieve::next_weier127,
+        );
+        select::verify_weier127(&k.seed, &c).unwrap();
+    }
+}
+
 /// The odd l the vector tests check on every candidate.
 const LS: [u32; 5] = [3, 5, 7, 11, 13];
 
@@ -94,6 +119,42 @@ fn gf2_127_torsion_agrees_with_sage() {
         |c, p, l| {
             let p = c.decode(p).unwrap();
             !p.is_identity() && is_zero(c.mul(&c.from_affine(&p), l as u128).x)
+        },
+    );
+}
+
+#[test]
+fn edwards127_torsion_agrees_with_sage() {
+    let o = edwards127::Point::IDENTITY;
+    agree(
+        sv::FP127,
+        |j| select::fp127_candidate(&sv::SEED, j).unwrap(),
+        &[&[8][..], &LS].concat(),
+        sieve::edwards_torsion,
+        |c, p, l| {
+            let p = c.from_affine(&c.decode(p).unwrap());
+            // l = 8: of order exactly 8; odd l: P != O
+            let below = if l == 8 { 4 } else { 1 };
+            c.mul(&p, l as u128).equals(&o) && !c.mul(&p, below).equals(&o)
+        },
+    );
+}
+
+#[test]
+fn weier127_torsion_agrees_with_sage() {
+    agree(
+        sv::WEIER127,
+        |j| select::weier127_candidate(&sv::SEED, j).unwrap(),
+        &[&[2][..], &LS].concat(),
+        sieve::weier_torsion,
+        |c, p, l| {
+            let p = c.decode(p).unwrap();
+            !p.is_identity()
+                && if l == 2 {
+                    p.y.is_zero()
+                } else {
+                    c.mul(&c.from_affine(&p), l as u128).is_identity()
+                }
         },
     );
 }

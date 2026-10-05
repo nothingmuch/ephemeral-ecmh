@@ -54,6 +54,14 @@ macro_rules! field {
     };
 }
 
+/// `field!` for odd characteristic.
+macro_rules! prime_field {
+    ($m:ident, $F:ty, square: $square:expr, invert: $invert:expr, sqrt: $sqrt:expr $(,)?) => {
+        field!($m, $F, neg: |a: $F| -a, sub: |a: $F, b: $F| a - b,
+            square: $square, invert: $invert, sqrt: $sqrt);
+    };
+}
+
 /// `field!` for characteristic 2: negation is the identity, subtraction
 /// addition.
 macro_rules! binary_field {
@@ -73,7 +81,10 @@ pub mod field {
         }
     }
 
-    pub mod prime {}
+    pub mod prime {
+        prime_field!(fp127, crate::field::fp127::Fp, square: |a: crate::field::fp127::Fp| a.square(),
+            invert: |a: crate::field::fp127::Fp| a.invert(), sqrt: |a: crate::field::fp127::Fp| a.sqrt());
+    }
 }
 
 /// Probes for one family through the `group` traits, as RIBLT drives it:
@@ -132,6 +143,12 @@ pub mod group {
     family!(
         binary127_w,
         crate::curve::binary::wcodec::Curve<crate::curve::binary127::M127>
+    );
+    family!(edwards127, crate::curve::edwards127::Curve);
+    family!(weier127, crate::curve::weier127::OddCurve);
+    family!(
+        weier127_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp127::Fp>
     );
     family!(
         binary127_u,

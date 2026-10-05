@@ -69,6 +69,13 @@ def test_per_element_values_match_the_summary(table):
         assert abs(got[full] - want) <= max(0.006, 5e-4 * want), full
 
 
+def test_ids_survive_filename_mangling(table):
+    # directories are criterion's filename-safe names; ids come from the json
+    assert "on_curve/gf2/x: Tr(b/x) = 0 (1 I)" in set(table.full_id)
+    row = table[table.full_id == "curvegen/verify_full/weier/256 rejections/3"].iloc[0]
+    assert (row.function, row.parameter) == ("weier/256 rejections", "3")
+
+
 def test_slope_else_mean_and_never_base(table):
     x = table.set_index("full_id")
     add = x.loc["add/gf2/batch affine (tree sum)"]
@@ -116,14 +123,24 @@ def test_current_suite_is_fully_classified(table):
             "field/gf2/mul latency (dependent chain)",
             ("field", "gf2_127", "mul", "latency"),
         ),
+        ("field/fp/mul throughput (8 chains)", ("field", "fp127", "mul", "throughput")),
         (
             "field/gf2/batch invert (product tree)",
             ("field", "gf2_127", "batch invert", "batch"),
         ),
         ("field/gf2/halftrace", ("field", "gf2_127", "halftrace", "per-element")),
+        ("field/fp/add", ("field", "fp127", "add", "per-element")),
         (
             "add/gf2/extended += affine, 1 accumulator",
             ("group ops", "gf2_127", "add", "latency"),
+        ),
+        (
+            "add/edwards/-= cached, 8 accumulators",
+            ("group ops", "edwards127", "subtract", "throughput"),
+        ),
+        (
+            "add/weier/batch affine (tree sum)",
+            ("group ops", "weier127", "batch sum", "batch"),
         ),
         ("add/xor-sha256/xor 32B", ("group ops", "xor", "add", "per-element")),
         (
@@ -158,6 +175,14 @@ def test_current_suite_is_fully_classified(table):
             ("comparison maps", "gf2_127-u", "one map to addend", "batch"),
         ),
         (
+            "hash_to_curve/edwards127/elligator2 x1",
+            ("comparison maps", "edwards127", "one map", "per-element"),
+        ),
+        (
+            "hash_to_curve/weier127/sswu x1",
+            ("comparison maps", "weier127", "one map", "per-element"),
+        ),
+        (
             "hash_to_curve/secp256k1/ellswift decode",
             ("hash to curve", "secp256k1", "hash to curve", "per-element"),
         ),
@@ -169,9 +194,18 @@ def test_current_suite_is_fully_classified(table):
             "h2c_parts/gf2 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2 t&i", "batch"),
         ),
+        (
+            "on_curve/edwards/edwards u: Jacobi",
+            ("hash to curve", "edwards127", "x on curve", "per-element"),
+        ),
+        (
+            "digest/edwards/edwards-native streaming",
+            ("digest", "edwards127", "digest", "streaming"),
+        ),
         ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
         # GF(2^122): qsolve sits with the halftraces
+        ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
         # a batch to affine, not a sum
         (
             "agm/order",
@@ -184,6 +218,14 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_127", "add", "throughput"),
         ),
         (
+            "group.is_identity/weier.127",
+            ("group ops", "weier127", "is identity", "per-element"),
+        ),
+        (
+            "group.encode/edwards.127/mode=indep",
+            ("group ops", "edwards127", "encode", "per-element"),
+        ),
+        (
             "h2c/binary.127/mode=batch,n=1024",
             ("hash to curve", "gf2_127", "hash to curve", "batch"),
         ),
@@ -192,6 +234,12 @@ def test_current_suite_is_fully_classified(table):
             "field/gf2_127/mul latency (dependent chain)",
             ("field", "gf2_127", "mul", "latency"),
         ),
+        ("field/fp127/sqrt", ("field", "fp127", "sqrt", "per-element")),
+        (
+            "add/edwards127/+= cached, 8 accumulators",
+            ("group ops", "edwards127", "add", "throughput"),
+        ),
+        ("digest/weier127/streaming", ("digest", "weier127", "digest", "streaming")),
         (
             "h2c_parts/gf2_127 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2_127 t&i", "batch"),
@@ -210,6 +258,10 @@ def test_current_suite_is_fully_classified(table):
         # binary122: GLS constants, λ accumulators, and both
         # the F_{p^2} prototypes, and the codecs of the odd fields
         # the Weierstrass curves' Jacobian families
+        (
+            "group.add/weier-jacobian.127/mode=throughput",
+            ("group ops", "weier127-jacobian", "add", "throughput"),
+        ),
         # Plonky3's fields
         (
             "field/gf2_127/normalize (to_u128)",
@@ -230,6 +282,9 @@ def test_classify(full_id, want):
     "old, new",
     [
         ("gf2/mul latency (dependent chain)", "gf2_127/mul latency (dependent chain)"),
+        ("fp/sqrt (x^(2^125))", "fp127/sqrt (x^(2^125))"),
+        ("edwards/+= cached, 1 accumulator", "edwards127/+= cached, 1 accumulator"),
+        ("weier/x: Jacobi", "weier127/x: Jacobi"),
         ("gf2 pornin/2. invert m1 m2 m3", "gf2_127 pornin/2. invert m1 m2 m3"),
     ],
 )
@@ -247,6 +302,7 @@ def test_both_spellings_name_one_family(old, new):
             "0",
             "find (Rust: AGM + sieve)",
         ),
+        ("curvegen/embedding", "gf2_127", "0", "embedding-degree bound"),
     ],
 )
 def test_curvegen_names_each_family(group, function, parameter, operation):
@@ -620,7 +676,75 @@ def tables_md(g):
     return __import__("tables").to_markdown(g, br.fmt_time, br._md_cell)
 
 
+def test_addend_equality_splits_matches_from_mismatches(tmp_path):
+    root = tmp_path / "criterion"
+    for mode, ns in (("match", 3.0), ("mismatch", 1.0)):
+        write_bench(
+            root,
+            "group.equals",
+            f"edwards.127/mode={mode}",
+            None,
+            64 * ns,
+            128 * ns,
+            192 * ns,
+            {"Elements": 64},
+        )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    assert br.unclassified(table).empty
+    e = br.elementary(table)
+    rows = e[e.facet == "equals addend"].set_index("variant").value_ns
+    assert rows.to_dict() == pytest.approx({"match": 6.0, "mismatch": 2.0})
+    grid = br.elementary_grid(e, fields=False)
+    assert [column.key for column in grid.cols] == [
+        ("equals addend", "match"),
+        ("equals addend", "mismatch"),
+    ]
+
+
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)
+
+
+def test_curve_selection_shows_every_method_and_the_fastest_drawn(tmp_path):
+    phases = "candidate,quick,sieve,count,factor,witness,accept"
+    cols = ",".join(f"prove_{p}_s" for p in phases.split(","))
+    (tmp_path / "curvegen.csv").write_text(
+        "family,method,seed,candidates,prove_counts,find_s,prove_s,verify_s,"
+        + cols
+        + "\n"
+        "gf2_127,agm+sieve,0,30,8,0.01,0.02,0.0001,0,0,0.005,0.012,0,0,0.001\n"
+        "gf2_127,agm+sieve,1,50,10,0.03,0.04,0.0003,0,0,0.01,0.025,0,0,0.001\n"
+        "gf2_127,pari,0,30,30,0.2,0.3,0.0001,0,0,0,0.29,0,0,0.001\n"
+        "weier127,pari+sieve,0,200,20,1.0,1.3,0.0002,0.01,0,0.1,1.1,0.05,0,0.01\n"
+    )
+    runs = br.selection_runs(tmp_path)
+    assert set(br.fastest_method(runs).method) == {"agm+sieve", "pari+sieve"}
+    _, _, table = br.selection_blocks(runs)
+    t = table[1].set_index(["family", "method"])
+    assert t.loc[("gf2_127", "agm+sieve"), "shown"] == "yes"
+    assert t.loc[("gf2_127", "pari"), "shown"] == ""
+    assert t.loc[("gf2_127", "agm+sieve"), "prove"] == "30.0 ms"
+    # 18.5 ms of 30 ms counting
+    assert t.loc[("gf2_127", "agm+sieve"), "counting, of prove"] == "62%"
+    fig = figures.plot_selection(br.fastest_method(runs), tmp_path, ["png"])
+    assert "certify" in fig.alt and (tmp_path / "selection.png").is_file()
+
+
+def test_embedding_share_relates_the_bound_to_acceptance(tmp_path):
+    root = tmp_path / "criterion"
+    for fam, embedding, accept in [("gf2_127", 30e3, 60e3), ("edwards127", 20e3, 80e3)]:
+        write_bench(
+            root, "curvegen/embedding", fam, "0", embedding, embedding, embedding
+        )
+        write_bench(root, "curvegen/verify_accept", fam, "0", accept, accept, accept)
+    # timed only for acceptance: not part of the comparison
+    write_bench(root, "curvegen/verify_accept", "weier127", "0", 1e6, 1e6, 1e6)
+    t = br.tidy(br.load(root)[0])
+    text = br.embedding_share(t)
+    assert "25% to 50%" in text
+    assert "1 ms" not in text and "1.00 ms" not in text
+    assert br.embedding_share(t[t.group != "curvegen/embedding"]) == ""
 
 
 RUN_META = {

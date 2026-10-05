@@ -224,6 +224,7 @@ fn gcd(mut a: u128, mut b: u128) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::field::fp127::P;
     use proptest::prelude::*;
 
     /// The smallest k with q^k = 1 mod r, by brute force.
@@ -353,6 +354,7 @@ mod tests {
 
     #[test]
     fn known_primes() {
+        assert!(is_prime(P));
         assert!(is_prime((1u128 << 89) - 1));
         assert!(!is_prime((1u128 << 67) - 1)); // Cole's 193707721 * 761838257287
         // Carmichael numbers
