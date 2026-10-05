@@ -21,6 +21,9 @@
           ../report/linkcheck.py
           ../report/rules.py
           ../report/tables.py
+          ../report/summary.py
+          ../report/summary_pairs.py
+          ../report/summary_selection.py
           # the published runs, rendered as chapters of their reports
           (lib.fileset.maybeMissing ../results)
         ];

@@ -30,6 +30,32 @@ considerations](ecc_security.md)). They show the cost of trading security margin
 for width. The two 256-bit groups are fixed-curve references at conventional
 security levels.
 
+Binary Edwards curves [bernstein-lange-farashahi-2008] are excluded on inspected
+operation counts under equal field arithmetic; they are not implemented or
+measured. Every ordinary binary curve is birationally equivalent to a complete
+binary Edwards curve [bernstein-lange-farashahi-2008, Theorem 4.3], so the
+exclusion is one of cost, not availability. Their complete mixed addition costs
+$13M + 3S + 3D$, and $13M + 2S + 2D$ with the formulas of Kim, Lee and Negre
+[kim-lee-negre-2014]; the complete unscaled formulas used here [pornin-2022]
+cost $7M + 2S$. $M$, $S$ and $D$ denote a field multiplication, a squaring and a
+multiplication by a curve constant, counted as a full multiplication for generic
+dense parameters. Mixed addition is the most frequent operation of the workload
+([Workload](workload.md)). The binary Edwards formulas with lower operation
+counts [bernstein-2009] are differential: they compute $P + Q$ from $P$, $Q$ and
+$P - Q$, as a Montgomery ladder supplies them, and a coded-symbol update adds an
+independent hashed point with no known difference.
+
+The quadratic extensions $\mathrm{GF}(p^2)$ fit 16-byte encodings with one-word
+base arithmetic. Goldilocks [polygon-zero-2022] uses Plonky3's implementation
+[plonky3]; its 2-adicity of 32 makes square roots, and so decoding and hashing,
+slower than over $2^{64} - 59$; the benchmark report's Goldilocks rows measure
+the difference. The 31-bit primes of current proof systems, M31
+[haboeck-levit-papini-2024] and BabyBear [bruestle-gafni-2023], would need
+extensions of degree 4 to reach the same group size. Degree-4 extensions admit
+the heuristic index-calculus asymptotic $\widetilde{O}(q^{3/2})$ [gaudry-2009],
+below the generic $q^2$, so group size alone does not justify the target
+security there; these fields are excluded from the comparison.
+
 The variable-curve families hash by try-and-increment [boneh-lynn-shacham-2001].
 Alternatives are Elligator 2 [bernstein-et-al-2013] on every Edwards and twisted
 Edwards family, simplified SWU [rfc9380] on every Weierstrass family, and

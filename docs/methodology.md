@@ -37,6 +37,15 @@ the same measurement or is faster beyond both confidence intervals, and it is
 faster on at least one. Families that no other dominates are not thereby ranked
 against each other.
 
+Code-generation inspection identifies implementation effects. Static instruction
+counts are not timings. Binary-field performance depends on the build's
+carry-less multiplication: without PMULL or PCLMULQDQ the field product falls
+back to a portable routine, and the binary families' measurements do not carry
+over to such a build. `bench-bins-generic` measures that backend. Each result is
+bound to its source revision, compiler, target features, machine, and
+measurement method. The [code-generation report](codegen.md) records
+observations for the revisions and configurations it names.
+
 With Nix installed, the checks run from the repository root:
 
 ```sh

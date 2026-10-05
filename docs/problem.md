@@ -337,6 +337,10 @@ These assumptions differ from those of fixed-curve design:
 - Point counting and parameter certification occur once per namespace and are
   amortized, but must remain tractable for each new beacon value ([Parameter
   selection and verification](#parameter-selection-and-verification)).
+- Field and curve structure require separate analysis for attacks below the
+  reference work factor, including applicable Weil-descent methods
+  [gaudry-hess-smart-2002, hess-2005, gaudry-2009, diem-2011, joux-vitse-2012].
+  The existence of a descent does not by itself establish such an attack.
 
 [Candidate constructions](constructions.md) lists the constructions compared, at
 128-bit and shorter encodings. Their arithmetic costs are measured here; their
