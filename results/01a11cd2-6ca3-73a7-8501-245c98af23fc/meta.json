@@ -1,0 +1,367 @@
+{
+  "id": "01a11cd2-6ca3-73a7-8501-245c98af23fc",
+  "started": "2026-10-08T18:42:23Z",
+  "finished": "2026-10-08T23:22:43Z",
+  "kernel": "Linux 6.18.48",
+  "arch": "x86_64",
+  "cpu": "Intel(R) Xeon(R) W-1390P @ 3.50GHz",
+  "cores": 16,
+  "memory": 134877433856,
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "target": "x86-64-v3",
+  "rustflags": "-C target-cpu=x86-64-v3 -C target-feature=+pclmulqdq",
+  "bins": "/nix/store/9fhmglg8jbc7mjr8xwqairjypnbdrf3h-ecmh-bench-bins-x86-64-v3-ef9e82d",
+  "target_features": [
+    "avx",
+    "avx2",
+    "bmi1",
+    "bmi2",
+    "cmpxchg16b",
+    "f16c",
+    "fma",
+    "fxsr",
+    "lzcnt",
+    "movbe",
+    "pclmulqdq",
+    "popcnt",
+    "sse",
+    "sse2",
+    "sse3",
+    "sse4.1",
+    "sse4.2",
+    "ssse3",
+    "xsave"
+  ],
+  "commit": "ef9e82d39fbf06c605e1740360370f0003dc4ca4",
+  "dirty": false,
+  "suites": [
+    "compare",
+    "compare107",
+    "compare109",
+    "compare122",
+    "compare_fp2",
+    "group",
+    "riblt",
+    "agm",
+    "sieve",
+    "curvegen"
+  ],
+  "profile": "full",
+  "criterion_args": "--warm-up-time 3 --measurement-time 5 --sample-size 100 --nresamples 100000",
+  "group_fixtures": {
+    "binary-lambda.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-lambda.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-lambda.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-lambda.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-u.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-w.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "edwards.107": {
+      "r": "40564819207303338764951909988331",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "edwards.127": {
+      "r": "42535295865117307936850010495998861179",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "edwards.61x2": {
+      "r": "1329227995784915872441444289547414943",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.128": {
+      "r": "85070591730234615859019443197777184273",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.61x2": {
+      "r": "1329227995784915871179040464728046741",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.64x2": {
+      "r": "85070591730234615323865223605536925781",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.goldilocks2": {
+      "r": "85070591690620534613930777733150035197",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "weier-jacobian.107": {
+      "r": "162259276829213350707235122428473",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier-jacobian.127": {
+      "r": "170141183460469231726140088868651089949",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier-jacobian.61x2": {
+      "r": "5316911983139663482406005536283217627",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.107": {
+      "r": "162259276829213350707235122428473",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.127": {
+      "r": "170141183460469231726140088868651089949",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.61x2": {
+      "r": "5316911983139663482406005536283217627",
+      "cofactor": 1,
+      "automorphisms": 2
+    }
+  },
+  "group_plan": {
+    "binary-u.127": "lead",
+    "binary-u.122-gls": "lead",
+    "binary-u.109": "lead",
+    "binary-u.122": "lead",
+    "binary-lambda.127": "lead",
+    "binary-w.127": "lead",
+    "binary-lambda.109": "lead",
+    "binary-w.109": "lead",
+    "binary.122-gls": "lead",
+    "binary.127": "lead",
+    "binary-lambda.122": "lead",
+    "binary-lambda.122-gls": "lead",
+    "binary-w.122-gls": "lead",
+    "binary.122": "lead",
+    "binary-w.122": "lead",
+    "binary.109": "lead",
+    "twisted.61x2": "contrast"
+  },
+  "riblt_plan": {
+    "binary-lambda.109": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-lambda.122": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-lambda.122-gls": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-lambda.127": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-u.109": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-u.122": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-u.122-gls": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-u.127": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-w.109": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-w.122": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-w.122-gls": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary-w.127": {
+      "h2c": "pornin-addend",
+      "scope": "full",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary.109": {
+      "h2c": "pornin",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary.122": {
+      "h2c": "pornin",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary.122-gls": {
+      "h2c": "pornin",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "binary.127": {
+      "h2c": "pornin",
+      "scope": "buffer",
+      "proj": "gf2_127",
+      "mapproj": "gf2_127"
+    },
+    "edwards.107": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "edwards.127": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "edwards.61x2": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "twisted.128": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "twisted.61x2": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "twisted.64x2": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "twisted.goldilocks2": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier-jacobian.107": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier-jacobian.127": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier-jacobian.61x2": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier.107": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier.127": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "weier.61x2": {
+      "h2c": "ti",
+      "scope": "spot"
+    }
+  }
+}

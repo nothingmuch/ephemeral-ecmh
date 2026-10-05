@@ -1,0 +1,60 @@
+# ristretto255 8c7dd499a8fdf2237e08240d17af5deddb1d428f
+goos: linux
+goarch: amd64
+pkg: github.com/yangl1996/riblt
+cpu: Intel(R) Xeon(R) W-1390P @ 3.50GHz
+BenchmarkEncodeAndDecode/d=10-16         	    3872	    304524 ns/op	   2.10 MB/s	         1.723 symbols/diff
+BenchmarkEncodeAndDecode/d=20-16         	    1782	    647472 ns/op	   1.98 MB/s	         1.635 symbols/diff
+BenchmarkEncodeAndDecode/d=40-16         	     876	   1401770 ns/op	   1.83 MB/s	         1.541 symbols/diff
+BenchmarkEncodeAndDecode/d=100-16        	     315	   3714193 ns/op	   1.72 MB/s	         1.454 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-16       	      26	  44178731 ns/op	   1.45 MB/s	         1.369 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-16      	       2	 500483552 ns/op	   1.28 MB/s	         1.349 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-16      	       1	3198724922 ns/op	   1.00 MB/s	         1.359 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-16     	       1	6839527002 ns/op	   0.94 MB/s	         1.358 symbols/diff
+BenchmarkMapping-16                      	187425558	         6.313 ns/op
+BenchmarkSketchAddSymbol/m=1000-16       	  127628	      9236 ns/op	   6.93 MB/s
+BenchmarkSketchAddSymbol/m=10000-16      	  106083	     10271 ns/op	   6.23 MB/s
+BenchmarkSketchAddSymbol/m=100000-16     	   94104	     12138 ns/op	   5.27 MB/s
+BenchmarkSketchAddSymbol/m=1000000-16    	   76798	     15230 ns/op	   4.20 MB/s
+BenchmarkSketchAddSymbol/m=10000000-16   	   65535	     18510 ns/op	   3.46 MB/s
+PASS
+# ristretto255-chacha8 11521a4c73ebbbfe80050ec99a4f976eb9ce7147
+goos: linux
+goarch: amd64
+pkg: github.com/yangl1996/riblt
+cpu: Intel(R) Xeon(R) W-1390P @ 3.50GHz
+BenchmarkEncodeAndDecode/d=10-16         	    3873	    295941 ns/op	   2.16 MB/s	         1.723 symbols/diff
+BenchmarkEncodeAndDecode/d=20-16         	    1791	    650113 ns/op	   1.97 MB/s	         1.646 symbols/diff
+BenchmarkEncodeAndDecode/d=40-16         	     870	   1387771 ns/op	   1.84 MB/s	         1.543 symbols/diff
+BenchmarkEncodeAndDecode/d=100-16        	     324	   3770161 ns/op	   1.70 MB/s	         1.450 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-16       	      26	  44434636 ns/op	   1.44 MB/s	         1.375 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-16      	       2	 591313758 ns/op	   1.08 MB/s	         1.365 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-16      	       1	3759546902 ns/op	   0.85 MB/s	         1.358 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-16     	       1	8065280937 ns/op	   0.79 MB/s	         1.355 symbols/diff
+BenchmarkMapping-16                      	128410842	         9.233 ns/op
+BenchmarkSketchAddSymbol/m=1000-16       	  123724	      9484 ns/op	   6.75 MB/s
+BenchmarkSketchAddSymbol/m=10000-16      	  111786	     10624 ns/op	   6.02 MB/s
+BenchmarkSketchAddSymbol/m=100000-16     	   90146	     12440 ns/op	   5.14 MB/s
+BenchmarkSketchAddSymbol/m=1000000-16    	   74266	     15536 ns/op	   4.12 MB/s
+BenchmarkSketchAddSymbol/m=10000000-16   	   64290	     18551 ns/op	   3.45 MB/s
+PASS
+# upstream 4afa6bc06cb2237d9ea273a51d97a7e05b3f573b
+goos: linux
+goarch: amd64
+pkg: github.com/yangl1996/riblt
+cpu: Intel(R) Xeon(R) W-1390P @ 3.50GHz
+BenchmarkEncodeAndDecode/d=10-16         	  105866	     11345 ns/op	  56.41 MB/s	         1.721 symbols/diff
+BenchmarkEncodeAndDecode/d=20-16         	   44910	     26624 ns/op	  48.08 MB/s	         1.631 symbols/diff
+BenchmarkEncodeAndDecode/d=40-16         	   19374	     62182 ns/op	  41.17 MB/s	         1.542 symbols/diff
+BenchmarkEncodeAndDecode/d=100-16        	    5734	    195959 ns/op	  32.66 MB/s	         1.454 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-16       	     361	   3243843 ns/op	  19.73 MB/s	         1.375 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-16      	      19	  56025465 ns/op	  11.42 MB/s	         1.361 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-16      	       3	 459937647 ns/op	   6.96 MB/s	         1.352 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-16     	       1	1394856226 ns/op	   4.59 MB/s	         1.351 symbols/diff
+BenchmarkMapping-16                      	190065004	         6.260 ns/op
+BenchmarkSketchAddSymbol/m=1000-16       	 4553923	       256.2 ns/op	 249.84 MB/s
+BenchmarkSketchAddSymbol/m=10000-16      	 3392574	       351.3 ns/op	 182.17 MB/s
+BenchmarkSketchAddSymbol/m=100000-16     	 2421300	       471.1 ns/op	 135.86 MB/s
+BenchmarkSketchAddSymbol/m=1000000-16    	 1384400	       859.2 ns/op	  74.49 MB/s
+BenchmarkSketchAddSymbol/m=10000000-16   	  889869	      1288 ns/op	  49.68 MB/s
+PASS

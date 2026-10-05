@@ -1,0 +1,274 @@
+{
+  "id": "01a11a5b-9046-7637-b5af-cfa347a1a47d",
+  "started": "2026-10-08T07:13:46Z",
+  "finished": "2026-10-08T09:30:18Z",
+  "os": "macOS 27.0.1",
+  "kernel": "Darwin 27.0.0",
+  "arch": "arm64",
+  "cpu": "Apple M4",
+  "cores": 10,
+  "memory": 25769803776,
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "target": "generic",
+  "rustflags": "-C target-cpu=generic",
+  "bins": "/nix/store/220h2x4ahic4knxsmry7x6kqjj743p5b-ecmh-bench-bins-generic-ef9e82d",
+  "target_features": [
+    "neon"
+  ],
+  "commit": "ef9e82d39fbf06c605e1740360370f0003dc4ca4",
+  "dirty": false,
+  "suites": [
+    "compare",
+    "compare109",
+    "compare122",
+    "group",
+    "riblt"
+  ],
+  "profile": "full",
+  "criterion_args": "--warm-up-time 3 --measurement-time 5 --sample-size 100 --nresamples 100000 binary|gf2|xor|edwards\\.?127|weier(-jacobian)?\\.?127|fp127|riblt\\.mapping",
+  "group_fixtures": {
+    "binary-lambda.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-lambda.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-lambda.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-lambda.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-u.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-u.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary-w.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary-w.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.109": {
+      "r": "324518553658426723420669171851569",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.122": {
+      "r": "2658455991569831745950519011584223661",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "binary.122-gls": {
+      "r": "2658455991569831743503614373272993201",
+      "cofactor": 2,
+      "automorphisms": 4
+    },
+    "binary.127": {
+      "r": "85070591730234615870333724557581568083",
+      "cofactor": 2,
+      "automorphisms": 2
+    },
+    "edwards.107": {
+      "r": "40564819207303338764951909988331",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "edwards.127": {
+      "r": "42535295865117307936850010495998861179",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "edwards.61x2": {
+      "r": "1329227995784915872441444289547414943",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.128": {
+      "r": "85070591730234615859019443197777184273",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.61x2": {
+      "r": "1329227995784915871179040464728046741",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.64x2": {
+      "r": "85070591730234615323865223605536925781",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "twisted.goldilocks2": {
+      "r": "85070591690620534613930777733150035197",
+      "cofactor": 4,
+      "automorphisms": 2
+    },
+    "weier-jacobian.107": {
+      "r": "162259276829213350707235122428473",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier-jacobian.127": {
+      "r": "170141183460469231726140088868651089949",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier-jacobian.61x2": {
+      "r": "5316911983139663482406005536283217627",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.107": {
+      "r": "162259276829213350707235122428473",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.127": {
+      "r": "170141183460469231726140088868651089949",
+      "cofactor": 1,
+      "automorphisms": 2
+    },
+    "weier.61x2": {
+      "r": "5316911983139663482406005536283217627",
+      "cofactor": 1,
+      "automorphisms": 2
+    }
+  },
+  "group_plan": {
+    "edwards.127": "lead",
+    "weier-jacobian.127": "lead",
+    "weier.127": "lead",
+    "binary-u.127": "lead",
+    "binary-w.127": "lead",
+    "binary-lambda.127": "lead"
+  },
+  "riblt_plan": {
+    "binary-lambda.109": {
+      "h2c": "ti-addend",
+      "scope": "spot"
+    },
+    "binary-lambda.122": {
+      "h2c": "ti-addend",
+      "scope": "spot"
+    },
+    "binary-lambda.122-gls": {
+      "h2c": "ti-addend",
+      "scope": "spot"
+    },
+    "binary-lambda.127": {
+      "h2c": "ti-addend",
+      "scope": "buffer",
+      "proj": "fp127",
+      "mapproj": "fp127"
+    },
+    "binary-u.109": {
+      "h2c": "pornin-addend",
+      "scope": "spot"
+    },
+    "binary-u.122": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary-u.122-gls": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary-u.127": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "fp127",
+      "mapproj": "fp127"
+    },
+    "binary-w.109": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary-w.122": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary-w.122-gls": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary-w.127": {
+      "h2c": "pornin-addend",
+      "scope": "buffer",
+      "proj": "fp127",
+      "mapproj": "fp127"
+    },
+    "binary.109": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary.122": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary.122-gls": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "binary.127": {
+      "h2c": "ti",
+      "scope": "spot"
+    },
+    "edwards.127": {
+      "h2c": "ti",
+      "scope": "full",
+      "proj": "fp130",
+      "mapproj": "fp127"
+    },
+    "weier-jacobian.127": {
+      "h2c": "ti",
+      "scope": "full",
+      "proj": "fp127",
+      "mapproj": "fp127"
+    },
+    "weier.127": {
+      "h2c": "ti",
+      "scope": "buffer",
+      "proj": "fp127",
+      "mapproj": "fp127"
+    }
+  }
+}

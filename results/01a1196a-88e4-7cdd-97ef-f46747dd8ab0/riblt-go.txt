@@ -1,0 +1,60 @@
+# ristretto255 8c7dd499a8fdf2237e08240d17af5deddb1d428f
+goos: darwin
+goarch: arm64
+pkg: github.com/yangl1996/riblt
+cpu: Apple M4
+BenchmarkEncodeAndDecode/d=10-10         	    3292	    340044 ns/op	   1.88 MB/s	         1.723 symbols/diff
+BenchmarkEncodeAndDecode/d=20-10         	    1598	    746643 ns/op	   1.71 MB/s	         1.638 symbols/diff
+BenchmarkEncodeAndDecode/d=40-10         	     777	   1558469 ns/op	   1.64 MB/s	         1.543 symbols/diff
+BenchmarkEncodeAndDecode/d=100-10        	     290	   4180911 ns/op	   1.53 MB/s	         1.450 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-10       	      25	  46353212 ns/op	   1.38 MB/s	         1.370 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-10      	       2	 534713376 ns/op	   1.20 MB/s	         1.349 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-10      	       1	3119951709 ns/op	   1.03 MB/s	         1.359 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-10     	       1	6675758417 ns/op	   0.96 MB/s	         1.358 symbols/diff
+BenchmarkMapping-10                      	204228204	         5.875 ns/op
+BenchmarkSketchAddSymbol/m=1000-10       	  114762	     10325 ns/op	   6.20 MB/s
+BenchmarkSketchAddSymbol/m=10000-10      	  108339	     11150 ns/op	   5.74 MB/s
+BenchmarkSketchAddSymbol/m=100000-10     	   92113	     12950 ns/op	   4.94 MB/s
+BenchmarkSketchAddSymbol/m=1000000-10    	   79833	     14701 ns/op	   4.35 MB/s
+BenchmarkSketchAddSymbol/m=10000000-10   	   69350	     17137 ns/op	   3.73 MB/s
+PASS
+# ristretto255-chacha8 11521a4c73ebbbfe80050ec99a4f976eb9ce7147
+goos: darwin
+goarch: arm64
+pkg: github.com/yangl1996/riblt
+cpu: Apple M4
+BenchmarkEncodeAndDecode/d=10-10         	    3685	    327699 ns/op	   1.95 MB/s	         1.720 symbols/diff
+BenchmarkEncodeAndDecode/d=20-10         	    1666	    719071 ns/op	   1.78 MB/s	         1.646 symbols/diff
+BenchmarkEncodeAndDecode/d=40-10         	     790	   1548711 ns/op	   1.65 MB/s	         1.543 symbols/diff
+BenchmarkEncodeAndDecode/d=100-10        	     286	   4154701 ns/op	   1.54 MB/s	         1.450 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-10       	      25	  46982605 ns/op	   1.36 MB/s	         1.374 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-10      	       2	 585489667 ns/op	   1.09 MB/s	         1.365 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-10      	       1	3428023833 ns/op	   0.93 MB/s	         1.358 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-10     	       1	7238987249 ns/op	   0.88 MB/s	         1.355 symbols/diff
+BenchmarkMapping-10                      	163165444	         7.375 ns/op
+BenchmarkSketchAddSymbol/m=1000-10       	  114472	     10429 ns/op	   6.14 MB/s
+BenchmarkSketchAddSymbol/m=10000-10      	  106646	     11285 ns/op	   5.67 MB/s
+BenchmarkSketchAddSymbol/m=100000-10     	   90075	     13146 ns/op	   4.87 MB/s
+BenchmarkSketchAddSymbol/m=1000000-10    	   78579	     15041 ns/op	   4.25 MB/s
+BenchmarkSketchAddSymbol/m=10000000-10   	   68209	     17432 ns/op	   3.67 MB/s
+PASS
+# upstream 4afa6bc06cb2237d9ea273a51d97a7e05b3f573b
+goos: darwin
+goarch: arm64
+pkg: github.com/yangl1996/riblt
+cpu: Apple M4
+BenchmarkEncodeAndDecode/d=10-10         	  106087	     11104 ns/op	  57.64 MB/s	         1.721 symbols/diff
+BenchmarkEncodeAndDecode/d=20-10         	   50425	     23628 ns/op	  54.17 MB/s	         1.631 symbols/diff
+BenchmarkEncodeAndDecode/d=40-10         	   24136	     49712 ns/op	  51.50 MB/s	         1.542 symbols/diff
+BenchmarkEncodeAndDecode/d=100-10        	    8028	    147946 ns/op	  43.26 MB/s	         1.455 symbols/diff
+BenchmarkEncodeAndDecode/d=1000-10       	     496	   2391899 ns/op	  26.76 MB/s	         1.376 symbols/diff
+BenchmarkEncodeAndDecode/d=10000-10      	      28	  41813906 ns/op	  15.31 MB/s	         1.362 symbols/diff
+BenchmarkEncodeAndDecode/d=50000-10      	       4	 345055958 ns/op	   9.27 MB/s	         1.352 symbols/diff
+BenchmarkEncodeAndDecode/d=100000-10     	       2	 963353938 ns/op	   6.64 MB/s	         1.353 symbols/diff
+BenchmarkMapping-10                      	202957856	         5.891 ns/op
+BenchmarkSketchAddSymbol/m=1000-10       	 5244783	       229.6 ns/op	 278.72 MB/s
+BenchmarkSketchAddSymbol/m=10000-10      	 3871454	       307.7 ns/op	 207.98 MB/s
+BenchmarkSketchAddSymbol/m=100000-10     	 2931217	       404.9 ns/op	 158.05 MB/s
+BenchmarkSketchAddSymbol/m=1000000-10    	 1656528	       731.4 ns/op	  87.51 MB/s
+BenchmarkSketchAddSymbol/m=10000000-10   	 1084315	      1084 ns/op	  59.06 MB/s
+PASS
