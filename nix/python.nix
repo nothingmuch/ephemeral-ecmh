@@ -8,7 +8,10 @@
       # through uv2nix, not pip or a venv, so that checks and CI resolve the
       # same environment. Scripts run under this output, not a system python.
       pythonEnv = pkgs.python3.withPackages (ps: [
+        ps.matplotlib
+        ps.pandas
         ps.pytest
+        ps.seaborn
       ]);
     in
     {

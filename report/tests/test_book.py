@@ -1,7 +1,15 @@
+import json
+import re
+from pathlib import Path
+
+import bench_report
 import bibliography
 import book
+import figures
 import pytest
+from criterion_fixture import read_rows, write_tree
 
+FIXTURE = Path(__file__).parent / "fixtures" / "2026-09-30.tsv"
 BLOB = "https://example.org/r/blob/abc"
 BIB = (
     "@misc{a-2001,\n  author = {Doe, Jane},\n  title = {A},\n  year = {2001},\n}\n"
@@ -115,3 +123,112 @@ def test_assembly_covers_every_chapter(tmp_path):
     assert 'site-url = "/r/"' in toml
     assert 'additional-css = ["book.css"]' in toml
     assert "--content-max-width" in (out / "book.css").read_text()
+
+
+INDEX = (
+    "# Study\n\n* [C](c.md) - d\n\n# Evidence\n\n* [G](g.md) - e\n\n"
+    "# Reference\n\n* [L](literature.md) - f\n"
+)
+
+
+def test_entries_close_their_part():
+    assert book.with_entries(INDEX, "# Evidence", ["* [R](r.md) - x"]) == (
+        "# Study\n\n* [C](c.md) - d\n\n# Evidence\n\n* [G](g.md) - e\n"
+        "* [R](r.md) - x\n\n# Reference\n\n* [L](literature.md) - f\n"
+    )
+    assert book.with_entries(INDEX, "# Evidence", []) == INDEX
+    last = book.with_entries(INDEX, "# Reference", ["* [R](r.md) - x"])
+    assert last.endswith("* [L](literature.md) - f\n* [R](r.md) - x\n")
+    with pytest.raises(ValueError):
+        book.with_entries(INDEX, "# Results", ["* [R](r.md) - x"])
+
+
+META = {
+    "name": "m4-native",
+    "host": "box.local",
+    "started": "2026-10-04T09:00:00Z",
+    "cpu": "Apple M4",
+    "os": "macOS 26.6.2",
+    "arch": "arm64",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "rustflags": "-C target-cpu=apple-m4",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "dirty": False,
+    "profile": "full",
+    "group_fixtures": {
+        "binary.127": {"r": str(2**126 + 1), "cofactor": 2, "automorphisms": 2}
+    },
+}
+
+
+def repository(root, published=()):
+    (root / "docs").mkdir(parents=True)
+    (root / "references.bib").write_text(BIB)
+    (root / "README.md").write_text("# R\n")
+    (root / "docs" / "index.md").write_text(INDEX)
+    for name in ("c", "g", "literature"):
+        (root / "docs" / f"{name}.md").write_text(f"# {name}\n")
+    for name in published:
+        run = root / "bench-runs" / name
+        write_tree(read_rows(FIXTURE), run / "criterion")
+        (run / "meta.json").write_text(json.dumps(META | {"name": name}))
+        bench_report.export(run, root / "results" / name)
+    return root
+
+
+def test_without_published_runs_the_index_is_the_summary(tmp_path):
+    root = repository(tmp_path / "repo")
+    (root / "results").mkdir()
+    book.assemble(root, tmp_path / "book", "https://example.org/r", "abc")
+    src = tmp_path / "book" / "src"
+    assert (src / "SUMMARY.md").read_text() == book.summary(INDEX)
+    assert not (src / "results").exists()
+
+
+def test_each_published_run_is_a_chapter_of_evidence(tmp_path):
+    root = repository(tmp_path / "repo", ["x86-native", "m4-native"])
+    book.assemble(root, tmp_path / "book", "https://example.org/r", "abc")
+    src = tmp_path / "book" / "src"
+    summary = (src / "SUMMARY.md").read_text()
+    assert (
+        "# Evidence\n\n- [G](g.md)\n"
+        "- [Benchmark run m4-native](results/m4-native/report.md)\n"
+        "- [Benchmark run x86-native](results/x86-native/report.md)\n\n# Reference"
+    ) in summary
+    contents = (src / "contents.md").read_text()
+    assert (
+        "* [Benchmark run m4-native](results/m4-native/report.md) - "
+        "Apple M4 · rustc 1.98.1 · RUSTFLAGS=-C target-cpu=apple-m4 · "
+        "0123456789ab · full profile · 2026-10-04\n"
+    ) in contents
+    page = src / "results" / "m4-native" / "report.md"
+    style, text = page.read_text().split("\n\n", 1)
+    assert style.startswith("<style>table.grid{")
+    assert text.startswith(
+        "# Benchmark run m4-native\n\nRun m4-native started 2026-10-04T09:00:00Z "
+        "on Apple M4 (macOS 26.6.2, arm64) and timed commit "
+        "0123456789abcdef0123456789abcdef01234567, built by rustc 1.98.1 "
+        "(48a229cea 2026-09-01) with RUSTFLAGS -C target-cpu=apple-m4, in the "
+        "full profile.\n\n"
+    )
+    assert "box.local" not in text
+    # the grids shaded, as the report's introduction states
+    assert '<table class="grid">' in text and "background:" in text
+    light = re.findall(r'<img class="fig-light" src="([^"]+)"', text)
+    dark = re.findall(r'<img class="fig-dark" src="([^"]+)"', text)
+    assert light and all(f.endswith(".svg") for f in light)
+    assert dark == [f.removesuffix(".svg") + "-dark.svg" for f in light]
+    assert all((page.parent / f).is_file() for f in light + dark)
+    # the twin is the figure with the neutrals swapped, and only those
+    for f, d in zip(light, dark):
+        svg, twin = ((page.parent / n).read_text() for n in (f, d))
+        for old, new in figures.DARK.items():
+            svg = svg.replace(old, new)
+        assert twin == svg and bench_report.SURFACE not in twin
+    assert not list(page.parent.glob("*.png")) + list(page.parent.glob("*.html"))
+
+
+def test_a_run_name_must_be_a_path_segment(tmp_path):
+    root = repository(tmp_path / "repo", ["m4 native"])
+    with pytest.raises(ValueError, match="m4 native"):
+        book.assemble(root, tmp_path / "book", "https://example.org/r", "abc")

@@ -1,4 +1,5 @@
 /target
+/bench-runs
 result
 result-*
 .direnv/
