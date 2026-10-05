@@ -333,7 +333,7 @@ These assumptions differ from those of fixed-curve design:
   amortized, but must remain tractable for each new beacon value ([Parameter
   selection and verification](#parameter-selection-and-verification)).
 
-The constructions compared have
+[Candidate constructions](constructions.md) lists the constructions compared, at
 128-bit and shorter encodings. Their arithmetic costs are measured here; their
 security conditions are assessed separately.
 

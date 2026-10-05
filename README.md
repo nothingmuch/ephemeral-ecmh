@@ -143,6 +143,15 @@ conservative alternatives: their field multiplication uses the integer
 multiplier of every target, and a prime field has no subfield over which a Weil
 descent applies.
 
+With $m = 61$, $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})^2$ admits
+Galbraith–Lin–Scott (GLS) curves, whose constants range over about $2^{61}$
+values and whose automorphism lowers the rho cost by a factor $\sqrt{2}$ beyond
+that of the negation map. A $\mathrm{GF}(2^{61})$ coordinate fits one 64-bit
+word, and points have 16-byte encodings; the 107-bit and 109-bit families have
+14-byte encodings. Weil descent constrains the choice of binary field.
+[Candidate constructions](docs/constructions.md) lists the constructions
+compared and their operation counts.
+
 ## License
 
 [MIT](./LICENSE)

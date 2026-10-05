@@ -245,9 +245,25 @@ the same distinctions.
 
 ### Multiset hashes in deployment, and fixed-group baselines
 
+- `certicom-2010`, `libsecp256k1`. secp256k1's parameters and the library
+  timed in `benches/compare.rs` (compressed-point parsing, ElligatorSwift
+  decoding, Jacobian accumulation): the cost of ECMH on a fixed 256-bit
+  curve.
+- `bernstein-2006`, `hamburg-2015`, `rfc9496`, `curve25519-dalek`. Curve25519,
+  the Decaf quotient that removes its cofactor, the ristretto255 specification,
+  and the implementation timed in `benches/compare.rs`: the second fixed 256-bit
+  baseline. Decaf's quotient, which removes a cofactor of 4, is the model for
+  the `twisted` family's encoding of $E/\langle T \rangle$, which removes only
+  the 2-torsion point $T$.
 - `fips-180-4`, `aumasson-bernstein-2012`. SHA-256, the digest behind
   `src/hash.rs` and every map, and SipHash. XOR of either is the
   non-adversarial baseline every curve is compared against.
+
+### Binary fields and their dependence on carry-less multiplication
+
+- `crrl`. Pornin's library: the $\mathrm{GF}(2^{127})$ backends
+  (`field::gf2_127`) and the GLS254 code from which `curve::binary127::map` and
+  the $\mathrm{GF}(2^{122})$ tower are adapted.
 
 ### Binary curve models and addition formulas
 
@@ -261,6 +277,18 @@ the same distinctions.
   $\mathrm{GF}(2^{254}) = \mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
   curve. The $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})[u]$ tower and the GLS
   family (`binary.122-gls`) test whether this shape transfers at half the size.
+- `pornin-2024`. The general method: a prime-order group abstraction with
+  complete formulas from any curve of even order, most efficient for
+  $|E| \equiv 2 \pmod{4}$. Both characteristics are covered, so it states once
+  the structure the binary families ($E[r] = 2E$) and the `twisted` quotient
+  use.
+- `oliveira-et-al-2014`, `oliveira-et-al-2013`. $\lambda$-projective
+  coordinates, with mixed addition $8M + 2S$ and no curve constant: the
+  `curve::binary::lambda` accumulators. On curves with a dense $B$, where
+  Pornin's extended formulas need two full multiplications by $\beta = B^{1/4}$,
+  this costs less than the extended accumulator, at the price of incompleteness;
+  the unscaled formulas, at $7M + 2S$, move $\beta$ into the addend and cost
+  less than $\lambda$'s $8M + 2S$ for the addition itself.
 - `galbraith-lin-scott-2009`. GLS curves: over $\mathrm{GF}(q^2)$, quadratic
   twists of curves defined over $\mathrm{GF}(q)$, with an endomorphism $\psi$,
   $\psi^2 = -1$. For binary curves, $a = u$ and $B$ in $\mathrm{GF}(2^{61})$, as
@@ -268,3 +296,24 @@ the same distinctions.
   workload does not perform; what the family gains here is a curve constant in
   $\mathrm{GF}(2^{61})$, so each multiplication by it costs two word products
   instead of three. Its rho penalty is in the security section.
+
+### Odd-characteristic curve models and addition formulas
+
+- `edwards-2007`, `bernstein-lange-2007`. The Edwards normal form and its
+  complete addition law when $d$ is a non-square: the `edwards` family, with
+  $d$ drawn per salt.
+- `bernstein-et-al-2008`, `hisil-et-al-2008`. Twisted Edwards curves and
+  extended coordinates. With $a = -1$ a square, the addition is complete and
+  a cached addend costs $7M$; this is the `twisted` family's accumulator, and
+  the reason it requires $q \equiv 1 \pmod{4}$.
+- `renes-costello-batina-2016`. Complete projective formulas for
+  prime-order short Weierstrass curves, $11M + 2 m_b$ for mixed addition:
+  the `weier` family's accumulator, and the cost of completeness when the
+  order has no cofactor to quotient away.
+- `efd`. The Explicit-Formulas Database: the named formulas
+  (madd-2007-bl, dbl-2001-b) in `curve::weier::jacobian` and the operation
+  counts quoted in the module documentation.
+- `montgomery-1987`. Montgomery curves and simultaneous inversion. The inversion
+  method is `field::batch`, which every batch sum and batch normalization uses;
+  the Montgomery model is the form in which `edwards` points travel and are
+  summed in batches by the affine chord law.
