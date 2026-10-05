@@ -9,11 +9,14 @@
 //!   backends, for `binary122`.
 //! - `fp127`: F_p, p = 2^127 - 1, portable, for `edwards127` and `weier127`.
 //! - `fp107`: F_p, p = 2^107 - 1, portable, for `edwards107` and `weier107`.
+//! - `fp128`: F_p, p = 2^128 - 275, for the a = -1 Edwards curves of
+//!   `twisted128` (p = 5 mod 8, so -1 is a square).
 //! - `batch`: Montgomery's batch inversion, for any of them.
 
 pub mod batch;
 pub mod fp107;
 pub mod fp127;
+pub mod fp128;
 pub mod gf2_109;
 pub mod gf2_122;
 pub mod gf2_127;
@@ -146,8 +149,11 @@ macro_rules! prime {
         }
     };
 }
+// p = 3 mod 4 for the Mersenne primes, and 5 mod 8 for 2^128 - 275.
 prime!(fp107, fp107::Fp::new(fp107::P - 1), 107);
 prime!(fp127, fp127::Fp::new(fp127::P - 1), 127);
+prime!(fp128, fp128::Fp::new(2), 128);
+
 /// GF(2^m), as the binary curve laws use it: the arithmetic, and a
 /// canonical integer for each element. + is also -.
 pub trait Binary: Field + AddAssign {
@@ -331,6 +337,7 @@ mod tests {
     fn boundaries_prime() {
         boundaries::<fp107::Fp>(1, fp107::P);
         boundaries::<fp127::Fp>(1, fp127::P);
+        boundaries::<fp128::Fp>(1, fp128::P);
     }
 
     proptest! {
@@ -341,6 +348,11 @@ mod tests {
 
         #[test]
         fn odd_fp127(x in fp127::tests::fp(), y in fp127::tests::fp(), v in any::<u128>()) {
+            odd(1, x, y, v)?;
+        }
+
+        #[test]
+        fn odd_fp128(x in fp128::tests::fp(), y in fp128::tests::fp(), v in any::<u128>()) {
             odd(1, x, y, v)?;
         }
 

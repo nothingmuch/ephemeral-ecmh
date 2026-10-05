@@ -373,6 +373,10 @@ def test_current_suite_is_fully_classified(table):
             "group.encode/weier-jacobian.107/mode=batch,n=64",
             ("group ops", "weier107-jacobian", "encode", "batch"),
         ),
+        (
+            "field/fp128/sqrt_ratio",
+            ("field", "fp128", "sqrt_ratio", "per-element"),
+        ),
         # Plonky3's fields
         (
             "field/gf2_127/normalize (to_u128)",

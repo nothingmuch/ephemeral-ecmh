@@ -76,6 +76,7 @@ FAMILIES = {
     },
     "fp127": ("fp127", 127),
     "fp107": ("fp127", 107),
+    "fp128": ("fp127", 128),
     "edwards127": ("edwards127", 127),
     "edwards107": ("edwards127", 107),
     "weier127": ("weier127", 127),
@@ -308,6 +309,7 @@ FIELDS = {
     "gf2_122": "gf2_127",
     "fp127": "fp127",
     "fp107": "fp127",
+    "fp128": "fp127",
 }
 CURVES = [
     "xor",
@@ -424,7 +426,14 @@ FIELD_GROUPS = [
             ("gf2_109", "F_2[z]/(z^109 + z^5 + z^4 + z^2 + 1)"),
         ],
     ),
-    ("prime", [("fp127", "p = 2^127 − 1"), ("fp107", "p = 2^107 − 1")]),
+    (
+        "prime",
+        [
+            ("fp127", "p = 2^127 − 1"),
+            ("fp107", "p = 2^107 − 1"),
+            ("fp128", "p = 2^128 − 275, for twisted128"),
+        ],
+    ),
 ]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {
