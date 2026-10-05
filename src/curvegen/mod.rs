@@ -5,7 +5,9 @@
 //! probable-prime test; it does not supply a primality certificate.
 //!
 //! - `criteria`: candidate/order contracts and direct selection from point counts.
+//! - `agm`: counts points on binary curves (canonical lift, with `agm::zq`).
 
+pub mod agm;
 pub mod criteria;
 mod number;
 pub mod prove;
