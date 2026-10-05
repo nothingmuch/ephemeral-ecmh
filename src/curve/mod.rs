@@ -7,3 +7,4 @@
 
 pub mod binary;
 pub mod binary127;
+pub mod h2c;

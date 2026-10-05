@@ -8,6 +8,8 @@
 //!   inversion shared by the batch.
 //! - Encoding: x | Tr(y) << SIGN in `Model::Bytes`, 0 for O; hashing is
 //!   try-and-increment on the same x and sign.
+//! - `map`: Pornin's deterministic map, for the families whose modulus
+//!   gives it constants (`Pornin`).
 //!
 //! The families are `binary127` and `binary109`, a = 1 over `gf2_127` and
 //! `gf2_109`, and `binary122`'s two, a = u over `gf2_122` with B dense or
@@ -16,8 +18,14 @@
 mod affine;
 mod batch;
 mod curve;
+mod hash_to_curve;
+mod map;
 #[cfg(test)]
 pub(crate) mod tests;
 pub use affine::Affine;
 pub use batch::{add_batch, sum_batch};
 pub use curve::{Constant, Curve, Model};
+pub use hash_to_curve::candidate;
+#[cfg(test)]
+pub(crate) use map::map_suite;
+pub use map::{MapState, Pornin};
