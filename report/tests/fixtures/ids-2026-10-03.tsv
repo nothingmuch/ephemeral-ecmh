@@ -62,6 +62,20 @@ field	gf2_109/sqrt
 field	gf2_109/square latency (dependent chain)
 field	gf2_109/square throughput (8 chains)
 field	gf2_109/trace
+field	gf2_122/batch invert (product tree)
+field	gf2_122/invert
+field	gf2_122/mul latency (dependent chain)
+field	gf2_122/mul throughput (8 chains)
+field	gf2_122/mul_base (by a GF(2^61) constant) latency (dependent chain)
+field	gf2_122/mul_base (by a GF(2^61) constant) throughput (8 chains)
+field	gf2_122/mul_u2 (by a^2 = 1 + a) latency (dependent chain)
+field	gf2_122/mul_u2 (by a^2 = 1 + a) throughput (8 chains)
+field	gf2_122/normalize (to_u128)
+field	gf2_122/qsolve (z^2 + z = c, 2 base halftraces)
+field	gf2_122/sqrt
+field	gf2_122/square latency (dependent chain)
+field	gf2_122/square throughput (8 chains)
+field	gf2_122/trace
 field	gf2_127/batch invert (product tree)
 field	gf2_127/halftrace
 field	gf2_127/halftrace (byte tables)

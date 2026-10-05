@@ -74,6 +74,8 @@ macro_rules! binary_field {
 pub mod field {
     binary_field!(gf2_127, crate::field::gf2_127::Gf);
     binary_field!(gf2_109, crate::field::gf2_109::Gf);
+    binary_field!(gf2_122, crate::field::gf2_122::Gf);
+    binary_field!(gf2_61, crate::field::gf2_122::Gf61);
 
     pub mod halftrace {
         #[inline(never)]
@@ -83,6 +85,10 @@ pub mod field {
         #[inline(never)]
         pub fn gf2_109(a: crate::field::gf2_109::Gf) -> crate::field::gf2_109::Gf {
             crate::field::gf2_109::halftrace8(a)
+        }
+        #[inline(never)]
+        pub fn gf2_122(a: crate::field::gf2_122::Gf) -> crate::field::gf2_122::Gf {
+            a.qsolve()
         }
     }
 

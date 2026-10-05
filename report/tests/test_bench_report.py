@@ -218,7 +218,19 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_109", "add", "throughput"),
         ),
         # GF(2^122): qsolve sits with the halftraces
+        (
+            "field/gf2_122/qsolve (z^2 + z = c, 2 base halftraces)",
+            ("field", "gf2_122", "halftrace", "per-element"),
+        ),
+        (
+            "field/gf2_122/mul_base (by a GF(2^61) constant) throughput (8 chains)",
+            ("field", "gf2_122", "mul_base", "throughput"),
+        ),
         ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
+        (
+            "field/gf2_122/mul_u2 (by a^2 = 1 + a) latency (dependent chain)",
+            ("field", "gf2_122", "mul_u2", "latency"),
+        ),
         (
             "field/gf2_109/normalize (to_u128)",
             ("field", "gf2_109", "normalize", "per-element"),

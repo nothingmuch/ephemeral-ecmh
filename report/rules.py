@@ -81,6 +81,7 @@ FAMILIES = {
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
+FAMILIES["gf2_122"] = ("gf2_127", 122)
 # How ids spell a family: the first word of the function id's first
 # component, e.g. "binary-u.122-gls" in group.add/binary-u.122-gls/...,
 # "gf2_127" in h2c_parts/gf2_127 t&i/... Each family's name spells it.
@@ -290,6 +291,7 @@ ALSO = {
 FIELDS = {
     "gf2_127": "gf2_127",
     "gf2_109": "gf2_127",
+    "gf2_122": "gf2_127",
     "fp127": "fp127",
 }
 CURVES = [
@@ -366,6 +368,7 @@ FIELD_GROUPS = [
         "binary",
         [
             ("gf2_127", "F_2[z]/(z^127 + z^63 + 1)"),
+            ("gf2_122", "GF(2^61)[u]/(u^2 + u + 1)"),
             ("gf2_109", "F_2[z]/(z^109 + z^5 + z^4 + z^2 + 1)"),
         ],
     ),
