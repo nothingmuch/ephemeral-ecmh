@@ -119,7 +119,7 @@ macro_rules! registry {
         #[cfg(test)]
         #[test]
         fn base_fixtures_reproduce_kat_hashes_and_sums() {
-            use ephemeral_ecmh::group::{Encode, Group};
+            use ephemeral_ecmh::group::{Accumulate, Encode, Group};
             use ephemeral_ecmh::hash::Salted;
             $(
                 let f = $name();
@@ -151,4 +151,6 @@ macro_rules! registry {
 registry! {
     binary127: curve::binary127::Curve, kats::GF2_127_CERTS, select::verify_gf2_127,
         ("binary", "127", 2, 2), binary;
+    edwards127: curve::edwards127::Curve, kats::FP127_CERTS, select::verify_fp127,
+        ("edwards", "127", 4, 2), single;
 }

@@ -57,6 +57,7 @@ mod tests {
     use super::*;
     use crate::curve::binary::lambda;
     use crate::curve::binary127;
+    use crate::curve::edwards127;
     use crate::group::{Accumulate, Decode};
     use proptest::prelude::*;
 
@@ -229,6 +230,11 @@ mod tests {
         #[test]
         fn binary127_lambda_matches_binary127(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
             check_lambda_matches_binary127(c, salt, xs, signs)?;
+        }
+
+        #[test]
+        fn edwards127_ecmh(c in edwards127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
         }
 
         #[test]

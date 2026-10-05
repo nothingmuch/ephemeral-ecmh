@@ -10,6 +10,7 @@
 //! F_p has not been measured. Over GF(2^127) squaring mod m is linear and
 //! costs d^2/2 M (see `sieve` for the cost model).
 
+use crate::field::fp127::Fp;
 use crate::field::gf2_127::{Gf, from_u128};
 use core::ops::{Add, Mul, Neg, Sub};
 
@@ -40,6 +41,17 @@ impl Field for Gf {
     fn shift(k: u32) -> Self {
         assert!(k < 127, "z^0..z^126 separate any two roots");
         from_u128(1 << k)
+    }
+}
+
+impl Field for Fp {
+    const CHAR2: bool = false;
+    const Q: u128 = crate::field::fp127::P;
+    fn small(n: u64) -> Self {
+        Fp::new(n as u128)
+    }
+    fn shift(k: u32) -> Self {
+        Fp::new(k as u128)
     }
 }
 
@@ -409,6 +421,7 @@ pub fn find_root<F: Field, W>(m: &Poly<F>, test: &mut impl FnMut(F) -> Option<W>
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::field::Field as _;
     use crate::field::batch::Invert;
     use proptest::prelude::*;
 
@@ -535,7 +548,21 @@ pub(crate) mod tests {
         }
 
         #[test]
+        fn fp127_ring_laws(
+            a in poly(crate::field::fp127::tests::fp(), 10),
+            b in poly(crate::field::fp127::tests::fp(), 10),
+            c in poly(crate::field::fp127::tests::fp(), 10),
+        ) {
+            ring_laws(&a, &b, &c);
+        }
+
+        #[test]
         fn gf2_127_division(a in poly(gf(), 16), d in poly(gf(), 8)) {
+            division(&a, &d);
+        }
+
+        #[test]
+        fn fp127_division(a in poly(crate::field::fp127::tests::fp(), 16), d in poly(crate::field::fp127::tests::fp(), 8)) {
             division(&a, &d);
         }
 
@@ -545,7 +572,25 @@ pub(crate) mod tests {
         }
 
         #[test]
+        fn fp127_modular(
+            m in modulus(crate::field::fp127::tests::fp(), 12),
+            a in poly(crate::field::fp127::tests::fp(), 16),
+            b in poly(crate::field::fp127::tests::fp(), 16),
+        ) {
+            modular(&m, &a, &b);
+        }
+
+        #[test]
         fn gf2_127_gcd_of_products(rs in prop::collection::vec(gf(), 1..6), t in gf(), c in gf()) {
+            gcd_of_products(&rs, t, c);
+        }
+
+        #[test]
+        fn fp127_gcd_of_products(
+            rs in prop::collection::vec(crate::field::fp127::tests::fp(), 1..6),
+            t in crate::field::fp127::tests::fp(),
+            c in crate::field::fp127::tests::fp(),
+        ) {
             gcd_of_products(&rs, t, c);
         }
 
@@ -555,11 +600,21 @@ pub(crate) mod tests {
             let c = if c.trace() == 1 { c } else { c + Gf::ONE };
             roots(&rs, &Poly::new(vec![c, Gf::ONE, Gf::ONE]));
         }
+
+        #[test]
+        fn fp127_roots(rs in prop::collection::vec(crate::field::fp127::tests::fp(), 0..8), n in crate::field::fp127::tests::fp()) {
+            // x^2 - n has no root in F_p iff n is not a square
+            let n = if n.is_square() { -n } else { n };
+            prop_assume!(!n.is_square());
+            roots(&rs, &Poly::new(vec![-n, Fp::ZERO, Fp::ONE]));
+        }
     }
 
     #[test]
     fn roots_of_split_moduli() {
         // every root in F, 0 among them (over F_p, x^(p+1) - x^2 has it too)
+        let fp: Vec<Fp> = (0..6).map(Fp::small).collect();
+        roots(&fp, &Poly::constant(Fp::ONE));
         let gf: Vec<Gf> = (0..6).map(|k| from_u128(k * 0x1234_5678_9abc)).collect();
         roots(&gf, &Poly::constant(Gf::ONE));
     }
@@ -663,5 +718,13 @@ pub(crate) mod tests {
         fn shift(k: u32) -> Self {
             Counted(F::shift(k))
         }
+    }
+
+    #[test]
+    fn counted_counts() {
+        let (a, b) = (Counted(Fp::new(3)), Counted(Fp::new(5)));
+        let (r, ops) = count(|| (a * b + a.square()).inv());
+        assert!((r.0 * Fp::new(24) - Fp::ONE).is_zero());
+        assert_eq!(ops, Ops { m: 1, s: 1, i: 1 });
     }
 }

@@ -15,8 +15,8 @@ use common::{each, packing, whole};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use ephemeral_ecmh::curve::h2c::map1;
-use ephemeral_ecmh::curve::{binary, binary127};
+use ephemeral_ecmh::curve::h2c::{Elligator2, map1};
+use ephemeral_ecmh::curve::{binary, binary127, edwards127};
 use ephemeral_ecmh::ecmh::digest_batch;
 use ephemeral_ecmh::field::fp127::Fp;
 use ephemeral_ecmh::field::gf2_127::{self, Gf, MASK127, from_u128};
@@ -33,6 +33,7 @@ const ACCS: usize = 8;
 struct Setup {
     seed: [u8; 32],
     bin: binary127::Curve,
+    ed: edwards127::Curve,
     salt: Salted,
     items: Vec<[u8; 36]>,
     /// the first digest half of each item: a hash-to-curve candidate
@@ -41,7 +42,9 @@ struct Setup {
 
 fn setup() -> Setup {
     let bin = common::families::binary127();
+    let ed = common::families::edwards127();
     let seed = bin.seed;
+    assert_eq!(seed, ed.seed);
     let salt = Salted::new(ephemeral_ecmh::ecmh::TAG_ITEM, &seed);
     let items = common::items(&[], N);
     let cands = items
@@ -51,6 +54,7 @@ fn setup() -> Setup {
     Setup {
         seed,
         bin: bin.group,
+        ed: ed.group,
         salt,
         items,
         cands,
@@ -302,6 +306,16 @@ fn hash_to_curve(c: &mut Criterion) {
     each(&mut g, "gf2_127/pornin map x2", &refs, |m| {
         s.bin.hash_to_curve_map2(&s.salt, m)
     });
+    each(
+        &mut g,
+        "edwards127/edwards-native try-and-increment",
+        &refs,
+        |m| s.ed.hash_to_edwards(&s.salt, m),
+    );
+    let ell = Elligator2::new(s.ed).unwrap();
+    each(&mut g, "edwards127/elligator2 x1", &refs, |m| {
+        map1(&ell, &s.salt, m)
+    });
     each(&mut g, "ristretto255/hash_from_bytes<Sha512>", &refs, |m| {
         RistrettoPoint::hash_from_bytes::<Sha512>(m)
     });
@@ -340,6 +354,11 @@ fn negate(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
     let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
+    let hm: Vec<_> = refs
+        .iter()
+        .map(|m| s.ed.hash_to_curve(&s.salt, m))
+        .collect();
+    let em: Vec<_> = hm.iter().map(|p| s.ed.from_affine(p)).collect();
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
@@ -347,6 +366,7 @@ fn negate(c: &mut Criterion) {
     let hs: Vec<_> = refs.iter().map(|m| secp_hash(&s.salt, m)).collect();
     let mut g = c.benchmark_group("negate");
     each(&mut g, "gf2_127/affine (y += x)", &hb, |p| p.neg());
+    each(&mut g, "edwards127/extended (-X, -T)", &em, |p| p.neg());
     each(&mut g, "ristretto255/-P", &hr, |p| -p);
     each(&mut g, "secp256k1/PublicKey::negate", &hs, |p| p.negate());
     g.finish();
@@ -356,6 +376,10 @@ fn add(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
     let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
+    let hm: Vec<_> = refs
+        .iter()
+        .map(|m| s.ed.hash_to_curve(&s.salt, m))
+        .collect();
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
@@ -418,6 +442,15 @@ fn add(c: &mut Criterion) {
     throughput!("gf2_127/extended += affine", s.bin.neutral(), hb, |a, p| s
         .bin
         .add_affine(a, p));
+    g.bench_function("edwards127/batch montgomery affine (tree sum)", |bn| {
+        bn.iter(|| s.ed.sum_batch(black_box(&hm)))
+    });
+    throughput!(
+        "edwards127/+= montgomery affine",
+        edwards127::Point::IDENTITY,
+        hm,
+        |a, p| s.ed.add_ext(a, &s.ed.from_affine(p))
+    );
     streaming!(
         "ristretto255/+=",
         RistrettoPoint::default(),
@@ -454,6 +487,9 @@ fn digest(c: &mut Criterion) {
     });
     g.bench_function("gf2_127/batch", |bn| {
         bn.iter(|| digest_batch(s.bin, &s.seed, &refs))
+    });
+    g.bench_function("edwards127/batch", |bn| {
+        bn.iter(|| digest_batch(s.ed, &s.seed, &refs))
     });
     g.bench_function("ristretto255/streaming", |bn| {
         bn.iter(|| {

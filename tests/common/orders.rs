@@ -174,3 +174,266 @@ pub const GF2_127: Orders = Orders {
         (0x3fffffffffffffffba7f5e5e2ec2d07b, 0x5),
     ],
 };
+
+pub const FP127: Orders = Orders {
+    seed: [
+        0, 0, 0, 0, 0, 25, 214, 104, 156, 8, 90, 225, 101, 131, 30, 147, 79, 247, 99, 174, 70, 162,
+        166, 193, 114, 179, 241, 182, 10, 140, 226, 111,
+    ],
+    orders: &[
+        (
+            0x55652782103fa34fa885245ed36d1c4a,
+            0x7fffffffffffffff8d9d6e24c134e9e4,
+        ),
+        (
+            0x1b820417331b5451765a6723c57d73b7,
+            0x800000000000000012ae705677e13458,
+        ),
+        (
+            0x68707c4697fc5086f7e0fc0515432b7e,
+            0x7fffffffffffffffcc61ff9e0ef1d500,
+        ),
+        (
+            0x16288c7484d115e6c27d464e52f974ec,
+            0x800000000000000034338371579ffa2c,
+        ),
+        (
+            0x5722f0b4f7d537485845f38e86820cf6,
+            0x7fffffffffffffffc809c9bdc6bcc4b0,
+        ),
+        (
+            0x465b526873ae1b635adad3926d6d6db3,
+            0x80000000000000006834984692984bf0,
+        ),
+        (
+            0x675af0579768bfa5ba14441cfdc5657,
+            0x7fffffffffffffff561d805a4465bc60,
+        ),
+        (
+            0x11bf0903959bc44162f0c67e3b1c258a,
+            0x80000000000000010167a1d3f6a3697c,
+        ),
+        (
+            0x5888735aadb05b5a22790dc709d35685,
+            0x7fffffffffffffff45b9202cfe8a5c7c,
+        ),
+        (
+            0x40825567539028e2813552ab82e8521c,
+            0x80000000000000001ac51ed34a950bd0,
+        ),
+        (
+            0x7c6a413b4dc1c6bdbff6a5f023c8a777,
+            0x7ffffffffffffffea61b7adc1639e620,
+        ),
+        (
+            0x79a656e2a4355193a2d6fb237d4a22f9,
+            0x7fffffffffffffff914717243166f238,
+        ),
+        (
+            0x24d1d2c8000fc498eb3ee82f6bd66ed0,
+            0x800000000000000070876663f1f2b2f8,
+        ),
+        (
+            0x3897deea2810ff52b8792a008fcc52f3,
+            0x7fffffffffffffff36e651426e568c34,
+        ),
+        (
+            0x3d7826cacda896d29b1f392774fa5ec9,
+            0x7fffffffffffffffa5b8d90304655540,
+        ),
+        (
+            0x748449803a7cee4c6d19420d83f8e817,
+            0x800000000000000031dcb0b945e95d60,
+        ),
+        (
+            0x73cec04d6f9dc15ac55d5269e509a02f,
+            0x80000000000000001a4521c55af6ef68,
+        ),
+        (
+            0x11bbc5234d2c813dcfafa1cbda710c77,
+            0x8000000000000000a54010a6d678c2e8,
+        ),
+        (
+            0x5e2b94306eafb9016b158a06d3ba7f38,
+            0x7fffffffffffffff651d0d5e685114ac,
+        ),
+        (
+            0x3a2c54066ea6043aab87a89b398be0d1,
+            0x7fffffffffffffff312dcc9ce9b25b48,
+        ),
+        (
+            0x2ed2197f66cf045209a7a02ef4c8ff50,
+            0x7ffffffffffffffffb4c34089def1b04,
+        ),
+        (
+            0x8fc6dbff2585447e3497435dcfb2159,
+            0x7fffffffffffffff55a7b10dba6e15c8,
+        ),
+        (
+            0x9ebc711b1a02384640b85f64c604957,
+            0x7ffffffffffffffeed5c9af8ac33a510,
+        ),
+        (
+            0x7826db3bb88ae05adb722366184e5a0b,
+            0x7fffffffffffffffc5ccecf0eedf7028,
+        ),
+        (
+            0x24c9985dd6cfbbc7a8725b0533e1382b,
+            0x80000000000000000a9875a03cb75ce4,
+        ),
+        (
+            0x7f86dd9630bc961baf0d5f9997b25ef6,
+            0x8000000000000000fb163db4158ce1ac,
+        ),
+        (
+            0x546b2fc1c322603175660e2272f49ba8,
+            0x7fffffffffffffff92356bcb9b177710,
+        ),
+        (
+            0x6aa704953af6b4e165599c3b0060189e,
+            0x80000000000000005e6b403dedef7288,
+        ),
+        (
+            0x3fea09f98fd24dc61dfbab5affa26ff0,
+            0x800000000000000006e9d43d73916070,
+        ),
+        (
+            0x2214a427d90bc8e41814eda55d19fa42,
+            0x7ffffffffffffffee2c2f86a9e0ff470,
+        ),
+        (
+            0x1b614e17b13bd0df68713703a7b1b7c,
+            0x7fffffffffffffffa605d55383cee3bc,
+        ),
+        (
+            0x5a81b78d3179fd4156b84e32b7ec9670,
+            0x80000000000000008c66d72ecb019efc,
+        ),
+        (
+            0x5cf9bd826f282d6362d16d2cd4548999,
+            0x80000000000000003cd1c822d71c27f4,
+        ),
+        (
+            0x62543694f853fcbb5e8b1e46de7855ae,
+            0x7fffffffffffffff73b287fd4eb41300,
+        ),
+        (
+            0x14334ffa6d08e279a3ba12120815b117,
+            0x8000000000000000155f7e603c394254,
+        ),
+        (
+            0x34d2c9946bbf94baf06a1d9e1fa3e992,
+            0x80000000000000005406cd03176a34e4,
+        ),
+        (
+            0x1031e514c4fcd09ff8a106b39c471fcb,
+            0x800000000000000088f81ccdbcf955d4,
+        ),
+        (
+            0x18a62cd6dddcb539ab64ca1988126c36,
+            0x80000000000000009b2321efff665198,
+        ),
+        (
+            0x1b6cfa5605dea9bc92ff733a3f53a079,
+            0x7fffffffffffffffc938c0882b6e5284,
+        ),
+        (
+            0xfa2950e0ba2d34a599d814e80ce197a,
+            0x7fffffffffffffff21ee20a33839e7e8,
+        ),
+        (
+            0x400922e18a2da5c5352d84aa5d0380dd,
+            0x8000000000000000b4f8fdb3f98bbff0,
+        ),
+        (
+            0x60d2675d4cafaae4e053d77df1389c8d,
+            0x800000000000000066e08a90ad79bca0,
+        ),
+        (
+            0x33a0e38ca787de4737d586c5787272d0,
+            0x80000000000000005a64eddf50b6cdd4,
+        ),
+        (
+            0x4b515e1a6f6b340a2f75dec1640bd8f9,
+            0x8000000000000000afbf5d5b9f6f47ac,
+        ),
+        (
+            0x7884562f5b4b7165f6d8afa9d8f72777,
+            0x7fffffffffffffff1e6831f227967e0c,
+        ),
+        (
+            0x376f24fe80c7fd0d6461c988548c9b6d,
+            0x8000000000000000d1a155d5b57d9720,
+        ),
+        (
+            0x42fb62b7b100839c84951a76fc7ac550,
+            0x800000000000000065cdb3c8f8c00254,
+        ),
+        (
+            0x61134788451da16252cee313df2b4553,
+            0x7ffffffffffffffee6d7f5a25475098c,
+        ),
+        (
+            0x286866de8c278ff81336d40d58ddaa37,
+            0x7fffffffffffffffbe81837fdd4c3510,
+        ),
+        (
+            0x4128d3acf2959ec01afb9f9acb22533c,
+            0x800000000000000003441789385014f0,
+        ),
+        (
+            0x3a6fb6f2c5a7c1226ce30e819a731dca,
+            0x7fffffffffffffffa89ad3839fadac74,
+        ),
+        (
+            0x1d6ce4443636b8d66a4312dc5c4cea67,
+            0x80000000000000009b566505f786a6d0,
+        ),
+        (
+            0x73df669d47b97af69b1648fa87adbefe,
+            0x800000000000000092e77f4a9fe27fc8,
+        ),
+        (
+            0x409e8172d059dc3fb14edb6f389bcae8,
+            0x800000000000000020557b67f12bc8ac,
+        ),
+        (
+            0x2e1fede5327f8ce6e7152dbf0ce01f76,
+            0x80000000000000012f371f4f825ab068,
+        ),
+        (
+            0x8c16d2568cbc0fa9e1baf546dc540a,
+            0x8000000000000000ccb0e8d83b780674,
+        ),
+        (
+            0x18e7ad12a74de3c218133ea15c75f8c2,
+            0x8000000000000000da0edc3487767dec,
+        ),
+    ],
+    factors: &[
+        (0x1fffffffffffffffe3675b89304d3a79, 0xb),
+        (0x20000000000000000d0ce0dc55e7fe8b, 0x5),
+        (0x20000000000000004059e874fda8da5f, 0x3497),
+        (0x1fffffffffffffffd16e480b3fa2971f, 0x3),
+        (0x1fffffffffffffffcdb994509b95a30d, 0x13),
+        (0x1fffffffffffffffd94743579a14452b, 0x3),
+        (0x1ffffffffffffffffed30d02277bc6c1, 0xd),
+        (0x200000000000000002a61d680f2dd739, 0x5),
+        (0x20000000000000003ec58f6d0563386b, 0x3),
+        (0x1fffffffffffffffe9817554e0f3b8ef, 0x7),
+        (0x20000000000000002319b5cbb2c067bf, 0x3),
+        (0x20000000000000000f347208b5c709fd, 0x97),
+        (0x20000000000000000557df980f0e5095, 0x17),
+        (0x20000000000000001501b340c5da8d39, 0x5),
+        (0x2000000000000000223e07336f3e5575, 0x3),
+        (0x1ffffffffffffffff24e30220adb94a1, 0x265),
+        (0x200000000000000016993b77d42db375, 0x7),
+        (0x20000000000000002befd756e7dbd1eb, 0x3),
+        (0x1fffffffffffffffc79a0c7c89e59f83, 0x3),
+        (0x200000000000000019736cf23e300095, 0x167),
+        (0x1fffffffffffffffb9b5fd68951d4263, 0x7),
+        (0x1fffffffffffffffea26b4e0e7eb6b1d, 0x11),
+        (0x200000000000000008155ed9fc4af22b, 0x89),
+        (0x2000000000000000332c3a360ede019d, 0x3),
+    ],
+};

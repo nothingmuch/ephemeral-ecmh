@@ -75,6 +75,7 @@ FAMILIES = {
         for acc in ACCUMULATORS
     },
     "fp127": ("fp127", 127),
+    "edwards127": ("edwards127", 127),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -93,10 +94,12 @@ SPELLINGS = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
+    "edwards.127": "edwards127",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
     "fp": "fp127",
+    "edwards": "edwards127",
 }
 # (regex on the group, spelling, family): spellings some groups use for
 # another family: Ristretto's input digest is a step of its hash.
@@ -127,6 +130,7 @@ def curve(family: str) -> str:
 # vision deficiencies; the baseline is grey.
 COLORS = {
     "gf2_127": "#4e79a7",
+    "edwards127": "#59a14f",
     "fp127": "#b6992d",
     "xor": "#79706e",
     "ristretto255": "#b07aa1",
@@ -135,6 +139,7 @@ COLORS = {
 }
 LIGHT = {
     "gf2_127": "#a0cbe8",
+    "edwards127": "#8cd17d",
     "fp127": "#f1ce63",
     "xor": "#bab0ac",
     "ristretto255": "#d4a6c8",
@@ -146,6 +151,7 @@ FAMILY_ORDER = [
     "xor",
     "gf2_127",
     "fp127",
+    "edwards127",
     "ristretto255",
     "secp256k1",
     OTHER,
@@ -281,6 +287,7 @@ CURVES = [
     "gf2_127-lambda",
     "gf2_127-w",
     "gf2_127-u",
+    "edwards127",
     "ristretto255",
     "secp256k1",
 ]
@@ -313,6 +320,12 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "F_p, p = 2^127 − 1, 16 bytes",
+        [
+            ("edwards127", "a = 1 Edwards, extended += cached"),
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -330,6 +343,7 @@ FIELD_OF = {
     "gf2_127-lambda": "gf2_127",
     "gf2_127-w": "gf2_127",
     "gf2_127-u": "gf2_127",
+    "edwards127": "fp127",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

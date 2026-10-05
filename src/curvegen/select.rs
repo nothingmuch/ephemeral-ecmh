@@ -72,11 +72,15 @@ use super::criteria::{AdmissibleR, Criteria, OrderError};
 pub use super::number::{EMBEDDING_MIN, embedding_degree_ok, is_prime};
 
 use crate::curve::binary::{self, Model};
-use crate::curve::binary127;
+use crate::curve::encoding::Signed;
+use crate::curve::{binary127, edwards, edwards127};
+use crate::field::OddField;
+use crate::field::fp127::{Fp, P};
 use crate::field::gf2_127::{MASK127, from_u128};
 use crate::hash::{Salted, halves};
 
 pub const TAG_GF2_127: &[u8] = b"ephemeral-ecmh/curve/gf2";
+pub const TAG_FP127: &[u8] = b"ephemeral-ecmh/curve/fp127";
 pub const TAG_CERT_POINT: &[u8] = b"ephemeral-ecmh/cert-point";
 
 /// floor(2 sqrt q), the same for q = 2^127 and p = 2^127 - 1.
@@ -228,6 +232,22 @@ pub(crate) fn even_order<const N: usize, C: Arithmetic<N>>(
     })
 }
 
+/// The Edwards marker: l = 8 with `clear * P` of order 2 in the
+/// represented group.
+pub(crate) fn eight_torsion<const N: usize, C: Arithmetic<N>>(
+    clear: u128,
+    c: &C,
+    p: &C::Affine,
+    l: u128,
+) -> Option<bool> {
+    (l == 8).then(|| {
+        c.lift(p).is_some_and(|q| {
+            let q = c.mul(&q, clear);
+            !c.is_identity(&q) && c.is_identity(&c.mul(&q, 2))
+        })
+    })
+}
+
 impl<const N: usize, M: Model<Bytes = [u8; N]>> Arithmetic<N> for binary::Curve<M> {
     type Affine = binary::Affine<M>;
     type Point = binary::Point<M>;
@@ -243,6 +263,27 @@ impl<const N: usize, M: Model<Bytes = [u8; N]>> Arithmetic<N> for binary::Curve<
     }
     fn mul(&self, p: &Self::Point, k: u128) -> Self::Point {
         binary::Curve::mul(self, p, k)
+    }
+    fn is_identity(&self, p: &Self::Point) -> bool {
+        p.is_identity()
+    }
+}
+
+impl<const N: usize, F: OddField + Signed<Bytes = [u8; N]>> Arithmetic<N> for edwards::Curve<F> {
+    type Affine = edwards::Affine<F>;
+    type Point = edwards::Point<F>;
+
+    fn decode(&self, enc: [u8; N]) -> Option<Self::Affine> {
+        edwards::Curve::decode(self, enc)
+    }
+    fn hash(&self, salt: &Salted, msg: &[u8]) -> Self::Affine {
+        self.hash_to_curve(salt, msg)
+    }
+    fn lift(&self, p: &Self::Affine) -> Option<Self::Point> {
+        (!p.is_identity()).then(|| self.from_affine(p))
+    }
+    fn mul(&self, p: &Self::Point, k: u128) -> Self::Point {
+        edwards::Curve::mul(self, p, k)
     }
     fn is_identity(&self, p: &Self::Point) -> bool {
         p.is_identity()
@@ -271,8 +312,38 @@ impl Policy<16> for Binary127 {
     }
 }
 
+/// Edwards x^2 + y^2 = 1 + d x^2 y^2 over F_p, p = 2^127 - 1, #E = 4r.
+pub struct Edwards127;
+
+impl Criteria for Edwards127 {
+    type Curve = edwards127::Curve;
+    const TAG: &'static [u8] = TAG_FP127;
+    const R: AdmissibleR = AdmissibleR::new(P, HASSE, 4);
+    // 8 | #E iff 1 - d is a square; accepted Edwards orders are 4r.
+    fn reject_without_count(c: &Self::Curve) -> bool {
+        (Fp::ONE - c.d).is_square()
+    }
+
+    fn candidate(seed: &[u8; 32], j: u32) -> Option<Self::Curve> {
+        edwards127::Curve::new(Fp::new(half(Self::TAG, seed, j) & MASK127))
+    }
+}
+
+impl Policy<16> for Edwards127 {
+    const CLEAR: u128 = 4;
+    const ENTRY_PER_INDEX: bool = false;
+
+    fn marker(c: &Self::Curve, p: &edwards127::Affine, l: u128) -> Option<bool> {
+        eight_torsion(Self::CLEAR, c, p, l)
+    }
+}
+
 pub fn gf2_127_candidate(seed: &[u8; 32], j: u32) -> Option<binary127::Curve> {
     Binary127::candidate(seed, j)
+}
+
+pub fn fp127_candidate(seed: &[u8; 32], j: u32) -> Option<edwards127::Curve> {
+    Edwards127::candidate(seed, j)
 }
 
 pub fn verify_gf2_127(seed: &[u8; 32], cert: &Certificate) -> Result<binary127::Curve, Error> {
@@ -285,6 +356,14 @@ pub fn gf2_127_rejects(c: &binary127::Curve, l: u128, enc: [u8; 16]) -> bool {
 
 pub fn accept_gf2_127(seed: &[u8; 32], index: u32, r: u128) -> Result<binary127::Curve, Error> {
     accept::<16, Binary127>(seed, index, r)
+}
+
+pub fn verify_fp127(seed: &[u8; 32], cert: &Certificate) -> Result<edwards127::Curve, Error> {
+    verify::<16, Edwards127>(seed, cert)
+}
+
+pub fn accept_fp127(seed: &[u8; 32], index: u32, r: u128) -> Result<edwards127::Curve, Error> {
+    accept::<16, Edwards127>(seed, index, r)
 }
 
 #[cfg(test)]
@@ -306,8 +385,7 @@ mod tests {
 
     #[test]
     fn admissible_r_matches_the_direct_bounds() {
-        {
-            let r = Binary127::R;
+        for r in [Binary127::R, Edwards127::R] {
             hasse_is_exact(&r);
             assert!(
                 r.hasse_contains(r.cofactor * r.lo) && !r.hasse_contains(r.cofactor * (r.lo - 1))
@@ -320,6 +398,7 @@ mod tests {
         // The binary bound's floor is even and one below the least admissible r;
         // it cannot be an odd rejection label.
         assert_eq!(Binary127::R.lo, 85070591730234615852799834032609270652 + 1);
+        assert_eq!(Edwards127::R.lo, 42535295865117307926399917016304635326);
     }
 
     proptest! {
@@ -329,6 +408,18 @@ mod tests {
             for r in [r, hi] {
                 let cert = Certificate { index: 0, r, rejections: vec![] };
                 prop_assert!(verify_gf2_127(&seed, &cert).is_err());
+                prop_assert!(verify_fp127(&seed, &cert).is_err());
+            }
+        }
+
+        /// The extended Edwards identity test agrees with `equals(&IDENTITY)`.
+        #[test]
+        fn edwards_identity_test_matches_equals(seed in any::<[u8; 32]>(), k in 1u128..64) {
+            let c = (0..).find_map(|j| fp127_candidate(&seed, j)).unwrap();
+            let p = c.from_affine(&c.hash_to_curve(&cert_salt(&seed), b"identity"));
+            for k in [k, 4 * k, 8 * k] {
+                let q = c.mul(&p, k);
+                prop_assert_eq!(q.is_identity(), q.equals(&edwards127::Point::IDENTITY));
             }
         }
     }

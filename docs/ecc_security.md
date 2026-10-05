@@ -31,6 +31,7 @@ quantity from the $r$ recorded by that run's group suite:
 | Family | Group order | $\log_2$ of rho cost |
 |---|---|---|
 | Binary, $\mathrm{GF}(2^{127})$ | $2r$, $r$ near $2^{126}$ | 62.8 |
+| Edwards, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $4r$ | 62.3 |
 
 The setting is an ephemeral public namespace, with salt and curve derived from a
 beacon value. It is distinct from a secret-keyed namespace, in which keyed XOR

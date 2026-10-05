@@ -127,6 +127,10 @@ def test_current_suite_is_fully_classified(table):
             "add/gf2/extended += affine, 1 accumulator",
             ("group ops", "gf2_127", "add", "latency"),
         ),
+        (
+            "add/edwards/-= cached, 8 accumulators",
+            ("group ops", "edwards127", "subtract", "throughput"),
+        ),
         ("add/xor-sha256/xor 32B", ("group ops", "xor", "add", "per-element")),
         (
             "add/secp256k1/combine_keys (jacobian += affine)",
@@ -160,6 +164,10 @@ def test_current_suite_is_fully_classified(table):
             ("comparison maps", "gf2_127-u", "one map to addend", "batch"),
         ),
         (
+            "hash_to_curve/edwards127/elligator2 x1",
+            ("comparison maps", "edwards127", "one map", "per-element"),
+        ),
+        (
             "hash_to_curve/secp256k1/ellswift decode",
             ("hash to curve", "secp256k1", "hash to curve", "per-element"),
         ),
@@ -170,6 +178,14 @@ def test_current_suite_is_fully_classified(table):
         (
             "h2c_parts/gf2 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2 t&i", "batch"),
+        ),
+        (
+            "on_curve/edwards/edwards u: Jacobi",
+            ("hash to curve", "edwards127", "x on curve", "per-element"),
+        ),
+        (
+            "digest/edwards/edwards-native streaming",
+            ("digest", "edwards127", "digest", "streaming"),
         ),
         ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
@@ -186,6 +202,10 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_127", "add", "throughput"),
         ),
         (
+            "group.encode/edwards.127/mode=indep",
+            ("group ops", "edwards127", "encode", "per-element"),
+        ),
+        (
             "h2c/binary.127/mode=batch,n=1024",
             ("hash to curve", "gf2_127", "hash to curve", "batch"),
         ),
@@ -195,6 +215,10 @@ def test_current_suite_is_fully_classified(table):
             ("field", "gf2_127", "mul", "latency"),
         ),
         ("field/fp127/sqrt", ("field", "fp127", "sqrt", "per-element")),
+        (
+            "add/edwards127/+= cached, 8 accumulators",
+            ("group ops", "edwards127", "add", "throughput"),
+        ),
         (
             "h2c_parts/gf2_127 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2_127 t&i", "batch"),
@@ -234,6 +258,7 @@ def test_classify(full_id, want):
     [
         ("gf2/mul latency (dependent chain)", "gf2_127/mul latency (dependent chain)"),
         ("fp/sqrt (x^(2^125))", "fp127/sqrt (x^(2^125))"),
+        ("edwards/+= cached, 1 accumulator", "edwards127/+= cached, 1 accumulator"),
         ("gf2 pornin/2. invert m1 m2 m3", "gf2_127 pornin/2. invert m1 m2 m3"),
     ],
 )
@@ -622,6 +647,33 @@ def test_grid_calls_overlapping_intervals_a_tie():
 
 def tables_md(g):
     return __import__("tables").to_markdown(g, br.fmt_time, br._md_cell)
+
+
+def test_addend_equality_splits_matches_from_mismatches(tmp_path):
+    root = tmp_path / "criterion"
+    for mode, ns in (("match", 3.0), ("mismatch", 1.0)):
+        write_bench(
+            root,
+            "group.equals",
+            f"edwards.127/mode={mode}",
+            None,
+            64 * ns,
+            128 * ns,
+            192 * ns,
+            {"Elements": 64},
+        )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    assert br.unclassified(table).empty
+    e = br.elementary(table)
+    rows = e[e.facet == "equals addend"].set_index("variant").value_ns
+    assert rows.to_dict() == pytest.approx({"match": 6.0, "mismatch": 2.0})
+    grid = br.elementary_grid(e, fields=False)
+    assert [column.key for column in grid.cols] == [
+        ("equals addend", "match"),
+        ("equals addend", "mismatch"),
+    ]
 
 
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)

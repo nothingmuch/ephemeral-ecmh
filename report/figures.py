@@ -49,6 +49,7 @@ REPRESENTATIVES = (
     "gf2_109",
     "gf2_127",
     "gf2_122-gls",
+    "edwards127",
     "ristretto255",
     "secp256k1",
 )

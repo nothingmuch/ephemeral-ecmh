@@ -2,6 +2,8 @@
 # run of all suites, as `cargo bench -- --list` names them, numeric parameters
 # collapsed; every one must classify (report/tests/test_bench_report.py). The
 # run's directory, machine and source revision were not recorded.
+add	edwards127/+= montgomery affine, 8 accumulators
+add	edwards127/batch montgomery affine (tree sum)
 add	gf2_127/batch affine (tree sum)
 add	gf2_127/extended += affine, 8 accumulators
 add	ristretto255/+=, 1 accumulator
@@ -14,8 +16,11 @@ agm	tables
 agm	trace
 curvegen/certify	gf2_127 agm+sieve/index 30
 curvegen/find	gf2_127 agm+sieve/index 30
+curvegen/verify_accept	edwards127
 curvegen/verify_accept	gf2_127
+curvegen/verify_full	edwards127/3 rejections
 curvegen/verify_full	gf2_127/3 rejections
+digest	edwards127/batch
 digest	gf2_127/batch
 digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
@@ -53,6 +58,8 @@ group.add	binary-w.127/mode=latency
 group.add	binary-w.127/mode=throughput
 group.add	binary.127/mode=latency
 group.add	binary.127/mode=throughput
+group.add	edwards.127/mode=latency
+group.add	edwards.127/mode=throughput
 group.decode	binary-lambda.127/mode=batch,n=1024
 group.decode	binary-lambda.127/mode=indep
 group.decode	binary-u.127/mode=batch,n=1024
@@ -61,6 +68,8 @@ group.decode	binary-w.127/mode=batch,n=1024
 group.decode	binary-w.127/mode=indep
 group.decode	binary.127/mode=batch,n=1024
 group.decode	binary.127/mode=indep
+group.decode	edwards.127/mode=batch,n=1024
+group.decode	edwards.127/mode=indep
 group.encode	binary-lambda.127/mode=batch,n=1024
 group.encode	binary-lambda.127/mode=indep
 group.encode	binary-u.127/mode=batch,n=1024
@@ -69,18 +78,23 @@ group.encode	binary-w.127/mode=batch,n=1024
 group.encode	binary-w.127/mode=indep
 group.encode	binary.127/mode=batch,n=1024
 group.encode	binary.127/mode=indep
+group.encode	edwards.127/mode=batch,n=1024
+group.encode	edwards.127/mode=indep
 group.equals	binary-lambda.127
 group.equals	binary-u.127
 group.equals	binary-w.127
 group.equals	binary.127
+group.equals	edwards.127
 group.is_identity	binary-lambda.127
 group.is_identity	binary-u.127
 group.is_identity	binary-w.127
 group.is_identity	binary.127
+group.is_identity	edwards.127
 group.neg	binary-lambda.127
 group.neg	binary-u.127
 group.neg	binary-w.127
 group.neg	binary.127
+group.neg	edwards.127
 group.prepare	binary-lambda.127/mode=batch,n=1024
 group.prepare	binary-lambda.127/mode=indep
 group.prepare	binary-u.127/mode=batch,n=1024
@@ -89,6 +103,8 @@ group.prepare	binary-w.127/mode=batch,n=1024
 group.prepare	binary-w.127/mode=indep
 group.prepare	binary.127/mode=batch,n=1024
 group.prepare	binary.127/mode=indep
+group.prepare	edwards.127/mode=batch,n=1024
+group.prepare	edwards.127/mode=indep
 group.sub	binary-lambda.127/mode=latency
 group.sub	binary-lambda.127/mode=throughput
 group.sub	binary-u.127/mode=latency
@@ -97,6 +113,8 @@ group.sub	binary-w.127/mode=latency
 group.sub	binary-w.127/mode=throughput
 group.sub	binary.127/mode=latency
 group.sub	binary.127/mode=throughput
+group.sub	edwards.127/mode=latency
+group.sub	edwards.127/mode=throughput
 h2c	binary-lambda.127/mode=batch,n=1024
 h2c	binary-lambda.127/mode=indep
 h2c	binary-u.127/mode=batch,n=1024
@@ -105,8 +123,12 @@ h2c	binary-w.127/mode=batch,n=1024
 h2c	binary-w.127/mode=indep
 h2c	binary.127/mode=batch,n=1024
 h2c	binary.127/mode=indep
+h2c	edwards.127/mode=batch,n=1024
+h2c	edwards.127/mode=indep
 h2c_parts	digest/sha512 (ristretto input)
 h2c_parts	ristretto255/from_uniform_bytes (2 maps + add)
+hash_to_curve	edwards127/edwards-native try-and-increment
+hash_to_curve	edwards127/elligator2 x1
 hash_to_curve	gf2_127/pornin map x1
 hash_to_curve	gf2_127/pornin map x1, batched
 hash_to_curve	gf2_127/pornin map x2
@@ -114,12 +136,15 @@ hash_to_curve	ristretto255/hash_from_bytes<Sha512>
 hash_to_curve	secp256k1/ellswift decode
 hash_to_curve	secp256k1/try-and-increment (parse)
 hash_to_curve	sha256 (XOR baseline)
+negate	edwards127/extended (-X, -T)
 negate	gf2_127/affine (y += x)
 negate	ristretto255/-P
 negate	secp256k1/PublicKey::negate
 on_curve	ristretto255/decompress (valid, inv sqrt)
 on_curve	secp256k1/x: parse compressed (sqrt)
+sieve/candidate	edwards127
 sieve/candidate	gf2_127
+sieve/l	edwards127
 sieve/l	gf2_127
 zq	mul
 zq	sigma

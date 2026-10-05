@@ -12,9 +12,9 @@ mod orders;
 use ephemeral_ecmh::curvegen::criteria::{self, Count};
 use std::collections::HashMap;
 
-use ephemeral_ecmh::curve::binary127;
+use ephemeral_ecmh::curve::{binary127, edwards127};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve, SmallL,
+    self, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve, SmallL,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
 use ephemeral_ecmh::curvegen::sieve;
@@ -30,6 +30,12 @@ trait Param {
 impl Param for binary127::Curve {
     fn param(&self) -> u128 {
         to_u128(self.big_b)
+    }
+}
+
+impl Param for edwards127::Curve {
+    fn param(&self) -> u128 {
+        self.d.value()
     }
 }
 
@@ -207,6 +213,18 @@ fn gf2_127_matches_sage() {
         none,
         sieve::GF2_127_L_MAX,
         select::verify_gf2_127,
+    );
+}
+
+#[test]
+fn fp127_matches_sage() {
+    let eight = |n: u128| n.is_multiple_of(8);
+    check::<Edwards127>(
+        &orders::FP127,
+        &kats::FP127_CERTS[0],
+        eight,
+        sieve::EDWARDS127.prove,
+        select::verify_fp127,
     );
 }
 
