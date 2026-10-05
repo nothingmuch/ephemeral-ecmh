@@ -74,6 +74,8 @@ the same distinctions.
   $s \cdot q^{2d}/(q^{n/2} \cdot n)$ gives $2^{-52.3}$). Accepted without a
   check: across $T$ epochs the probability is at most $T$ times this heuristic
   figure, and a descent compromises only its own epoch.
+- `hess-2005`. Survey chapter covering the above; cited where the problem
+  statement states the Weil-descent conclusion without the derivation.
 - `hankerson-karabina-menezes-2009`. Security analysis of GLS curves over
   $\mathrm{GF}(2^{2m})$: the GHS descent to $\mathrm{GF}(2^m)$ and the $n = 2$
   index calculus leave the discrete logarithm at about $2^m$, the rho cost. It
@@ -83,6 +85,13 @@ the same distinctions.
   which ties rho for every quadratic-extension family here (fp61x2, fp64x2,
   goldilocks2, and $\mathrm{GF}(2^{122})$ as $\mathrm{GF}(2^{61})^2$). The
   reason degree 2 is admissible and degree $\ge 3$ is not.
+- `diem-2011`. The discrete logarithm over $\mathrm{GF}(q^n)$ is subexponential
+  when $n$ grows with $\log q$ within fixed bounds. It does not apply at $n = 2$
+  or at prime $n = 127, 109, 107$; cited to say so.
+- `joux-vitse-2012`. Cover and decomposition attacks made practical for
+  $\mathrm{GF}(q^6)$-type fields; the boundary case showing where
+  composite-degree extensions become dangerous, and that $n = 2$ is not among
+  them.
 
 ### Point counting and curve generation
 
@@ -296,6 +305,52 @@ the same distinctions.
   workload does not perform; what the family gains here is a curve constant in
   $\mathrm{GF}(2^{61})$, so each multiplication by it costs two word products
   instead of three. Its rho penalty is in the security section.
+- `bernstein-lange-farashahi-2008`. Binary Edwards curves: the complete model in
+  characteristic 2. For $n \ge 3$ every ordinary curve over $\mathrm{GF}(2^n)$
+  is birationally equivalent to a complete binary Edwards curve (Theorem 4.3),
+  so the model is available for every certified binary curve and the exclusion
+  is one of cost. Mixed addition costs $13M + 3S + 3D$ (projective
+  $21M + 1S + 4D$; $16M + 1S + 4D$ for $d_1 = d_2$, with no mixed variant of
+  lower cost) against $7M + 2S$ for the unscaled formulas of `pornin-2022`. No
+  direct map to the model with a demonstrated advantage was found, and generic
+  projective equality costs about $4M$ against $1M$ to $3M$ on the $(x, s)$
+  representations; neither is a lower bound for a cached or quotient
+  representation. Excluded on these inspected operation counts under equal field
+  arithmetic; not implemented or measured, so the exclusion is a prioritization,
+  not a lower bound. The $d_1 = d_2$ forms, of lower cost, have
+  $\mathrm{Tr}(d_1^2 + d_2) = 0$ in the birational Weierstrass model, and so
+  $4 \mid |E|$; the certified binary curves, with $|E| = 2r$ and $r$ odd,
+  require $d_1 \ne d_2$.
+- `kim-lee-negre-2014`. Revisits binary Edwards arithmetic and keeps
+  completeness on complete curves ($\mathrm{Tr}(d_2) = 1$). For general
+  $d_1, d_2$, projective addition costs $15M + 2S + 4D$ (the paper's baseline
+  for the 2008 formulas, from the EFD, is $18M + 3S + 6D$), mixed addition
+  $13M + 2S + 2D$ and doubling $2M + 5S + 3D$. The $d_1 = d_2$ forms (projective
+  addition $14M + 1S + 2D$, mixed $13M + 1S + 2D$) and the complete differential
+  addition-and-doubling at $5M + 4S + D$ exist exactly when the curve has a
+  rational point of order 4 (Lemma 1), so not on the certified curves; the
+  differential formulas also assume a fixed difference $\omega_0 \ne 0$ (and
+  $\omega_0 \ne 1$ when $d_1 = d_2$). Mixed addition stays near twice the
+  $7M + 2S$ of `pornin-2022` with dense constants, and the differential result
+  does not implement an arbitrary cell update.
+- `bernstein-2009`, `koziel-azarderakhsh-mozaffari-2015`, `koziel-bec-small`,
+  `farias-albertini-barreto-2018`, `loiseau-fournier-2018`,
+  `hajra-karati-sen-2026`. The fast binary Edwards formulas are differential, in
+  the coordinate $w = x + y$, which identifies $P$ with $-P$: $w(Q + P)$ is
+  computed from $w(P)$, $w(Q)$ and $w(Q - P)$, as a Montgomery ladder supplies
+  it. Batch Binary Edwards gives the $d_1 = d_2$ mixed form at $5M + 2D + 4S$
+  with $d$ chosen sparse so that multiplication by $d$ reduces to a few shifts
+  and additions (`bernstein-2009`, section "Differential addition and
+  doubling"); the later papers correct and re-cost these $w$-formulas
+  ($5M + 1D + 4S$ mixed, `koziel-azarderakhsh-mozaffari-2015`;
+  `koziel-bec-small` is its Sage check), apply them with $d_1 = d_2$
+  (`farias-albertini-barreto-2018`, Section 4), add the co-Z technique
+  (`loiseau-fournier-2018`, Algorithm 2), and vectorize the ladder step with
+  VPCLMULQDQ on a $d_1 = d_2$ curve with sparse $d$ and cofactor 4
+  (`hajra-karati-sen-2026`, Table 2). A cell update adds an independent hashed
+  point with no known difference, so none of these formulas applies to it; for
+  generic dense parameters $D$ counts as a full $M$, and the sparse-parameter
+  specialization they rely on is not established for seed-derived curves.
 
 ### Odd-characteristic curve models and addition formulas
 
@@ -317,3 +372,18 @@ the same distinctions.
   method is `field::batch`, which every batch sum and batch normalization uses;
   the Montgomery model is the form in which `edwards` points travel and are
   summed in batches by the affine chord law.
+
+### Prime fields
+
+- `polygon-zero-2022`, `plonky3`. The Goldilocks prime $2^{64} - 2^{32} + 1$ and
+  the implementation `field::goldilocks2` uses for its base field and
+  binomial extension. Its 2-adicity of 32, chosen for FFTs, makes square
+  roots slower than over $2^{64} - 59$; the `goldilocks2` rows measure that
+  cost.
+- `bruestle-gafni-2023`, `haboeck-levit-papini-2024`. BabyBear and the Mersenne
+  prime $2^{31} - 1$, the 31-bit fields of current STARK systems. Reaching
+  $2^{122}$ points over a 31-bit prime needs an extension of degree 4, which
+  admits the heuristic index-calculus asymptotic $\widetilde{O}(q^{3/2})$ of
+  `gaudry-2009`, below the generic $q^2$. Group size alone therefore does not
+  justify the target security, and these fields are excluded from the
+  comparison.
