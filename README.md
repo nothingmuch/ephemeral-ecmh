@@ -138,6 +138,11 @@ on the primality of $r$, which is tested to 24 fixed Miller–Rabin bases, not
 proven ([Parameter selection and
 verification](docs/problem.md#parameter-selection-and-verification)).
 
+Random short Weierstrass and Edwards curves over prime fields are the
+conservative alternatives: their field multiplication uses the integer
+multiplier of every target, and a prime field has no subfield over which a Weil
+descent applies.
+
 ## License
 
 [MIT](./LICENSE)
