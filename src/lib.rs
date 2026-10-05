@@ -12,8 +12,11 @@
 //!
 //! - [`field`] defines arithmetic, representation contracts, and batch
 //!   inversion for binary, prime, and quadratic fields.
+//! - [`curve`] defines shared curve laws, coordinate representations,
+//!   hash mappings, canonical codecs, and concrete field instances.
 //! - [`group`] exposes the capabilities needed by each workload.
 //! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
+pub mod curve;
 pub mod ecmh;
 pub mod field;
 pub mod group;
