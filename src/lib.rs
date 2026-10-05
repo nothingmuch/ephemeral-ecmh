@@ -12,5 +12,6 @@
 //!
 //! - [`group`] exposes the capabilities needed by each workload.
 //! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
+pub mod ecmh;
 pub mod group;
 pub mod hash;
