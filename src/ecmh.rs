@@ -51,3 +51,141 @@ pub fn digest_batch<G: HashToCurve + SumBatch + Encode>(
     let h = Salted::new(TAG_ITEM, salt);
     group.encode(&group.sum_batch(&group.hash_batch(&h, items)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::curve::binary127;
+    use crate::group::Decode;
+    use proptest::prelude::*;
+
+    type Items = Vec<Vec<u8>>;
+
+    fn items() -> impl Strategy<Value = Items> {
+        prop::collection::vec(prop::collection::vec(any::<u8>(), 0..12), 0..12)
+    }
+
+    fn streaming<G: HashToCurve + Negate + Encode>(
+        g: G,
+        salt: &[u8; 32],
+        xs: &Items,
+    ) -> G::Encoding {
+        let mut e = Ecmh::new(g, salt);
+        xs.iter().for_each(|x| e.insert(x));
+        e.digest()
+    }
+
+    fn batch<G: HashToCurve + SumBatch + Encode>(g: G, salt: &[u8; 32], xs: &Items) -> G::Encoding {
+        let refs: Vec<&[u8]> = xs.iter().map(|x| x.as_slice()).collect();
+        digest_batch(g, salt, &refs)
+    }
+
+    /// Batch encode/decode agree with one-at-a-time on running sums (O included)
+    /// and on every single-bit flip of O's and the first sum's encodings;
+    /// whatever decodes re-encodes to the same bytes.
+    fn check_codec<G: HashToCurve + Negate + Decode>(
+        g: G,
+        salt: [u8; 32],
+        xs: &Items,
+    ) -> Result<(), TestCaseError> {
+        let h = Salted::new(TAG_ITEM, &salt);
+        let pts: Vec<G::Point> = std::iter::once(g.identity())
+            .chain(xs.iter().scan(g.identity(), |p, x| {
+                *p = g.add_affine(p, &g.hash(&h, x));
+                Some(*p)
+            }))
+            .collect();
+        let es = g.encode_batch(&pts);
+        let one: Vec<_> = pts.iter().map(|p| g.encode(&g.to_affine(p))).collect();
+        prop_assert_eq!(&es, &one);
+        let direct: Vec<_> = pts.iter().map(|p| g.encode_point(p)).collect();
+        prop_assert_eq!(&direct, &one);
+        let mut all = es.clone();
+        for e in es.iter().take(2) {
+            for bit in 0..8 * e.as_ref().len() {
+                let mut f = *e;
+                f.as_mut()[bit / 8] ^= 1 << (bit % 8);
+                all.push(f);
+            }
+        }
+        prop_assert!(g.decode_batch(&[]).is_empty());
+        let re = |a: Option<G::Affine>| a.map(|a| g.encode(&a));
+        let batch: Vec<_> = g.decode_batch(&all).into_iter().map(re).collect();
+        let one: Vec<_> = all.iter().map(|e| re(g.decode(e))).collect();
+        prop_assert_eq!(&batch, &one);
+        for (e, d) in all.iter().zip(&batch) {
+            prop_assert!(d.is_none_or(|d| d == *e));
+        }
+        for (e, d) in es.iter().zip(&batch) {
+            prop_assert_eq!(*d, Some(*e));
+        }
+        Ok(())
+    }
+
+    fn check_laws<G: HashToCurve + Negate + SumBatch + Decode>(
+        g: G,
+        salt: [u8; 32],
+        xs: Items,
+        ys: Items,
+        perm: prop::sample::Index,
+    ) -> Result<(), TestCaseError> {
+        check_codec(g, salt, &xs)?;
+        let empty = streaming(g, &salt, &vec![]);
+        prop_assert_eq!(streaming(g, &salt, &xs), batch(g, &salt, &xs));
+        let mut shuffled = xs.clone();
+        if !shuffled.is_empty() {
+            let k = perm.index(shuffled.len());
+            shuffled.rotate_left(k);
+            shuffled.reverse();
+        }
+        prop_assert_eq!(batch(g, &salt, &shuffled), batch(g, &salt, &xs));
+        let mut e = Ecmh::new(g, &salt);
+        xs.iter().chain(&ys).for_each(|x| e.insert(x));
+        xs.iter().for_each(|x| e.remove(x));
+        prop_assert_eq!(e.digest(), streaming(g, &salt, &ys));
+        prop_assert_eq!(g.is_identity(&e.acc), ys.is_empty());
+        ys.iter().for_each(|x| e.remove(x));
+        prop_assert_eq!(e.digest(), empty);
+        prop_assert!(g.is_identity(&e.acc));
+        let h = Salted::new(TAG_ITEM, &salt);
+        let pts: Vec<_> = xs.iter().map(|x| g.hash(&h, x)).collect();
+        let one: Vec<_> = pts.iter().map(|p| g.prepare(p)).collect();
+        // equals_addend on unnormalized accumulators: accepts the item, rejects
+        // its negation and O, matches affine equality after another item is
+        // added, and accepts again once it is removed.
+        for (a, b) in one.iter().zip(one.iter().skip(1)) {
+            let p = g.add(&g.identity(), a);
+            prop_assert!(g.equals_addend(&p, a));
+            prop_assert!(!g.equals_addend(&p, &g.neg_addend(a)));
+            prop_assert!(!g.equals_addend(&g.identity(), a));
+            let pb = g.add(&p, b);
+            prop_assert_eq!(
+                g.equals_addend(&pb, a),
+                g.encode(&g.to_affine(&pb)) == g.encode(&g.to_affine(&p))
+            );
+            prop_assert!(g.equals_addend(&g.add(&pb, &g.neg_addend(b)), a));
+        }
+        for adds in [one, g.prepare_batch(&pts)] {
+            let acc = adds.iter().fold(g.identity(), |acc, a| g.add(&acc, a));
+            prop_assert_eq!(g.encode(&g.to_affine(&acc)), streaming(g, &salt, &xs));
+            let acc = adds
+                .iter()
+                .fold(acc, |acc, a| g.add(&acc, &g.neg_addend(a)));
+            prop_assert_eq!(g.encode(&g.to_affine(&acc)), empty);
+        }
+        // The digest depends on the salt (a collision is possible but negligible).
+        if !xs.is_empty() {
+            let mut other = salt;
+            other[0] ^= 1;
+            prop_assert_ne!(batch(g, &salt, &xs), batch(g, &other, &xs));
+        }
+        Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn binary127_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+    }
+}

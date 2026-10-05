@@ -35,9 +35,11 @@
 //! ([`MapRoot`]), where try-and-increment pays an inversion to lift its
 //! point.
 
-use super::{Constant, Curve, Model};
-use crate::field::Binary;
-use crate::field::batch::Invert;
+use super::{Constant, Curve, Model, Point};
+use crate::curve::h2c::Map;
+use crate::field::batch::{Invert, invert as batch_invert};
+use crate::field::{Binary, Field};
+use crate::hash::{Salted, halves};
 
 /// What the map takes from a family's modulus: k, c with both trace
 /// conditions forced, c^2/k, and a bit that tells w from w + 1.
@@ -74,7 +76,33 @@ pub struct MapRoot<F> {
     pub d: F,
 }
 
+impl<M: Pornin> Map<Point<M>> for Curve<M> {
+    /// The map of c, whose bit `Model::SIGN` selects between +P and -P.
+    fn map(&self, c: u128) -> Point<M> {
+        let st = Self::map_prepare(c);
+        self.map_finish(&st, st.den.inv())
+    }
+}
+
 impl<M: Pornin> Curve<M> {
+    /// Pornin's map on many inputs with one shared inversion.
+    pub fn map_to_curve_batch(&self, cs: &[u128]) -> Vec<Point<M>> {
+        self.map_batch(cs, |st, inv| self.map_finish(st, inv))
+    }
+
+    /// `finish` of each input's state and the inverse of its denominator,
+    /// the inversions shared.
+    pub(super) fn map_batch<P>(
+        &self,
+        cs: &[u128],
+        finish: impl Fn(&MapState<M::F>, M::F) -> P,
+    ) -> Vec<P> {
+        let ms: Vec<MapState<M::F>> = cs.iter().map(|&c| Self::map_prepare(c)).collect();
+        let mut inv: Vec<M::F> = ms.iter().map(|m| m.den).collect();
+        batch_invert(&mut inv);
+        ms.iter().zip(inv).map(|(m, i)| finish(m, i)).collect()
+    }
+
     pub fn map_prepare(c: u128) -> MapState<M::F> {
         let sign = (c >> M::SIGN) as u32 & 1;
         let c = M::force(c);
@@ -119,6 +147,41 @@ impl<M: Pornin> Curve<M> {
         }
         MapRoot { x, w, d }
     }
+
+    pub fn map_finish(&self, st: &MapState<M::F>, inv_den: M::F) -> Point<M> {
+        let MapRoot { x, w, .. } = self.map_root(st, inv_den);
+        let s = x * w.square();
+        Point {
+            x,
+            s: self.beta.mul(s),
+            z: self.beta.gf(),
+            t: self.beta.mul(x),
+        }
+    }
+
+    pub fn hash_to_curve_map1_batch(&self, h: &Salted, msgs: &[&[u8]]) -> Vec<Point<M>> {
+        let cs: Vec<u128> = msgs.iter().map(|m| halves(&h.digest(m, 0))[0]).collect();
+        self.map_to_curve_batch(&cs)
+    }
+
+    /// crrl-style map(h0) + map(h1), conjectured indifferentiable from a
+    /// random oracle. The sum of two encodings is indifferentiable when the
+    /// map is well distributed (Farashahi, Fouque, Shparlinski, Tibouchi and
+    /// Voloch, 2013); that property has not been established for these
+    /// instantiations of the map.
+    pub fn hash_to_curve_map2(&self, h: &Salted, msg: &[u8]) -> Point<M> {
+        let [c0, c1] = halves(&h.digest(msg, 0));
+        self.add(&self.map(c0), &self.map(c1))
+    }
+}
+
+/// The map's affine outputs against (input, x, y) known answers.
+#[cfg(test)]
+pub(crate) fn check_map_vectors<M: Pornin>(c: &Curve<M>, vectors: &[(u128, u128, u128)]) {
+    for &(v, x, y) in vectors {
+        let a = c.to_affine(&c.map(v));
+        assert_eq!((a.x.value(), a.y.value()), (x, y), "input {v:#x}");
+    }
 }
 
 /// The map's properties, for each family's `map` tests module, over
@@ -127,14 +190,24 @@ impl<M: Pornin> Curve<M> {
 macro_rules! map_suite {
     ($m:ty, $curve:expr) => {
         use crate::curve::binary::{Constant, Model};
-        use crate::field::Field;
+        use crate::curve::h2c::{Map, map1};
         use crate::field::batch::Invert;
+        use crate::field::Field;
+        use crate::hash::Salted;
         use proptest::prelude::*;
 
         type M = $m;
         type Curve = crate::curve::binary::Curve<M>;
 
         proptest! {
+            #[test]
+            fn map_lands_in_the_group_and_sign_negates(c in $curve, v in any::<u128>()) {
+                let p = c.map(v);
+                let a = c.to_affine(&p);
+                prop_assert!(!a.is_identity() && c.is_on_curve(&a) && a.x.trace() == M::A.trace());
+                prop_assert_eq!(c.to_affine(&c.map(v ^ 1 << M::SIGN)), a.neg());
+            }
+
             #[test]
             fn candidates_have_trace_a_and_cancel(c in $curve, v in any::<u128>()) {
                 // Tr(m_i) = Tr(a) for all three, and b/m1 + b/m2 + b/m3 = 0
@@ -144,6 +217,32 @@ macro_rules! map_suite {
                 }
                 let e = |m: <M as Model>::F| c.b.mul(m.inv());
                 prop_assert!((e(m1) + e(m2) + e(m3)).is_zero());
+            }
+
+            #[test]
+            fn map_output_decodes_to_itself(c in $curve, v in any::<u128>()) {
+                let a = c.to_affine(&c.map(v));
+                prop_assert_eq!(c.decode(a.encode()), Some(a));
+            }
+
+            #[test]
+            fn map_hashes_land_in_group(c in $curve, salt in any::<[u8; 32]>(), msg in any::<[u8; 8]>()) {
+                let h = Salted::new(b"test", &salt);
+                for q in [map1(&c, &h, &msg), c.hash_to_curve_map2(&h, &msg)] {
+                    let q = c.to_affine(&q);
+                    prop_assert!(c.is_on_curve(&q) && (q.is_identity() || q.x.trace() == M::A.trace()));
+                }
+            }
+
+            #[test]
+            fn batched_map_matches_single(c in $curve, salt in any::<[u8; 32]>(), msgs in prop::collection::vec(prop::collection::vec(any::<u8>(), 0..8), 0..20)) {
+                let h = Salted::new(b"test", &salt);
+                let refs: Vec<&[u8]> = msgs.iter().map(|m| m.as_slice()).collect();
+                let batch = c.hash_to_curve_map1_batch(&h, &refs);
+                prop_assert_eq!(batch.len(), refs.len());
+                for (m, p) in refs.iter().zip(batch) {
+                    prop_assert_eq!(c.to_affine(&p), c.to_affine(&map1(&c, &h, m)));
+                }
             }
         }
     };

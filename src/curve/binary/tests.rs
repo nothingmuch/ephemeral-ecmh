@@ -15,6 +15,7 @@ macro_rules! suite {
     };
     ($gf:ident, $m:ty, $curve:expr) => {
         use crate::curve::binary::{add_batch, candidate, sum_batch};
+        use crate::ecmh::{Ecmh, digest_batch};
         use crate::field::$gf::tests::fe;
         use crate::field::batch::Invert;
         use crate::curve::binary::Model;
@@ -26,6 +27,8 @@ macro_rules! suite {
         type Gf = crate::field::$gf::Gf;
         type Curve = crate::curve::binary::Curve<M>;
         type Affine = crate::curve::binary::Affine<M>;
+        type Point = crate::curve::binary::Point<M>;
+
         pub fn curve() -> impl Strategy<Value = Curve> {
             $curve
         }
@@ -43,6 +46,12 @@ macro_rules! suite {
         }
 
         proptest! {
+            #[test]
+            fn empty_digest_encodes_the_identity(c in curve()) {
+                prop_assert_eq!(Ecmh::new(c, &[0; 32]).digest(), M::to_bytes(0));
+                prop_assert_eq!(digest_batch(c, &[0; 32], &[]), M::to_bytes(0));
+            }
+
             #[test]
             fn decoded_points_are_in_the_group((c, ps) in curve_and_points(1)) {
                 let p = ps[0];
@@ -84,6 +93,22 @@ macro_rules! suite {
             }
 
             #[test]
+            fn group_laws((c, ps) in curve_and_points(3)) {
+                let (p, q, s) = (ps[0], ps[1], ps[2]);
+                let o = Affine::IDENTITY;
+                prop_assert!(c.is_on_curve(&p.add(&q)) && c.is_on_curve(&p.add(&p)));
+                prop_assert_eq!(p.add(&q), q.add(&p));
+                prop_assert_eq!(p.add(&q).add(&s), p.add(&q.add(&s)));
+                prop_assert_eq!(p.add(&o), p);
+                prop_assert_eq!(o.add(&p), p);
+                prop_assert_eq!(p.add(&p.neg()), o);
+                prop_assert_eq!(p.add(&p).add(&p.neg()), p);
+                prop_assert!(p.add(&p).x.trace() == 1);
+                let pq = p.add(&q);
+                prop_assert!(pq.is_identity() || pq.x.trace() == 1);
+            }
+
+            #[test]
             fn batch_matches_single((_c, ps) in curve_and_points(24), mask in any::<u32>()) {
                 // The mask mixes identity addends, doublings and cancellations
                 // into ordinary additions to exercise the batch exceptions.
@@ -108,6 +133,110 @@ macro_rules! suite {
             }
 
             #[test]
+            fn extended_roundtrip((c, ps) in curve_and_points(1)) {
+                let p = ps[0];
+                prop_assert_eq!(c.to_affine(&c.from_affine(&p)), p);
+                prop_assert_eq!(c.to_affine(&c.neutral()), Affine::IDENTITY);
+                prop_assert_eq!(c.to_affine(&c.from_affine(&p).neg()), p.neg());
+            }
+
+            #[test]
+            fn extended_matches_affine((c, ps) in curve_and_points(3)) {
+                let (p, q, s) = (ps[0], ps[1], ps[2]);
+                let (ep, eq_) = (c.from_affine(&p), c.from_affine(&q));
+                prop_assert_eq!(c.to_affine(&c.add(&ep, &eq_)), p.add(&q));
+                prop_assert_eq!(c.to_affine(&c.add_affine(&ep, &q)), p.add(&q));
+                // Exceptional inputs of the affine law are ordinary here:
+                // P = Q, P = -Q and O, each way round.
+                prop_assert_eq!(c.to_affine(&c.add(&ep, &ep)), p.add(&p));
+                prop_assert_eq!(c.to_affine(&c.add_affine(&ep, &p)), p.add(&p));
+                prop_assert!(c.add(&ep, &ep.neg()).is_identity());
+                prop_assert_eq!(c.to_affine(&c.add_affine(&ep, &p.neg())), Affine::IDENTITY);
+                prop_assert_eq!(c.to_affine(&c.add(&c.neutral(), &ep)), p);
+                prop_assert_eq!(c.to_affine(&c.add(&ep, &c.neutral())), p);
+                prop_assert!(c.add(&c.neutral(), &c.neutral()).is_identity());
+                prop_assert_eq!(c.to_affine(&c.add_affine(&c.neutral(), &p)), p);
+                prop_assert_eq!(c.to_affine(&c.add_affine(&ep, &Affine::IDENTITY)), p);
+                let pqs = c.add_affine(&c.add(&ep, &eq_), &s);
+                prop_assert_eq!(c.to_affine(&pqs), p.add(&q).add(&s));
+            }
+
+            #[test]
+            fn associative((c, ps) in curve_and_points(3)) {
+                let [p, q, s] = [ps[0], ps[1], ps[2]].map(|p| c.from_affine(&p));
+                let l = c.add(&c.add(&p, &q), &s);
+                let r = c.add(&p, &c.add(&q, &s));
+                prop_assert!(l.equals(&r));
+                prop_assert!(c.add(&p, &q).equals(&c.add(&q, &p)));
+            }
+
+            #[test]
+            fn chains_match_affine((c, ps) in curve_and_points(6), ops in prop::collection::vec((0usize..6, 0u8..4), 0..32)) {
+                // Ops 2 and 3 add or subtract the running sum, exercising
+                // doubling and cancellation after arbitrary preceding additions.
+                let (mut acc, mut want) = (c.neutral(), Affine::IDENTITY);
+                for (i, op) in ops {
+                    let a = match op {
+                        0 => ps[i],
+                        1 => ps[i].neg(),
+                        2 => want,
+                        _ => want.neg(),
+                    };
+                    acc = c.add(&acc, &c.from_affine(&a));
+                    want = want.add(&a);
+                    prop_assert_eq!(c.to_affine(&acc), want);
+                    prop_assert_eq!(acc.is_identity(), want.is_identity());
+                }
+            }
+
+            #[test]
+            fn extended_equality((c, ps) in curve_and_points(2)) {
+                let (p, q) = (ps[0], ps[1]);
+                let (ep, eq_) = (c.from_affine(&p), c.from_affine(&q));
+                // Same point, different projective representatives.
+                prop_assert!(c.add(&ep, &eq_).equals(&c.add_affine(&eq_, &p)));
+                prop_assert!(!ep.equals(&eq_) && !ep.equals(&ep.neg()) && !ep.equals(&c.neutral()));
+                prop_assert!(c.neutral().equals(&c.add_affine(&ep, &p.neg())));
+            }
+
+            #[test]
+            fn normalize_batch_matches((c, ps) in curve_and_points(6)) {
+                let mut ext: Vec<Point> = ps.windows(2).map(|w| c.add_affine(&c.from_affine(&w[0]), &w[1])).collect();
+                ext.push(c.neutral());
+                let want: Vec<Affine> = ext.iter().map(|p| c.to_affine(p)).collect();
+                prop_assert_eq!(c.normalize_batch(&ext), want);
+            }
+
+            #[test]
+            fn double_matches_add((c, ps) in curve_and_points(2)) {
+                let (p, q) = (ps[0], ps[1]);
+                let n = c.neutral();
+                prop_assert!(c.double(&n).is_identity() && c.double(&n).equals(&n));
+                let pq = c.add(&c.from_affine(&p), &c.from_affine(&q));
+                for x in [c.from_affine(&p), pq, c.double(&pq)] {
+                    let d = c.double(&x);
+                    prop_assert!(d.equals(&c.add(&x, &x)));
+                    prop_assert_eq!(c.to_affine(&d), c.to_affine(&x).add(&c.to_affine(&x)));
+                    prop_assert!(Field::equals(d.t, d.x * d.z));
+                }
+            }
+
+            #[test]
+            fn scalar_mul_is_repeated_addition((c, ps) in curve_and_points(1), k in 0u128..40) {
+                let p = ps[0];
+                let want = (0..k).fold(Affine::IDENTITY, |acc, _| acc.add(&p));
+                prop_assert_eq!(c.to_affine(&c.mul(&c.from_affine(&p), k)), want);
+            }
+
+            #[test]
+            fn hash_to_curve_lands_in_group(c in curve(), salt in any::<[u8; 32]>(), msg in any::<[u8; 8]>()) {
+                let h = Salted::new(b"test", &salt);
+                let p = c.hash_to_curve(&h, &msg);
+                prop_assert!(!p.is_identity() && c.is_on_curve(&p) && p.x.trace() == 1);
+                prop_assert_eq!(p, c.hash_to_curve(&h, &msg));
+            }
+
+            #[test]
             fn x_on_curve_matches_decode(c in curve(), v in fe()) {
                 // 0 is O, so leave it out
                 prop_assume!(v != 0);
@@ -120,6 +249,16 @@ macro_rules! suite {
                 let refs: Vec<&[u8]> = msgs.iter().map(|m| m.as_slice()).collect();
                 let single: Vec<Affine> = refs.iter().map(|m| c.hash_to_curve(&h, m)).collect();
                 prop_assert_eq!(c.hash_to_curve_batch(&h, &refs), single);
+            }
+
+            #[test]
+            fn ecmh_streaming_matches_batch(c in curve(), salt in any::<[u8; 32]>(), xs in prop::collection::vec(prop::collection::vec(any::<u8>(), 0..8), 0..12)) {
+                let refs: Vec<&[u8]> = xs.iter().map(|m| m.as_slice()).collect();
+                let mut e = Ecmh::new(c, &salt);
+                refs.iter().for_each(|x| e.insert(x));
+                prop_assert_eq!(e.digest(), digest_batch(c, &salt, &refs));
+                refs.iter().rev().for_each(|x| e.remove(x));
+                prop_assert_eq!(e.digest(), M::to_bytes(0));
             }
         }
     };

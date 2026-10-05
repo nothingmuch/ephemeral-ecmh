@@ -36,6 +36,7 @@ impl binary::Model for M127 {
 
 pub type Curve = binary::Curve<M127>;
 pub type Affine = binary::Affine<M127>;
+pub type Point = binary::Point<M127>;
 pub use binary::{add_batch, sum_batch};
 pub type MapState = binary::MapState<Gf>;
 
