@@ -29,6 +29,8 @@
 
       mathTools = [
         pythonEnv
+        config.packages.sage
+        config.packages.pari
       ];
     in
     {

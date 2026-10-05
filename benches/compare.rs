@@ -9,14 +9,16 @@
 //! references with the specific APIs measured below.
 
 mod common;
-use common::each;
+use common::{each, whole};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use ephemeral_ecmh::hash::Salted;
+use ephemeral_ecmh::field::gf2_127::{self, Gf, from_u128};
+use ephemeral_ecmh::hash::{Salted, halves};
 use secp256k1::PublicKey;
 use secp256k1::ellswift::ElligatorSwift;
 use sha2::{Digest, Sha512};
+use std::hint::black_box;
 
 const N: usize = 1024;
 /// Independent accumulators for the throughput-bound (RIBLT-like) adds.
@@ -25,18 +27,27 @@ const ACCS: usize = 8;
 struct Setup {
     salt: Salted,
     items: Vec<[u8; 36]>,
+    /// the first digest half of each item: a hash-to-curve candidate
+    cands: Vec<u128>,
 }
 
 fn setup() -> Setup {
     let seed = [0u8; 32];
     let salt = Salted::new(ephemeral_ecmh::ecmh::TAG_ITEM, &seed);
     let items = common::items(&[], N);
-    Setup { salt, items }
+    let cands = items
+        .iter()
+        .map(|m| halves(&salt.digest(m, 0))[0])
+        .collect();
+    Setup { salt, items, cands }
 }
 
 impl Setup {
     fn refs(&self) -> Vec<&[u8]> {
         self.items.iter().map(|x| x.as_slice()).collect()
+    }
+    fn gf2_127_xs(&self) -> Vec<Gf> {
+        self.cands.iter().map(|&c| from_u128(c | 1)).collect()
     }
 }
 /// Try-and-increment through libsecp256k1's compressed-point parser.
@@ -59,6 +70,70 @@ fn secp_ellswift(h: &Salted, m: &[u8]) -> PublicKey {
     b[..32].copy_from_slice(&h.digest(m, 0));
     b[32..].copy_from_slice(&h.digest(m, 1));
     PublicKey::from_ellswift(ElligatorSwift::from_byte_array(b))
+}
+
+// Fp has no MulAssign; `a = a * b` keeps the macro generic over both fields.
+#[allow(clippy::assign_op_pattern)]
+fn field(c: &mut Criterion) {
+    let s = setup();
+    let mut g = c.benchmark_group("field");
+    let gx = s.gf2_127_xs();
+    // Latency: one chain of dependent products. Throughput: ACCS chains.
+    macro_rules! mul_chains {
+        ($name:expr, $v:expr, $w:expr) => {
+            g.throughput(Throughput::Elements(64));
+            g.bench_function(concat!($name, "/mul latency (dependent chain)"), |bn| {
+                bn.iter(|| (0..64).fold(black_box($v), |acc, _| acc * $w))
+            });
+            g.bench_function(concat!($name, "/mul throughput (8 chains)"), |bn| {
+                bn.iter(|| {
+                    // opaque as a whole: lanes known to be equal could share one chain
+                    let mut acc = black_box([$v; ACCS]);
+                    for _ in 0..64 / ACCS {
+                        for a in acc.iter_mut() {
+                            *a = *a * $w;
+                        }
+                    }
+                    acc
+                })
+            });
+        };
+    }
+    mul_chains!("gf2_127", gx[0], gx[1]);
+    // squarings chain in a sqrt or an inversion's addition chain
+    g.bench_function("gf2_127/square latency (dependent chain)", |bn| {
+        bn.iter(|| (0..64).fold(black_box(gx[0]), |acc, _| acc.square()))
+    });
+    g.bench_function("gf2_127/square throughput (8 chains)", |bn| {
+        bn.iter(|| {
+            let mut acc = black_box([gx[0]; ACCS]);
+            for _ in 0..64 / ACCS {
+                for a in acc.iter_mut() {
+                    *a = a.square();
+                }
+            }
+            acc
+        })
+    });
+    each(&mut g, "gf2_127/invert", &gx, |v| v.invert());
+    each(&mut g, "gf2_127/sqrt", &gx, |v| v.sqrt());
+    each(&mut g, "gf2_127/halftrace", &gx, |v| v.halftrace());
+    each(&mut g, "gf2_127/halftrace (byte tables)", &gx, |&v| {
+        gf2_127::halftrace8(v)
+    });
+    each(&mut g, "gf2_127/halftrace (nibble tables)", &gx, |&v| {
+        gf2_127::halftrace4(v)
+    });
+    each(&mut g, "gf2_127/trace", &gx, |v| v.trace());
+    each(&mut g, "gf2_127/normalize (to_u128)", &gx, |&v| {
+        gf2_127::to_u128(v)
+    });
+    whole(&mut g, "gf2_127/batch invert (product tree)", &gx, |v| {
+        let mut w = v.to_vec();
+        ephemeral_ecmh::field::batch::invert(&mut w);
+        w
+    });
+    g.finish();
 }
 
 /// Candidate x-coordinate checks for the reference groups. The study's
@@ -231,6 +306,6 @@ fn digest(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = common::config();
-    targets = on_curve, hash_to_curve, h2c_parts, negate, add, digest
+    targets = field, on_curve, hash_to_curve, h2c_parts, negate, add, digest
 }
 criterion_main!(benches);

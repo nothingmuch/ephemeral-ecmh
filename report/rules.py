@@ -40,11 +40,14 @@ LAYER_NOTES = {}
 # gf2_122-gls, binary122's curves with their constant in GF(2^61) (and
 # gf2_122-gls-lambda, both), or weier127-jacobian, the Weierstrass curves
 # under Jacobian accumulators. xor is the SHA-256-only baseline.
+BINARY = [(127, "")]
+ACCUMULATORS = ["", "-lambda", "-w", "-u"]
 # Families of benchmarks that involve no curve or field: the RIBLT
 # mapping's index generators (benches/riblt.rs, riblt.mapping).
 UNGROUPED = {}
 FAMILIES = {
     "xor": ("xor", None),
+    "gf2_127": ("gf2_127", 127),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -60,6 +63,7 @@ SPELLINGS = {
     **{name: name for name in FAMILIES},
     "xor-sha256": "xor",
     "sha256": "xor",
+    "gf2": "gf2_127",
 }
 # (regex on the group, spelling, family): spellings some groups use for
 # another family: Ristretto's input digest is a step of its hash.
@@ -89,12 +93,14 @@ def curve(family: str) -> str:
 # green, yellow, purple and brown stay distinct under the common colour
 # vision deficiencies; the baseline is grey.
 COLORS = {
+    "gf2_127": "#4e79a7",
     "xor": "#79706e",
     "ristretto255": "#b07aa1",
     "secp256k1": "#9d7660",
     OTHER: "#79706e",
 }
 LIGHT = {
+    "gf2_127": "#a0cbe8",
     "xor": "#bab0ac",
     "ristretto255": "#d4a6c8",
     "secp256k1": "#d7b5a6",
@@ -103,6 +109,7 @@ LIGHT = {
 # legend and bar order: the baseline first
 FAMILY_ORDER = [
     "xor",
+    "gf2_127",
     "ristretto255",
     "secp256k1",
     OTHER,
@@ -112,8 +119,18 @@ FAMILY_ORDER = [
 # operation may use the function regex's named groups, and {group}. Facets
 # follow this order, then cost.
 OPERATIONS = [
+    (r"^field", r"batch invert", "batch invert"),
     # GF(2^122) uses qsolve for the quadratic equation; half-trace requires
     # an odd extension degree.
+    (r"^field", r"\bqsolve\b", "halftrace"),
+    (
+        r"^field",
+        (
+            r"\b(?P<op>mul(_base|_u2)?|square|invert|sqrt(_ratio)?|halftrace|trace"
+            r"|pow_p34|add|sub|neg|normalize|pack|unpack)\b"
+        ),
+        "{op}",
+    ),
     # benches/group.rs: <layer>.<op>/<family>.<bits>/<parameters>
     (r"^h2c$", r"", "hash to curve"),
     (r"^negate", r"", "negate"),
@@ -158,6 +175,18 @@ MODES = [
 # is how it runs alone, the second how it runs in the pipeline (a dependent
 # chain, or per item of a batch).
 ELEMENTARY = [
+    ("field mul", "throughput", "field", "mul", ("throughput",)),
+    ("field mul", "latency", "field", "mul", ("latency",)),
+    ("field square", "throughput", "field", "square", ("throughput",)),
+    ("field square", "latency", "field", "square", ("latency",)),
+    ("field add", None, "field", "add", None),
+    ("field sqrt", None, "field", "sqrt", None),
+    ("field sqrt ratio", None, "field", "sqrt_ratio", None),
+    ("field halftrace", None, "field", "halftrace", None),
+    ("field invert", "one at a time", "field", "invert", None),
+    ("field invert", "batched", "field", "batch invert", None),
+    ("field pack", None, "field", "pack", None),
+    ("field unpack", None, "field", "unpack", None),
     ("point add", "throughput", "group ops", "add", ("throughput", "per-element")),
     ("point add", "latency", "group ops", "add", ("latency",)),
     ("point subtract", None, "group ops", "subtract", ("throughput", "per-element")),
@@ -181,7 +210,9 @@ ALSO = {
 # the section's columns: fields for the field rows, each coloured as its base
 # field; curves for the rest, each -lambda beside the family it shares its
 # curves with
-FIELDS = {}
+FIELDS = {
+    "gf2_127": "gf2_127",
+}
 CURVES = [
     "xor",
     "ristretto255",
@@ -214,7 +245,7 @@ CURVE_GROUPS = [
         ],
     ),
 ]
-FIELD_GROUPS = []
+FIELD_GROUPS = [("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")])]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {} | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 

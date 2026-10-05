@@ -10,8 +10,11 @@
 //! hashing to reusable addends, addition, subtraction, and encoding on
 //! public data.
 //!
+//! - [`field`] defines arithmetic, representation contracts, and batch
+//!   inversion for binary, prime, and quadratic fields.
 //! - [`group`] exposes the capabilities needed by each workload.
 //! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
 pub mod ecmh;
+pub mod field;
 pub mod group;
 pub mod hash;
