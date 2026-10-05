@@ -29,7 +29,8 @@ comparison.
 The benchmark report opens with a decision table. For each family it gives the
 nominal rho of [Security considerations](ecc_security.md); the measured cost of
 addition, of hashing and preparation, and of encoding and decoding; the two
-estimates of cost in repeated reconciliation at $n = 10^5$ and
+estimates of [Cost in repeated
+reconciliation](workload.md#cost-in-repeated-reconciliation) at $n = 10^5$ and
 $d = 10^3$; and the cost of curve selection. One family dominates another if its
 rho is at least as large and, for each of the four operations, it either reads
 the same measurement or is faster beyond both confidence intervals, and it is

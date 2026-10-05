@@ -14,6 +14,60 @@ status: draft
 
 # Workload
 
+For a namespace $N$, let $H_N$ map an item to a group element. The digest of a
+multiset $S$ is
+
+```text
+D_N(S) = sum of H_N(x), with multiplicity, over x in S.
+```
+
+Insertion and removal add or subtract a hashed point. A prepared representation
+of $H_N(x)$ is reused for every coded symbol the item maps to. The measured
+costs are hashing to a reusable addend, signed accumulation, and encoding or
+decoding accumulated points.
+
+The encoding must represent the additive closure of the hash outputs, including
+the identity, negatives, and sums, because coded symbols hold arbitrary sums.
+Prime order is not required. A subgroup or quotient group is sufficient if
+hashing, equality, accumulation, and canonical encoding all refer to the same
+group. Not every bit string needs to be a valid encoding.
+
+The [RIBLT workload](../src/riblt.rs) implements encoding and peeling with an
+XOR item field, an integer count, and an ECMH checksum. It is a cost model for
+these operations, not a specification of a wire protocol.
+
+## Cost in repeated reconciliation
+
+The RIBLT mapping includes an item in coded symbol $i$ with probability
+$1/(1 + i/2)$, so an item enters $k(m) = 2(H_{m+1} - 1)$, about $2 \ln m$, of
+the first $m$ symbols, and symbol $i$ holds about $n/(1 + i/2)$ of $n$ items:
+the first symbols are dense. Reconciling a difference of $d$ items takes $m$ of
+about $1.35d$ symbols [yang-gilad-alizadeh-2024]. Under three assumptions,
+
+1. weights are expected weights,
+2. every round reconciles the same number $d$ of new items, and
+3. each round rebuilds its symbols from the full set,
+
+one round over a set of $n$ items costs $n k(1.35d)$ additions, about
+$2n \ln(1.35d)$. Hashing is per item and its result can be kept, so a set that
+grows to $N$ items by rounds of $d$ new items costs $N$ hashes in all, but
+
+```text
+sum over rounds of n_j k(1.35d), about (N^2 / d) ln(1.35d) additions.
+```
+
+Under this model the number of additions grows quadratically in $N$ and the
+number of hashes linearly: a round performs $d$ hashes against $2n \ln(1.35d)$
+additions. Which dominates the elapsed time also depends on their measured unit
+costs. Decoding adds about $d k(m)$ subtractions per round, and one equality
+test per examined symbol, lower order than rebuilding when $n$ is much larger
+than $d$. If instead each party keeps its symbol sums between rounds and adds
+only new items (assumption 3 dropped), encoding falls to about $2N \ln(1.35d)$
+additions, linear in $N$, with one hash per $2 \ln(1.35d)$ additions; decoding
+is then of the same order. Kept hashes and sums are valid only within one
+namespace: a new beacon value changes the salt, the curve and the mapping, and
+everything is recomputed.
+
 ## Comparison with the reference implementations
 
 The Go benchmarks of
