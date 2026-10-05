@@ -10,3 +10,5 @@
 //! hashing to reusable addends, addition, subtraction, and encoding on
 //! public data.
 //!
+//! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
+pub mod hash;
