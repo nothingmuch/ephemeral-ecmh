@@ -7,9 +7,19 @@
 
 #[path = "common/kats.rs"]
 mod kats;
+#[path = "common/kats107.rs"]
+mod kats107;
+#[path = "common/kats109.rs"]
+mod kats109;
+#[path = "common/kats122.rs"]
+mod kats122;
+#[path = "common/kats128.rs"]
+mod kats128;
+#[path = "common/kats_fp2.rs"]
+mod kats_fp2;
 
-use ephemeral_ecmh::curvegen::select;
 use ephemeral_ecmh::curvegen::select::{Certificate, Error};
+use ephemeral_ecmh::curvegen::{select, select_fp2, select107, select109, select122, select128};
 
 /// A malformation applied to a valid (seed, certificate).
 #[derive(Clone, Copy, Debug)]
@@ -136,8 +146,26 @@ fn cert16(index: u32, r: u128, rejections: &[(u128, u128)]) -> Certificate<16> {
     }
 }
 
+fn cert14(index: u32, r: u128, rejections: &[(u128, u128)]) -> Certificate<14> {
+    Certificate {
+        index,
+        r,
+        rejections: rejections
+            .iter()
+            .map(|&(l, p)| (l, p.to_le_bytes()[..14].try_into().unwrap()))
+            .collect(),
+    }
+}
+
 const P127: u128 = (1 << 127) - 1;
+const P107: u128 = (1 << 107) - 1;
+const P128: u128 = u128::MAX - 274;
 const Q127: u128 = 1 << 127;
+const Q109: u128 = 1 << 109;
+const Q122: u128 = 1 << 122;
+const P61: u128 = (1 << 61) - 1;
+const P64: u128 = u64::MAX as u128 - 58;
+const PG: u128 = (1u128 << 64) - (1 << 32) + 1;
 
 #[test]
 fn malformed_certificates_keep_their_outcomes() {
@@ -175,6 +203,83 @@ fn malformed_certificates_keep_their_outcomes() {
         kats::WEIER127_CERTS,
         cert16,
         select::verify_weier127
+    );
+    family!(
+        "edwards107",
+        P107,
+        kats107::FP107_CERTS,
+        cert14,
+        select107::verify_fp107
+    );
+    family!(
+        "weier107",
+        P107,
+        kats107::WEIER107_CERTS,
+        cert14,
+        select107::verify_weier107
+    );
+    family!(
+        "gf2_109",
+        Q109,
+        kats109::GF2_109_CERTS,
+        cert14,
+        select109::verify
+    );
+    family!(
+        "gf2_122",
+        Q122,
+        kats122::GF2_122_CERTS,
+        cert16,
+        select122::verify_dense
+    );
+    family!(
+        "gf2_122_gls",
+        Q122,
+        kats122::GF2_122_GLS_CERTS,
+        cert16,
+        select122::verify_gls
+    );
+    family!(
+        "edwards128",
+        P128,
+        kats128::FP128_CERTS,
+        cert16,
+        select128::verify_fp128
+    );
+    family!(
+        "twisted61x2",
+        P61 * P61,
+        kats_fp2::TWISTED61X2_CERTS,
+        cert16,
+        select_fp2::verify_twisted61x2
+    );
+    family!(
+        "twisted64x2",
+        P64 * P64,
+        kats_fp2::TWISTED64X2_CERTS,
+        cert16,
+        select_fp2::verify_twisted64x2
+    );
+    family!(
+        "twisted_goldilocks2",
+        PG * PG,
+        kats_fp2::TWISTED_GOLDILOCKS2_CERTS,
+        cert16,
+        select_fp2::verify_twisted_goldilocks2
+    );
+    family!(
+        "edwards61x2",
+        P61 * P61,
+        kats_fp2::EDWARDS61X2_CERTS,
+        cert16,
+        select_fp2::verify_edwards61x2
+    );
+    family!(
+        "weier61x2",
+        P61 * P61,
+        kats_fp2::WEIER61X2_CERTS,
+        cert16,
+        select_fp2::verify_weier61x2
     );
 
     let got = format!("{HEADER}{}\n", out.join("\n"));

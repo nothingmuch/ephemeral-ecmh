@@ -31,8 +31,23 @@ quantity from the $r$ recorded by that run's group suite:
 | Family | Group order | $\log_2$ of rho cost |
 |---|---|---|
 | Binary, $\mathrm{GF}(2^{127})$ | $2r$, $r$ near $2^{126}$ | 62.8 |
+| Binary, $\mathrm{GF}(2^{122})$, dense constant | $2r$, $r$ near $2^{121}$ | 60.3 |
+| Binary, $\mathrm{GF}(2^{122})$, GLS | $2r$, $r$ near $2^{121}$ | 59.8 (automorphism group of order 4) |
+| Binary, $\mathrm{GF}(2^{109})$ | $2r$, $r$ near $2^{108}$ | 53.8 |
 | Weierstrass, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $r$ | 63.3 |
 | Edwards, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $4r$ | 62.3 |
+| Twisted Edwards, $\mathbb{F}_p$, $p = 2^{128} - 275$; $\mathrm{GF}(p^2)$, $p = 2^{64} - 59$ or Goldilocks | $4r$ | 62.8 |
+| Weierstrass, $\mathrm{GF}(p^2)$, $p = 2^{61} - 1$ | $r$ | 60.8 |
+| Edwards and twisted Edwards, $\mathrm{GF}(p^2)$, $p = 2^{61} - 1$ | $4r$ | 59.8 |
+| Weierstrass, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $r$ | 53.3 |
+| Edwards, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $4r$ | 52.3 |
+
+For curves over $\mathrm{GF}(p^2)$, index calculus over the extension
+[gaudry-2009] costs about $p$ group operations up to logarithmic factors, the
+same as rho; the GHS descent for $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})^2$
+[hankerson-karabina-menezes-2009] likewise gives no gain over rho. Candidates
+over $\mathrm{GF}(p^2)$ whose $j$-invariant lies in $\mathbb{F}_p$ are excluded
+as a conservative policy.
 
 The setting is an ephemeral public namespace, with salt and curve derived from a
 beacon value. It is distinct from a secret-keyed namespace, in which keyed XOR
@@ -52,6 +67,12 @@ certify primality.
 
 Each weakness below is accepted at the reference work factor, stated as an
 assumption on the application, or left open, as indicated.
+
+**Generic work factor.** The 107- and 109-bit families have rho costs of
+$2^{52.3}$ to $2^{53.8}$, in the lower part of the reference range.
+Curve-specific precomputation is limited, not excluded, by deriving a curve per
+beacon value ([Precomputation and per-namespace
+curves](problem.md#precomputation-and-per-namespace-curves)).
 
 **Weil descent.** A $\mathrm{GF}(2^{127})$ curve is reachable by the generalized
 GHS descent with heuristic probability about $2^{-52}$ per beacon value, and no

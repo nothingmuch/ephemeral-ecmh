@@ -39,7 +39,9 @@ the same distinctions.
   faster with the negation map and $\sqrt{2m}$ faster on curves with an
   automorphism group of order $2m$ (Koblitz curves, curves with efficiently
   computable endomorphisms). The report divides the reference work factor by
-  $sqrt{2}$ for the negation map, which every family admits.
+  these factors where they apply: by $\sqrt{2}$ for every family, and by a
+  further $\sqrt{2}$ for the GLS family over $\mathrm{GF}(2^{122})$, whose
+  endomorphism group has order 4.
 - `bernstein-lange-2012`, `bernstein-lange-2013`. With a precomputed table of
   size about $N^{2/3}$, each further discrete logarithm in a group of size $N$
   costs about $N^{1/3}$ operations. A fixed curve would let an attacker amortize
@@ -47,12 +49,54 @@ the same distinctions.
   curve-specific tables; field-level arithmetic and work on the candidate space
   remain reusable. These two papers motivate a curve per namespace.
 
+### Weil descent and index calculus over extension fields
+
+- `gaudry-hess-smart-2002`. The GHS construction: the descent gives a
+  hyperelliptic curve over $\mathrm{GF}(q)$ of genus about $2^{m-1}$, $m$ the
+  "magic number" determined by the minimal polynomial of $\sqrt{b}$ under
+  Frobenius. `sage/ghs.sage` computes $m$ for the binary families and the genus
+  that results.
+- `menezes-qu-2001`. For $n$ prime in $[160, 600]$ the GHS genus is too large
+  for any attack. The degree 127 lies outside that range and is the exceptional
+  small prime degree: 2 has order 7 modulo 127, so $x^{127} - 1$ splits into
+  degree-7 factors over $\mathbb{F}_2$ and the minimal genus is $2^6$, so the
+  descent must be examined for $\mathrm{GF}(2^{127})$.
+- `galbraith-hess-smart-2002`. Isogenous curves have equal order and the
+  attack transfers along isogenies, so the vulnerable set is a union of isogeny
+  classes, not of curves. `sage/ghs122.sage` checks the class, and the $m = 127$
+  statement counts classes.
+- `hess-2003`. Generalizes GHS: with $\sqrt{b} = \gamma_1 \cdot \gamma_2$ for
+  $\gamma_1, \gamma_2$ in the span of a degree-7 factor's kernel and
+  $\mathbb{F}_2$, the descent still has genus 127 or 128. Over
+  $\mathrm{GF}(2^{127})$ this reaches 4537 Frobenius classes, 65 of them of
+  order $2 \cdot \text{prime}$ and so admissible to the certificate, a heuristic
+  $2^{-52}$ of the admissible isogeny classes (Hess's own estimate
+  $s \cdot q^{2d}/(q^{n/2} \cdot n)$ gives $2^{-52.3}$). Accepted without a
+  check: across $T$ epochs the probability is at most $T$ times this heuristic
+  figure, and a descent compromises only its own epoch.
+- `hankerson-karabina-menezes-2009`. Security analysis of GLS curves over
+  $\mathrm{GF}(2^{2m})$: the GHS descent to $\mathrm{GF}(2^m)$ and the $n = 2$
+  index calculus leave the discrete logarithm at about $2^m$, the rho cost. It
+  is the reference for the $\mathrm{GF}(2^{122})$ family's security statement.
+- `gaudry-2009`. Index calculus for $E$ over $\mathrm{GF}(q^n)$ in
+  $\widetilde{O}(q^{2-2/n})$ for fixed $n \ge 2$: $\widetilde{O}(q)$ at $n = 2$,
+  which ties rho for every quadratic-extension family here (fp61x2, fp64x2,
+  goldilocks2, and $\mathrm{GF}(2^{122})$ as $\mathrm{GF}(2^{61})^2$). The
+  reason degree 2 is admissible and degree $\ge 3$ is not.
+
 ### Point counting and curve generation
 
 - `schoof-1995`. Schoof's algorithm and the Elkies–Atkin improvements (SEA):
   polynomial-time point counting over any finite field. PARI's `ellsea` runs it
   for the odd-field families, with the Elkies-prime early abort the `pari`
   module uses.
+- `satoh-2000`, `mestre-2000`, `gaudry-2002`. Canonical lifts and Mestre's AGM
+  for characteristic 2: counting a curve over $\mathrm{GF}(2^{127})$ in
+  milliseconds. The Rust `agm` counter is a canonical lift of this kind and
+  PARI's `F2xq_ellcard` is Harley's variant of the AGM; `gaudry-2002` is the
+  comparison that established the method.
+- `satoh-skjernaa-taguchi-2003`. The SST variant of the canonical lift, one
+  of the methods `gaudry-2002` compares; the method implemented is the AGM.
 - `ansi-x9-62-1998`, `rfc5639`, `baigneres-et-al-2015`,
   `lenstra-wesolowski-2017`. Curves derived from public randomness. X9.62's
   verifiably random curves and Brainpool's verifiably pseudo-random ones hash a
@@ -201,9 +245,25 @@ the same distinctions.
 
 ### Multiset hashes in deployment, and fixed-group baselines
 
+- `certicom-2010`, `libsecp256k1`. secp256k1's parameters and the library
+  timed in `benches/compare.rs` (compressed-point parsing, ElligatorSwift
+  decoding, Jacobian accumulation): the cost of ECMH on a fixed 256-bit
+  curve.
+- `bernstein-2006`, `hamburg-2015`, `rfc9496`, `curve25519-dalek`. Curve25519,
+  the Decaf quotient that removes its cofactor, the ristretto255 specification,
+  and the implementation timed in `benches/compare.rs`: the second fixed 256-bit
+  baseline. Decaf's quotient, which removes a cofactor of 4, is the model for
+  the `twisted` family's encoding of $E/\langle T \rangle$, which removes only
+  the 2-torsion point $T$.
 - `fips-180-4`, `aumasson-bernstein-2012`. SHA-256, the digest behind
   `src/hash.rs` and every map, and SipHash. XOR of either is the
   non-adversarial baseline every curve is compared against.
+
+### Binary fields and their dependence on carry-less multiplication
+
+- `crrl`. Pornin's library: the $\mathrm{GF}(2^{127})$ backends
+  (`field::gf2_127`) and the GLS254 code from which `curve::binary127::map` and
+  the $\mathrm{GF}(2^{122})$ tower are adapted.
 
 ### Binary curve models and addition formulas
 
@@ -214,5 +274,46 @@ the same distinctions.
   into the addend, against $8M + 2S$ for the implemented incomplete $\lambda$
   formula.
 - `pornin-2023`. The same formulas over
-  $mathrm{GF}(2^{254}) = mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
-  curve.
+  $\mathrm{GF}(2^{254}) = \mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
+  curve. The $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})[u]$ tower and the GLS
+  family (`binary.122-gls`) test whether this shape transfers at half the size.
+- `pornin-2024`. The general method: a prime-order group abstraction with
+  complete formulas from any curve of even order, most efficient for
+  $|E| \equiv 2 \pmod{4}$. Both characteristics are covered, so it states once
+  the structure the binary families ($E[r] = 2E$) and the `twisted` quotient
+  use.
+- `oliveira-et-al-2014`, `oliveira-et-al-2013`. $\lambda$-projective
+  coordinates, with mixed addition $8M + 2S$ and no curve constant: the
+  `curve::binary::lambda` accumulators. On curves with a dense $B$, where
+  Pornin's extended formulas need two full multiplications by $\beta = B^{1/4}$,
+  this costs less than the extended accumulator, at the price of incompleteness;
+  the unscaled formulas, at $7M + 2S$, move $\beta$ into the addend and cost
+  less than $\lambda$'s $8M + 2S$ for the addition itself.
+- `galbraith-lin-scott-2009`. GLS curves: over $\mathrm{GF}(q^2)$, quadratic
+  twists of curves defined over $\mathrm{GF}(q)$, with an endomorphism $\psi$,
+  $\psi^2 = -1$. For binary curves, $a = u$ and $B$ in $\mathrm{GF}(2^{61})$, as
+  in `binary.122-gls`. The endomorphism speeds scalar multiplication, which this
+  workload does not perform; what the family gains here is a curve constant in
+  $\mathrm{GF}(2^{61})$, so each multiplication by it costs two word products
+  instead of three. Its rho penalty is in the security section.
+
+### Odd-characteristic curve models and addition formulas
+
+- `edwards-2007`, `bernstein-lange-2007`. The Edwards normal form and its
+  complete addition law when $d$ is a non-square: the `edwards` family, with
+  $d$ drawn per salt.
+- `bernstein-et-al-2008`, `hisil-et-al-2008`. Twisted Edwards curves and
+  extended coordinates. With $a = -1$ a square, the addition is complete and
+  a cached addend costs $7M$; this is the `twisted` family's accumulator, and
+  the reason it requires $q \equiv 1 \pmod{4}$.
+- `renes-costello-batina-2016`. Complete projective formulas for
+  prime-order short Weierstrass curves, $11M + 2 m_b$ for mixed addition:
+  the `weier` family's accumulator, and the cost of completeness when the
+  order has no cofactor to quotient away.
+- `efd`. The Explicit-Formulas Database: the named formulas
+  (madd-2007-bl, dbl-2001-b) in `curve::weier::jacobian` and the operation
+  counts quoted in the module documentation.
+- `montgomery-1987`. Montgomery curves and simultaneous inversion. The inversion
+  method is `field::batch`, which every batch sum and batch normalization uses;
+  the Montgomery model is the form in which `edwards` points travel and are
+  summed in batches by the affine chord law.

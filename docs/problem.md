@@ -168,8 +168,9 @@ item. A failure of soundness for one curve, even a discrete logarithm computed
 in its group, is then a failure of liveness, and a transient one: the next
 beacon value selects a new curve. The short horizon and the limited scope of
 failure motivate a reference work factor between $2^{48}$ and $2^{64}$ group
-operations, with the upper part of the range preferred. This range is an
-application assumption under
+operations, with the upper part of the range preferred; the families compared
+here lie between $2^{52}$ and $2^{63}$ ([Security
+considerations](ecc_security.md)). This range is an application assumption under
 evaluation; salting does not by itself imply it.
 
 Maitin-Shepard et al. [maitin-shepard-et-al-2016, Section 4.1] reduce collision
@@ -253,7 +254,28 @@ library and calls it for point counting and integer factorization
 ([`curvegen::pari`](../src/curvegen/pari.rs)). SageMath (Sage) [sagemath], in
 which the reference programs are written, also counts points through PARI. The
 other implementation is this repository's own, in Rust, for binary fields only;
+it has no dependency on PARI.
 
+Over binary fields, Satoh's canonical lift [satoh-2000] and Mestre's
+arithmetic–geometric mean, in the form compared and combined by Gaudry
+[gaudry-2002], count points in polynomial time using 2-adic arithmetic alone.
+The repository implements this for $\mathrm{GF}(2^{127})$,
+$\mathrm{GF}(2^{109})$ and $\mathrm{GF}(2^{122})$
+([`curvegen::agm`](../src/curvegen/agm/mod.rs)), counting the dense 122-bit
+curves in a pentanomial basis and the Galbraith–Lin–Scott (GLS) curves
+[galbraith-lin-scott-2009] through their subfield curve over
+$\mathrm{GF}(2^{61})$. A GLS constant is $B = \beta^4$ for $\beta$ in
+$\mathrm{GF}(2^{61})$, so GLS candidates are drawn from about $2^{61}$
+constants, against about $2^{122}$ for the dense family; the accepted curves are
+a subset of each. For all three fields the Rust prover produces certificates
+without PARI: a candidate whose odd part is composite with no prime factor below
+the trial-division bound ($2^{16}$ for $\mathrm{GF}(2^{122})$, $2^{10}$
+otherwise) is rejected by its full order rather than by a factor.
+
+The known-answer certificates were produced with Sage, which derives its
+witnesses as the Rust prover does, from hashed points
+([`sage/kat_common.sage`](../sage/kat_common.sage)). For the 109- and 122-bit
+families it labels a rejection by the smallest prime factor of its odd part
 (below $2^{16}$ in the 122-bit scripts, without a bound in the 109-bit one).
 Without PARI, the Rust prover reproduces the indices and orders of these
 certificates and the 122-bit certificates byte for byte; with PARI supplying the
@@ -266,7 +288,28 @@ which handles curves with complex multiplication by a small discriminant
 separately before falling back to it. A participant in a prime-field namespace
 who does not run PARI or an equivalent system must therefore rely on another
 party's certificate to establish which curve is in use, whereas a binary curve
+can be derived and checked independently by a small, self-contained program. In
+a setting where every participant derives the curve from a public beacon, this
+is an advantage of binary curves, separate from their arithmetic cost.
 
+The cost of selection is paid once per namespace. Each run report's Curve
+selection section gives, per family and seed of `curvegen.csv`, the wall-clock
+time to find a curve from a seed, to find and certify it, and to verify the
+certificate, and how the prover's time divides among the phases of the search.
+The number of candidates before an admissible order is geometric, so the time to
+find varies severalfold between seeds. On an Apple M4 the Rust implementation
+finds a $\mathrm{GF}(2^{127})$ curve in about 20 ms on average, an order of
+magnitude faster than PARI on the same seeds; PARI finds the prime-field and
+$\mathrm{GF}(p^2)$ curves in 0.25 to 2 s on average; and certificates verify in
+under a millisecond on average.
+
+Binary fields add a structural check that prime fields do not need: Weil descent
+through subfields. For the prime extension degrees 127 and 109 the only proper
+subfield is $\mathbb{F}_2$ [menezes-qu-2001]. For $m = 109$, 2 has order 36
+modulo 109 and every descent has genus at least $2^{35}$. For $m = 127$, 2 has
+order 7, and the generalized Gaudry–Hess–Smart (GHS) descent
+[gaudry-hess-smart-2002, hess-2003], which extends to isogenous curves
+[galbraith-hess-smart-2002], reaches curves of admissible order with heuristic
 probability about $2^{-52}$ per epoch: 65 isogeny classes of order $2r$, against
 none among the 36 classes the basic descent reaches
 ([`sage/ghs.sage`](../sage/ghs.sage)). No check is made; a descent compromises
@@ -290,7 +333,7 @@ These assumptions differ from those of fixed-curve design:
   amortized, but must remain tractable for each new beacon value ([Parameter
   selection and verification](#parameter-selection-and-verification)).
 
-The constructions compared have
+[Candidate constructions](constructions.md) lists the constructions compared, at
 128-bit and shorter encodings. Their arithmetic costs are measured here; their
 security conditions are assessed separately.
 

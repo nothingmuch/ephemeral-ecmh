@@ -38,12 +38,21 @@ use criterion::{
 use ephemeral_ecmh::curvegen::criteria::Count;
 use ephemeral_ecmh::curvegen::embedding_degree_ok;
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
-use ephemeral_ecmh::curvegen::prove::{Binary127, Edwards127, Family, Weier127};
+use ephemeral_ecmh::curvegen::prove::{
+    Binary127, Edwards61x2, Edwards127, Family, Twisted61x2, Twisted64x2, TwistedGoldilocks2,
+    Weier61x2, Weier127,
+};
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error};
+use ephemeral_ecmh::curvegen::{select_fp2, select107, select109, select122, select128};
 use std::hint::black_box;
 use std::time::Duration;
 
 use common::families::kats;
+use common::families::kats_fp2;
+use common::families::kats107;
+use common::families::kats109;
+use common::families::kats122;
+use common::families::kats128;
 
 fn setup() {
     assert!(
@@ -92,11 +101,27 @@ fn count(c: &mut Criterion) {
     count_one::<Edwards127>(&mut g, "edwards127", &k.seed, k.index);
     let k = &kats::WEIER127_CERTS[0];
     count_one::<Weier127>(&mut g, "weier127", &k.seed, k.index);
+    let k = &kats_fp2::EDWARDS61X2_CERTS[0];
+    count_one::<Edwards61x2>(&mut g, "edwards61x2", &k.seed, k.index);
+    let k = &kats_fp2::WEIER61X2_CERTS[0];
+    count_one::<Weier61x2>(&mut g, "weier61x2", &k.seed, k.index);
+    let k = &kats_fp2::TWISTED61X2_CERTS[0];
+    count_one::<Twisted61x2>(&mut g, "twisted61x2", &k.seed, k.index);
+    let k = &kats_fp2::TWISTED64X2_CERTS[0];
+    count_one::<Twisted64x2>(&mut g, "twisted64x2", &k.seed, k.index);
+    let k = &kats_fp2::TWISTED_GOLDILOCKS2_CERTS[0];
+    count_one::<TwistedGoldilocks2>(&mut g, "twisted-goldilocks2", &k.seed, k.index);
     g.finish();
 }
 
 type Accept<C> = fn(&[u8; 32], u32, u128) -> Result<C, Error>;
 type Verify<C, const N: usize> = fn(&[u8; 32], &Certificate<N>) -> Result<C, Error>;
+
+/// The acceptance policy of a family whose prover checks it, as the
+/// selectors' `accept_*` apply it.
+fn accept_family<F: Family>(seed: &[u8; 32], index: u32, r: u128) -> Result<F::Curve, Error> {
+    select::accept::<16, F>(seed, index, r)
+}
 
 /// One family's verify_accept, embedding and verify_full rows, on its
 /// first fixture, over a field of q elements.
@@ -160,6 +185,94 @@ fn verify(c: &mut Criterion) {
         &fixtures!(kats::WEIER127_CERTS),
         select::accept_weier127,
         select::verify_weier127,
+    );
+    family(
+        c,
+        "edwards107",
+        (1 << 107) - 1,
+        &fixtures!(kats107::FP107_CERTS),
+        select107::accept_fp107,
+        select107::verify_fp107,
+    );
+    family(
+        c,
+        "weier107",
+        (1 << 107) - 1,
+        &fixtures!(kats107::WEIER107_CERTS),
+        select107::accept_weier107,
+        select107::verify_weier107,
+    );
+    family(
+        c,
+        "gf2_109",
+        1 << 109,
+        &fixtures!(kats109::GF2_109_CERTS),
+        select109::accept,
+        select109::verify,
+    );
+    family(
+        c,
+        "gf2_122",
+        1 << 122,
+        &fixtures!(kats122::GF2_122_CERTS),
+        select122::accept_dense,
+        select122::verify_dense,
+    );
+    family(
+        c,
+        "gf2_122-gls",
+        1 << 122,
+        &fixtures!(kats122::GF2_122_GLS_CERTS),
+        select122::accept_gls,
+        select122::verify_gls,
+    );
+    family(
+        c,
+        "twisted128",
+        u128::MAX - 274,
+        &fixtures!(kats128::FP128_CERTS),
+        select128::accept_fp128,
+        select128::verify_fp128,
+    );
+    family(
+        c,
+        "edwards61x2",
+        ((1 << 61) - 1u128).pow(2),
+        &fixtures!(kats_fp2::EDWARDS61X2_CERTS),
+        accept_family::<Edwards61x2>,
+        select_fp2::verify_edwards61x2,
+    );
+    family(
+        c,
+        "weier61x2",
+        ((1 << 61) - 1u128).pow(2),
+        &fixtures!(kats_fp2::WEIER61X2_CERTS),
+        accept_family::<Weier61x2>,
+        select_fp2::verify_weier61x2,
+    );
+    family(
+        c,
+        "twisted61x2",
+        ((1 << 61) - 1u128).pow(2),
+        &fixtures!(kats_fp2::TWISTED61X2_CERTS),
+        accept_family::<Twisted61x2>,
+        select_fp2::verify_twisted61x2,
+    );
+    family(
+        c,
+        "twisted64x2",
+        ((1 << 64) - 59u128).pow(2),
+        &fixtures!(kats_fp2::TWISTED64X2_CERTS),
+        accept_family::<Twisted64x2>,
+        select_fp2::verify_twisted64x2,
+    );
+    family(
+        c,
+        "twisted-goldilocks2",
+        ((1 << 64) - (1u128 << 32) + 1).pow(2),
+        &fixtures!(kats_fp2::TWISTED_GOLDILOCKS2_CERTS),
+        accept_family::<TwistedGoldilocks2>,
+        select_fp2::verify_twisted_goldilocks2,
     );
 }
 

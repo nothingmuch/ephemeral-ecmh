@@ -62,7 +62,7 @@ LAYER_NOTES = {
 # gf2_122-gls, binary122's curves with their constant in GF(2^61) (and
 # gf2_122-gls-lambda, both), or weier127-jacobian, the Weierstrass curves
 # under Jacobian accumulators. xor is the SHA-256-only baseline.
-BINARY = [(127, "")]
+BINARY = [(127, ""), (109, ""), (122, ""), (122, "-gls")]
 ACCUMULATORS = ["", "-lambda", "-w", "-u"]
 # Families of benchmarks that involve no curve or field: the RIBLT
 # mapping's index generators (benches/riblt.rs, riblt.mapping).
@@ -75,9 +75,24 @@ FAMILIES = {
         for acc in ACCUMULATORS
     },
     "fp127": ("fp127", 127),
+    "fp107": ("fp127", 107),
+    "fp128": ("fp127", 128),
+    "fp61x2": ("fp127", 122),
+    "fp64x2": ("fp127", 128),
+    "goldilocks2": ("fp127", 128),
     "edwards127": ("edwards127", 127),
+    "edwards107": ("edwards127", 107),
+    "twisted128": ("edwards127", 128),
+    "edwards61x2": ("edwards127", 122),
+    "twisted61x2": ("edwards127", 122),
+    "twisted64x2": ("edwards127", 128),
+    "twisted-goldilocks2": ("edwards127", 128),
     "weier127": ("weier127", 127),
     "weier127-jacobian": ("weier127", 127),
+    "weier107": ("weier127", 107),
+    "weier107-jacobian": ("weier127", 107),
+    "weier61x2": ("weier127", 122),
+    "weier61x2-jacobian": ("weier127", 122),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -96,9 +111,17 @@ SPELLINGS = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
-    "edwards.127": "edwards127",
-    "weier.127": "weier127",
-    "weier-jacobian.127": "weier127-jacobian",
+    **{f"edwards.{f}": f"edwards{f}" for f in ("107", "127", "61x2")},
+    **{f"weier.{f}": f"weier{f}" for f in ("107", "127", "61x2")},
+    **{f"weier-jacobian.{f}": f"weier{f}-jacobian" for f in ("107", "127", "61x2")},
+    "twisted.128": "twisted128",
+    # the a = -1 quotient before it was twisted128; the 2026-10-03 fixture
+    # keeps edwards.128
+    "edwards.128": "twisted128",
+    "edwards128": "twisted128",
+    "twisted.61x2": "twisted61x2",
+    "twisted.64x2": "twisted64x2",
+    "twisted.goldilocks2": "twisted-goldilocks2",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
@@ -277,6 +300,14 @@ ELEMENTARY = [
         ("per-element",),
     ),
     ("hash to curve", "batched", "hash to curve", "hash to curve", ("batch",)),
+    (
+        "hash to addend",
+        "one at a time",
+        "hash to curve",
+        "hash to addend",
+        ("per-element",),
+    ),
+    ("hash to addend", "batched", "hash to curve", "hash to addend", ("batch",)),
 ]
 # A hash's cell is the fastest construction that yields its output, so the
 # comparison maps' rows compete with try-and-increment's.
@@ -289,7 +320,14 @@ ALSO = {
 # curves with
 FIELDS = {
     "gf2_127": "gf2_127",
+    "gf2_109": "gf2_127",
+    "gf2_122": "gf2_127",
     "fp127": "fp127",
+    "fp107": "fp127",
+    "fp128": "fp127",
+    "fp61x2": "fp127",
+    "fp64x2": "fp127",
+    "goldilocks2": "fp127",
 }
 CURVES = [
     "xor",
@@ -297,9 +335,31 @@ CURVES = [
     "gf2_127-lambda",
     "gf2_127-w",
     "gf2_127-u",
+    "gf2_109",
+    "gf2_109-lambda",
+    "gf2_109-w",
+    "gf2_109-u",
+    "gf2_122",
+    "gf2_122-lambda",
+    "gf2_122-w",
+    "gf2_122-u",
+    "gf2_122-gls",
+    "gf2_122-gls-lambda",
+    "gf2_122-gls-w",
+    "gf2_122-gls-u",
     "edwards127",
+    "edwards107",
+    "twisted128",
     "weier127",
     "weier127-jacobian",
+    "weier107",
+    "weier107-jacobian",
+    "edwards61x2",
+    "weier61x2",
+    "weier61x2-jacobian",
+    "twisted61x2",
+    "twisted64x2",
+    "twisted-goldilocks2",
     "ristretto255",
     "secp256k1",
 ]
@@ -332,11 +392,80 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "GF(2^122) = GF(2^61)[u], dense constant, 16 bytes",
+        [
+            ("gf2_122", "(X:S:Z:T) extended"),
+            ("gf2_122-lambda", "λ-projective"),
+            ("gf2_122-w", "λ-projective, w codec"),
+            ("gf2_122-u", "unscaled (X:S:Z), w codec"),
+        ],
+    ),
+    (
+        "GF(2^122), constant in GF(2^61) (GLS-shaped), 16 bytes",
+        [
+            ("gf2_122-gls", "(X:S:Z:T) extended"),
+            ("gf2_122-gls-lambda", "λ-projective"),
+            ("gf2_122-gls-w", "λ-projective, w codec"),
+            ("gf2_122-gls-u", "unscaled (X:S:Z), w codec"),
+        ],
+    ),
+    (
+        "GF(2^109), 14 bytes",
+        [
+            ("gf2_109", "(X:S:Z:T) extended"),
+            ("gf2_109-lambda", "λ-projective"),
+            ("gf2_109-w", "λ-projective, w codec"),
+            ("gf2_109-u", "unscaled (X:S:Z), w codec"),
+        ],
+    ),
+    (
         "F_p, p = 2^127 − 1, 16 bytes",
         [
             ("edwards127", "a = 1 Edwards, extended += cached"),
             ("weier127", "short Weierstrass, projective += affine"),
             ("weier127-jacobian", "short Weierstrass, Jacobian += affine"),
+        ],
+    ),
+    (
+        "F_p, p = 2^107 − 1, 14 bytes",
+        [
+            ("edwards107", "a = 1 Edwards, extended += cached"),
+            ("weier107", "short Weierstrass, projective += affine"),
+            ("weier107-jacobian", "short Weierstrass, Jacobian += affine"),
+        ],
+    ),
+    (
+        "F_p, p = 2^128 − 275, 16 bytes",
+        [
+            (
+                "twisted128",
+                "a = −1 twisted Edwards modulo 2-torsion, extended += cached",
+            ),
+        ],
+    ),
+    (
+        "F_{p²}, p = 2^61 − 1, 16 bytes",
+        [
+            ("edwards61x2", "a = 1 Edwards, signed-x codec, extended += cached"),
+            ("weier61x2", "short Weierstrass, signed-x codec, projective += affine"),
+            (
+                "weier61x2-jacobian",
+                "short Weierstrass, signed-x codec, Jacobian += affine",
+            ),
+            ("twisted61x2", "a = −1 Edwards modulo 2-torsion, extended += cached"),
+        ],
+    ),
+    (
+        "F_{p²}, p = 2^64 − 59, 16 bytes",
+        [("twisted64x2", "a = −1 Edwards modulo 2-torsion, extended += cached")],
+    ),
+    (
+        "F_{p²}, p = 2^64 − 2^32 + 1, 16 bytes",
+        [
+            (
+                "twisted-goldilocks2",
+                "a = −1 Edwards modulo 2-torsion, extended += cached",
+            )
         ],
     ),
     (
@@ -348,8 +477,30 @@ CURVE_GROUPS = [
     ),
 ]
 FIELD_GROUPS = [
-    ("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")]),
-    ("prime", [("fp127", "p = 2^127 − 1")]),
+    (
+        "binary",
+        [
+            ("gf2_127", "F_2[z]/(z^127 + z^63 + 1)"),
+            ("gf2_122", "GF(2^61)[u]/(u^2 + u + 1)"),
+            ("gf2_109", "F_2[z]/(z^109 + z^5 + z^4 + z^2 + 1)"),
+        ],
+    ),
+    (
+        "prime",
+        [
+            ("fp127", "p = 2^127 − 1"),
+            ("fp107", "p = 2^107 − 1"),
+            ("fp128", "p = 2^128 − 275, for twisted128"),
+        ],
+    ),
+    (
+        "quadratic extensions of prime fields",
+        [
+            ("fp61x2", "GF(p^2) = F_p[i]/(i^2 + 1), p = 2^61 − 1"),
+            ("fp64x2", "GF(p^2) = F_p[i]/(i^2 − 2), p = 2^64 − 59"),
+            ("goldilocks2", "GF(p^2) = F_p[i]/(i^2 − 7), p = 2^64 − 2^32 + 1"),
+        ],
+    ),
 ]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {
@@ -357,9 +508,23 @@ FIELD_OF = {
     "gf2_127-lambda": "gf2_127",
     "gf2_127-w": "gf2_127",
     "gf2_127-u": "gf2_127",
+    "gf2_109": "gf2_109",
+    "gf2_109-lambda": "gf2_109",
+    "gf2_109-w": "gf2_109",
+    "gf2_109-u": "gf2_109",
     "edwards127": "fp127",
     "weier127": "fp127",
+    "edwards107": "fp107",
+    "twisted128": "fp128",
+    "weier107": "fp107",
     "weier127-jacobian": "fp127",
+    "weier107-jacobian": "fp107",
+    "edwards61x2": "fp61x2",
+    "weier61x2": "fp61x2",
+    "weier61x2-jacobian": "fp61x2",
+    "twisted61x2": "fp61x2",
+    "twisted64x2": "fp64x2",
+    "twisted-goldilocks2": "goldilocks2",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

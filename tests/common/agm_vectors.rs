@@ -203,6 +203,39 @@ pub const GF127: &[(u128, u128)] = &[
     ),
 ];
 
+/// (B, #E_B) over F_2\[z\]/(z^109 + z^5 + z^4 + z^2 + 1).
+pub const GF109: &[(u128, u128)] = &[
+    (0x1, 0x1fffffffffffff4c436058707d36),
+    (
+        0xc8fa05b82fb9ca4b3cb960a8050,
+        0x1ffffffffffffff0278897f626e6,
+    ),
+    (
+        0x1612b6a73440310ab6b5d04962bd,
+        0x1fffffffffffff6407ec4f958d9a,
+    ),
+    (
+        0x317e5ebbe856b43deb3a1cee04f,
+        0x1fffffffffffff5e72da976ac432,
+    ),
+    (
+        0xbfcabf661a130ee029a1fcbce3c,
+        0x200000000000007b11c120e19122,
+    ),
+    (
+        0x47402b1650211d8c4e58b872329,
+        0x2000000000000004af0127d9f876,
+    ),
+    (
+        0x1ffe2735ad908355fd0cf5c3b3ef,
+        0x1fffffffffffffae54ccb79dc186,
+    ),
+    (
+        0x149191dc30097b863aa91ddc5b80,
+        0x1fffffffffffffc014609f7dadda,
+    ),
+];
+
 /// (B, #E_B) over F_2\[z\]/(z^13 + z^4 + z^3 + z + 1).
 pub const GF13: &[(u128, u128)] = &[
     (0x1, 0x20b6),

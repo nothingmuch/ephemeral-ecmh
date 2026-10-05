@@ -3,7 +3,92 @@
 //! the first certified Weier107/127 curves in the Sage certificate fixtures.
 
 use super::*;
-use crate::field::fp127;
+use crate::field::{fp107, fp127};
+
+#[test]
+fn reference_vectors_107() {
+    type Fp = fp107::Fp;
+    let curve = Curve::new(Fp::new(0x6beb73f4f8778caf14d57fb6175)).unwrap();
+    let map = Sswu::new(curve, Fp::new(0x7fffffffffffffffffffffffff8)).unwrap();
+    let vectors = [
+        (
+            0x0,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x762beca6971bf1938c0b4f16260,
+        ),
+        (
+            0x7ef1b30e4343858f5454fb40b4a,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x762beca6971bf1938c0b4f16260,
+        ),
+        (
+            0x10e4cf1bcbc7a70abab04bf4b5,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x9d4135968e40e6c73f4b0e9d9f,
+        ),
+        (
+            0x1,
+            0x21c839dbba61b002dc717ee2b6b,
+            0x734b13a82ec324ced99f483da89,
+        ),
+        (
+            0x2,
+            0x22613614e796161a2a545021583,
+            0x5199050c77f390ffcc015658d34,
+        ),
+        (
+            0x3,
+            0x16a7571ebb230da7dae3fa5d8e5,
+            0x1bd4f47e80f14d645dd9516521b,
+        ),
+        (
+            0x4,
+            0x28265bc8630e89374b78068d0e0,
+            0x5d87e6abc1263585a66a291b4a6,
+        ),
+        (
+            0x5,
+            0x2297139fd947712b421da8a08e9,
+            0x766332aeb47f3bd8284897fb19b,
+        ),
+        (
+            0x11,
+            0x1710854cea9a33aaaf4713214e9,
+            0x4493a412692be93d19568e78fe1,
+        ),
+        (
+            0x7fffffffffffffffffffffffffe,
+            0x21c839dbba61b002dc717ee2b6b,
+            0xcb4ec57d13cdb312660b7c2576,
+        ),
+        (
+            0x7fffffffffffffffffffffffffd,
+            0x22613614e796161a2a545021583,
+            0x2e66faf3880c6f0033fea9a72cb,
+        ),
+    ];
+    for (u, x, y) in vectors {
+        let p = map.map_to_curve(Fp::new(u));
+        assert_eq!(
+            p,
+            Affine {
+                x: Fp::new(x),
+                y: Fp::new(y)
+            }
+        );
+        assert!(curve.is_on_curve(&p));
+    }
+}
+
+#[test]
+fn rejects_invalid_z_107() {
+    type Fp = fp107::Fp;
+    let curve = Curve::new(Fp::new(0x6beb73f4f8778caf14d57fb6175)).unwrap();
+    for z in [0, 1, fp107::P - 1] {
+        assert!(Sswu::new(curve, Fp::new(z)).is_none());
+    }
+}
+
 #[test]
 fn reference_vectors_127() {
     type Fp = fp127::Fp;
@@ -249,6 +334,7 @@ macro_rules! suite {
     };
 }
 
+suite!(small, fp107, 0x6beb73f4f8778caf14d57fb6175, P - 7, 3, P - 8);
 suite!(
     large,
     fp127,
@@ -257,3 +343,71 @@ suite!(
     P - 4,
     P - 2
 );
+
+mod fp61x2 {
+    use super::*;
+    use crate::field::fp61x2::{Fp, Fq, tests::fq};
+    use proptest::prelude::*;
+
+    /// RFC 9380's g for GF(p^2) = F_p(i).
+    const I: Fq = Fq::new(Fp::ZERO, Fp::ONE);
+
+    fn map(b: Fq) -> Option<(Fq, Sswu<Fq>)> {
+        let curve = Curve::new(b)?;
+        let map = Sswu::search_from(curve, I, 64)?;
+        Some((map.z, map))
+    }
+
+    #[test]
+    fn ratio_zero_is_square() {
+        assert_eq!(
+            Fq::ratio_root(Fq::ZERO, Fq::ONE, &Fq::NON_SQUARE),
+            (true, Fq::ZERO)
+        );
+    }
+
+    /// The exceptional denominator Z^2 u^4 + Z u^2 = 0 at u = 0 only: -1
+    /// is a square in GF(p^2), so u^2 = -1/Z has no root for a non-square Z.
+    #[test]
+    fn exceptional_input_matches_affine_reference() {
+        let b = Fq::new(Fp::new(5), Fp::new(7));
+        let (z, map) = map(b).expect("fixed curve admits SSWU setup");
+        let curve = Curve::new(b).unwrap();
+        assert!(!(-z.invert()).is_square());
+        let p = map.map_to_curve(Fq::ZERO);
+        assert_eq!(p, reference(&curve, z, Fq::ZERO));
+        assert!(curve.is_on_curve(&p));
+    }
+
+    proptest! {
+        #[test]
+        fn matches_affine_reference(b in fq(), u in fq()) {
+            let candidate = map(b);
+            prop_assume!(candidate.is_some());
+            let (z, map) = candidate.unwrap();
+            let curve = Curve::new(b).unwrap();
+            let p = map.map_to_curve(u);
+            prop_assert_eq!(p, reference(&curve, z, u));
+            prop_assert!(curve.is_on_curve(&p));
+            if !u.is_zero() {
+                prop_assert_eq!(map.map_to_curve(-u), p.neg());
+            }
+        }
+
+        #[test]
+        fn ratio_root_handles_both_square_classes(x in fq(), d in fq()) {
+            prop_assume!(!d.is_zero());
+            let z = Fq::NON_SQUARE;
+            let n = d * x.square();
+            let (square, r) = Fq::ratio_root(n, d, &z);
+            prop_assert!(square);
+            prop_assert_eq!(r.square() * d, n);
+            if !x.is_zero() {
+                let n = z * n;
+                let (square, r) = Fq::ratio_root(n, d, &z);
+                prop_assert!(!square);
+                prop_assert_eq!(r.square() * d, z * n);
+            }
+        }
+    }
+}

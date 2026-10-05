@@ -17,6 +17,8 @@ crrl = { version = "0.9.0", default-features = false, features = [
   "std",
   "gfb254",
 ] }
+p3-field = "0.8"
+p3-goldilocks = "0.8"
 sha2 = "0.11"
 
 [dev-dependencies]
@@ -31,6 +33,22 @@ secp256k1 = "0.33.1"
 
 [[bench]]
 name = "compare"
+harness = false
+
+[[bench]]
+name = "compare107"
+harness = false
+
+[[bench]]
+name = "compare109"
+harness = false
+
+[[bench]]
+name = "compare122"
+harness = false
+
+[[bench]]
+name = "compare_fp2"
 harness = false
 
 [[bench]]

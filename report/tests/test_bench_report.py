@@ -25,8 +25,18 @@ LAYERS = [
 
 # the workload, and the smaller-field variants the rules must name
 EXTRA = [
+    ("add", "gf2_109/extended += affine, 8 accumulators", None, 1024),
+    ("add", "edwards107/+= cached, 8 accumulators", None, 1024),
+    ("hash_to_curve", "weier107/try-and-increment", None, 1024),
+    ("hash_to_curve", "edwards107/montgomery try-and-increment", None, 1024),
     ("group.add", "binary-lambda.127/mode=throughput", None, 1024),
     ("group.add", "binary-w.127/mode=throughput", None, 1024),
+    ("group.add", "binary.122/mode=throughput", None, 1024),
+    ("group.add", "binary-lambda.122/mode=throughput", None, 1024),
+    ("group.add", "binary.122-gls/mode=throughput", None, 1024),
+    ("group.add", "binary-lambda.122-gls/mode=throughput", None, 1024),
+    ("group.add", "binary-w.122/mode=throughput", None, 1024),
+    ("group.add", "binary-w.122-gls/mode=throughput", None, 1024),
     # one family's pipeline, through the group traits
     ("h2c", "binary.127/mode=indep", None, 1024),
     ("h2c", "binary.127/mode=batch,n=1024", None, 1024),
@@ -35,6 +45,13 @@ EXTRA = [
     ("group.add", "binary.127/mode=throughput", None, 1024),
     ("group.add", "binary.127/mode=latency", None, 1024),
     # a λ family's hash straight to its addend
+    ("hash_to_curve", "gf2_122-lambda/try-and-increment to (x, λ)", None, 1024),
+    (
+        "hash_to_curve",
+        "gf2_122-lambda/try-and-increment to (x, λ), batched",
+        None,
+        1024,
+    ),
 ]
 
 
@@ -169,14 +186,30 @@ def test_current_suite_is_fully_classified(table):
                 "per-element",
             ),
         ),
+        (
+            "hash_to_curve/gf2_109/pornin map x1",
+            ("comparison maps", "gf2_109", "one map", "per-element"),
+        ),
         # the map straight to an addend: a comparison map that is also a prepare
         (
             "hash_to_curve/gf2_127-u/pornin map x1 to (u, v), batched",
             ("comparison maps", "gf2_127-u", "one map to addend", "batch"),
         ),
         (
+            "hash_to_curve/gf2_109-lambda/pornin map x1 to (x, λ)",
+            ("comparison maps", "gf2_109-lambda", "one map to addend", "per-element"),
+        ),
+        (
+            "hash_to_curve/gf2_122-gls/pornin map x1, batched",
+            ("comparison maps", "gf2_122-gls", "one map", "batch"),
+        ),
+        (
             "hash_to_curve/edwards127/elligator2 x1",
             ("comparison maps", "edwards127", "one map", "per-element"),
+        ),
+        (
+            "hash_to_curve/weier107/sswu x1",
+            ("comparison maps", "weier107", "one map", "per-element"),
         ),
         (
             "hash_to_curve/weier127/sswu x1",
@@ -204,9 +237,38 @@ def test_current_suite_is_fully_classified(table):
         ),
         ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
+        (
+            "add/gf2_109/extended += affine, 8 accumulators",
+            ("group ops", "gf2_109", "add", "throughput"),
+        ),
+        ("digest/edwards107/batch", ("digest", "edwards107", "digest", "batch")),
         # GF(2^122): qsolve sits with the halftraces
+        (
+            "field/gf2_122/qsolve (z^2 + z = c, 2 base halftraces)",
+            ("field", "gf2_122", "halftrace", "per-element"),
+        ),
+        (
+            "field/gf2_122/mul_base (by a GF(2^61) constant) throughput (8 chains)",
+            ("field", "gf2_122", "mul_base", "throughput"),
+        ),
+        (
+            "hash_to_curve/weier107/try-and-increment",
+            ("hash to curve", "weier107", "hash to curve", "per-element"),
+        ),
         ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
+        (
+            "field/gf2_122/mul_u2 (by a^2 = 1 + a) latency (dependent chain)",
+            ("field", "gf2_122", "mul_u2", "latency"),
+        ),
+        (
+            "field/gf2_109/normalize (to_u128)",
+            ("field", "gf2_109", "normalize", "per-element"),
+        ),
         # a batch to affine, not a sum
+        (
+            "add/gf2_122-gls/normalize, batched",
+            ("group ops", "gf2_122-gls", "normalize", "batch"),
+        ),
         (
             "agm/order",
             ("curve generation", "gf2_127", "point count (Rust AGM)", "per-element"),
@@ -218,6 +280,19 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_127", "add", "throughput"),
         ),
         (
+            "group.sub/edwards.107/mode=latency",
+            ("group ops", "edwards107", "subtract", "latency"),
+        ),
+        (
+            "group.add/edwards.128/mode=throughput",
+            ("group ops", "twisted128", "add", "throughput"),
+        ),
+        (
+            "group.prepare/binary.109/mode=batch,n=1024",
+            ("group ops", "gf2_109", "prepare", "batch"),
+        ),
+        ("group.neg/weier.107", ("group ops", "weier107", "negate", "per-element")),
+        (
             "group.is_identity/weier.127",
             ("group ops", "weier127", "is identity", "per-element"),
         ),
@@ -226,8 +301,20 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "edwards127", "encode", "per-element"),
         ),
         (
+            "group.encode/binary-w.122/mode=batch,n=1024",
+            ("group ops", "gf2_122-w", "encode", "batch"),
+        ),
+        (
+            "group.decode/binary.109/mode=indep",
+            ("group ops", "gf2_109", "decode", "per-element"),
+        ),
+        (
             "h2c/binary.127/mode=batch,n=1024",
             ("hash to curve", "gf2_127", "hash to curve", "batch"),
+        ),
+        (
+            "h2c/weier.107/mode=indep",
+            ("hash to curve", "weier107", "hash to curve", "per-element"),
         ),
         # Identifiers with an explicit 127-bit field width.
         (
@@ -256,18 +343,85 @@ def test_current_suite_is_fully_classified(table):
         # riblt.peel's parameters say whether it peels in batches
         # the two XOR baselines are told apart by their hash
         # binary122: GLS constants, λ accumulators, and both
+        (
+            "group.add/binary.122/mode=latency",
+            ("group ops", "gf2_122", "add", "latency"),
+        ),
+        (
+            "group.add/binary.122-gls/mode=throughput",
+            ("group ops", "gf2_122-gls", "add", "throughput"),
+        ),
+        (
+            "group.add/binary-lambda.122/mode=throughput",
+            ("group ops", "gf2_122-lambda", "add", "throughput"),
+        ),
+        (
+            "h2c/binary-lambda.122-gls/mode=batch,n=1024",
+            ("hash to curve", "gf2_122-gls-lambda", "hash to curve", "batch"),
+        ),
+        (
+            "add/gf2_122-gls/extended += affine, 8 accumulators",
+            ("group ops", "gf2_122-gls", "add", "throughput"),
+        ),
+        (
+            "hash_to_curve/gf2_122-lambda/try-and-increment to (x, λ), batched",
+            ("hash to curve", "gf2_122-lambda", "hash to addend", "batch"),
+        ),
         # the F_{p^2} prototypes, and the codecs of the odd fields
+        (
+            "field/fp61x2/mul throughput (8 chains)",
+            ("field", "fp61x2", "mul", "throughput"),
+        ),
+        ("field/fp64x2/sqrt", ("field", "fp64x2", "sqrt", "per-element")),
+        (
+            "field/fp64x2/batch invert (product tree)",
+            ("field", "fp64x2", "batch invert", "batch"),
+        ),
+        ("field/fp61x2/pack", ("field", "fp61x2", "pack", "per-element")),
+        (
+            "field/fp64x2/square latency (dependent chain)",
+            ("field", "fp64x2", "square", "latency"),
+        ),
         # the Weierstrass curves' Jacobian families
         (
             "group.add/weier-jacobian.127/mode=throughput",
             ("group ops", "weier127-jacobian", "add", "throughput"),
         ),
+        (
+            "group.encode/weier-jacobian.107/mode=batch,n=64",
+            ("group ops", "weier107-jacobian", "encode", "batch"),
+        ),
+        (
+            "field/fp128/sqrt_ratio",
+            ("field", "fp128", "sqrt_ratio", "per-element"),
+        ),
         # Plonky3's fields
+        (
+            "field/goldilocks2/mul throughput (8 chains)",
+            ("field", "goldilocks2", "mul", "throughput"),
+        ),
+        ("field/goldilocks2/unpack", ("field", "goldilocks2", "unpack", "per-element")),
         (
             "field/gf2_127/normalize (to_u128)",
             ("field", "gf2_127", "normalize", "per-element"),
         ),
         # binary109's λ and w families, and the λ one's hash to its addend
+        (
+            "group.add/binary-lambda.109/mode=throughput",
+            ("group ops", "gf2_109-lambda", "add", "throughput"),
+        ),
+        (
+            "group.decode/binary-w.109/mode=batch,n=64",
+            ("group ops", "gf2_109-w", "decode", "batch"),
+        ),
+        (
+            "hash_to_curve/gf2_109-lambda/try-and-increment to (x, λ)",
+            ("hash to curve", "gf2_109-lambda", "hash to addend", "per-element"),
+        ),
+        (
+            "h2c_parts/gf2_122-gls t&i/2. test Tr(b/x) (rejected)",
+            ("hash to curve", "gf2_122-gls", "steps: gf2_122-gls t&i", "per-element"),
+        ),
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
     ],
@@ -296,6 +450,14 @@ def test_both_spellings_name_one_family(old, new):
 @pytest.mark.parametrize(
     "group, function, parameter, operation",
     [
+        ("curvegen/count", "edwards61x2", None, "point count (PARI)"),
+        ("curvegen/verify_accept", "gf2_122-gls", "3", "accept certificate"),
+        (
+            "curvegen/verify_full",
+            "twisted-goldilocks2/12 rejections",
+            "0",
+            "verify certificate",
+        ),
         (
             "curvegen/find",
             "gf2_127 agm+sieve/index 30",
@@ -311,10 +473,32 @@ def test_curvegen_names_each_family(group, function, parameter, operation):
     assert (f.layer, f.family, f.operation) == ("curve generation", fam, operation)
 
 
+QUADRATIC_CURVES = [
+    ("edwards.61x2", "edwards61x2", "edwards127", "fp61x2", 122),
+    ("weier.61x2", "weier61x2", "weier127", "fp61x2", 122),
+    ("weier-jacobian.61x2", "weier61x2-jacobian", "weier127", "fp61x2", 122),
+    ("twisted.61x2", "twisted61x2", "edwards127", "fp61x2", 122),
+    ("twisted.64x2", "twisted64x2", "edwards127", "fp64x2", 128),
+    ("twisted.goldilocks2", "twisted-goldilocks2", "edwards127", "goldilocks2", 128),
+]
+
+
+@pytest.mark.parametrize("spelling, curve, base, field, bits", QUADRATIC_CURVES)
+@pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
+def test_quadratic_curve_identifiers(spelling, curve, base, field, bits, group):
+    f = rules.classify(group, spelling + "/mode=indep", None, True)
+    assert (f.family, f.base, f.bits) == (curve, base, bits)
+    assert rules.family(curve) == (curve, base, bits)
+    assert rules.FIELD_OF[curve] == field
+
+
 @pytest.mark.parametrize(
     "spelling, curve, field, bits",
     [
         ("binary-u.127", "gf2_127-u", "gf2_127", 127),
+        ("binary-u.109", "gf2_109-u", "gf2_109", 109),
+        ("binary-u.122", "gf2_122-u", "gf2_122", 122),
+        ("binary-u.122-gls", "gf2_122-gls-u", "gf2_122", 122),
     ],
 )
 @pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
@@ -401,6 +585,40 @@ def test_addend_equality_is_present_in_elementary_table(tmp_path):
     assert "group.equals/binary.127" in rendered
 
 
+def test_quadratic_curve_headings_describe_structure_without_certification():
+    for _, curve, _, _, _ in QUADRATIC_CURVES:
+        assert curve in rules.CURVES
+        rows = [
+            (heading, note)
+            for heading, rows in rules.CURVE_GROUPS
+            for name, note in rows
+            if name == curve
+        ]
+        assert len(rows) == 1
+        assert "certified" not in " ".join(rows[0]).lower()
+    headings = [
+        heading
+        for heading, rows in rules.FIELD_GROUPS
+        if any(name == "fp61x2" for name, _ in rows)
+    ]
+    assert all("no curve yet" not in heading for heading in headings)
+
+
+@pytest.mark.parametrize("name, bits", [("fp61x2", 122), ("fp64x2", 128)])
+def test_quadratic_field_width_is_the_extension_width(name, bits):
+    assert rules.family(name) == (name, "fp127", bits)
+
+
+def test_variants_keep_their_family_and_base():
+    lam = rules.classify("group.add", "binary-lambda.127/mode=latency", None, True)
+    assert (lam.family, lam.base, lam.bits) == ("gf2_127-lambda", "gf2_127", 127)
+    w = rules.classify("group.add", "binary-w.127/mode=latency", None, True)
+    assert (w.family, w.base, w.bits) == ("gf2_127-w", "gf2_127", 127)
+    gw = rules.classify("group.add", "binary-w.122-gls/mode=latency", None, True)
+    assert (gw.family, gw.bits) == ("gf2_122-gls-w", 122)
+    assert rules.family("gf2_122-gls-w/add")[0] == "gf2_122-gls-w"
+
+
 def test_every_base_has_a_dark_and_a_light_shade():
     assert rules.COLORS.keys() == rules.LIGHT.keys()
     assert (
@@ -474,6 +692,9 @@ def test_no_machine_is_flagged(rendered):
     assert "## Machine\n\nUnknown: no meta.json" in md
 
 
+GLS122 = {"r": str(2**121 + 5), "cofactor": 2, "automorphisms": 4}
+
+
 def test_runs_before_r_was_recorded_still_render(tmp_path):
     root = tmp_path / "criterion"
     write_bench(
@@ -486,11 +707,41 @@ def test_runs_before_r_was_recorded_still_render(tmp_path):
     assert br.fixtures(table, meta) == {"binary.127": {"status": "certified"}}
 
 
+@pytest.mark.parametrize("record", [GLS122, None])
+def test_curve_parameters_are_not_benchmark_results(tmp_path, record):
+    root = tmp_path / "criterion"
+    write_bench(
+        root, "group.add", "binary.122-gls/mode=latency", None, 1, 2, 3, {"Elements": 1}
+    )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    meta = {"group_fixtures": {"binary.122-gls": record}} if record else None
+    blocks = br.blocks(table, {}, [], "fixture", meta=meta)
+    md, html = br.to_markdown(blocks), br.to_html(blocks)
+    assert "Curve parameters" not in md and "Curve parameters" not in html
+    assert "Certificate verified" not in md
+
+
 def test_rho_is_sqrt_pi_r_over_2a():
     r = 2**126
     assert br.rho_bits(r, 2) == pytest.approx(math.log2(math.sqrt(math.pi * r / 4)))
     # a further sqrt 2 for an automorphism group of order 4
     assert br.rho_bits(r, 2) - br.rho_bits(r, 4) == pytest.approx(0.5)
+    # docs/ecc_security.md: 59.8 for the GLS family
+    assert f"{br.rho_bits(int(GLS122['r']), GLS122['automorphisms']):.1f}" == "59.8"
+
+
+def test_fixtures_do_not_cover_unlisted_families(tmp_path):
+    root = tmp_path / "criterion"
+    for family in ["binary.127", "twisted.61x2"]:
+        write_bench(root, "group.add", family, None, 1, 2, 3, {"Elements": 1})
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    rec = {"r": str(2**126 + 1), "cofactor": 2, "automorphisms": 2}
+    fixed = br.fixtures(table, {"group_fixtures": {"binary.127": rec}})
+    assert fixed == {"binary.127": rec, "twisted.61x2": None}
 
 
 def test_machine(tmp_path):
@@ -565,6 +816,20 @@ def test_index_lists_the_runs_newest_first(tmp_path):
     assert "| [x86](x86/report/report.md) | 2026-10-03T09:00:00Z | AMD EPYC |" in md
     with pytest.raises(SystemExit, match="no report.html"):
         br.index(tmp_path / "empty")
+
+
+def test_labels_wrap_between_parameters_not_inside_them():
+    s = "binary-lambda.122-gls/d=100,m=200,prefilter=true,batch=false"
+    lines = figures.wrap_label(s, 30).split("\n")
+    assert lines == [
+        "binary-lambda.122-gls/d=100,",
+        "m=200,prefilter=true,",
+        "batch=false",
+    ]
+    assert (
+        figures.wrap_label("gf2/batch affine (tree sum)")
+        == "gf2/batch affine (tree sum)"
+    )
 
 
 def test_raw_tables_tell_operations_apart(tmp_path):
@@ -704,6 +969,25 @@ def test_addend_equality_splits_matches_from_mismatches(tmp_path):
 
 
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)
+
+
+@pytest.mark.parametrize(
+    "spelling", ["edwards128", "edwards.128", "twisted128", "twisted.128"]
+)
+def test_twisted128_historical_names(spelling):
+    f = rules.classify("group.add", f"{spelling}/mode=throughput", None, True)
+    assert f.family == "twisted128"
+    assert f.base == "edwards127"
+    assert f.bits == 128
+
+
+def test_historical_selection_name_is_canonical(tmp_path):
+    (tmp_path / "curvegen.csv").write_text(
+        "family,method,seed,find_s,verify_s\nedwards128,pari,0,0.1,0.001\n"
+    )
+    row = br.selection(tmp_path).iloc[0]
+    assert row.family == "twisted128"
+    assert row.find_s == 0.1
 
 
 def test_curve_selection_shows_every_method_and_the_fastest_drawn(tmp_path):

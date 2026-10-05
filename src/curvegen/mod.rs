@@ -5,6 +5,10 @@
 //! probable-prime test; it does not supply a primality certificate.
 //!
 //! - `criteria`: candidate/order contracts and direct selection from point counts.
+//! - `select`, `select107`, `select109`, `select122`, `select128`:
+//!   candidates from a seed, and the certificate a verifier checks, for
+//!   the 127-, 107-, 109-, 122- and 128-bit families.
+//! - `select_fp2`: quadratic-field candidates and order certificates.
 //! - `prove`: constructs selection certificates using point counts.
 //! - `sieve`: rejects candidates by small torsion, before counting points.
 //! - `agm`: counts points on binary curves (canonical lift, with `agm::zq`).
@@ -19,6 +23,12 @@ pub mod pari;
 pub mod poly;
 pub mod prove;
 pub mod select;
+pub mod select107;
+pub mod select109;
+pub mod select122;
+pub mod select128;
 pub mod sieve;
+
+pub mod select_fp2;
 
 pub use number::embedding_degree_ok;

@@ -2,14 +2,25 @@
 # run of all suites, as `cargo bench -- --list` names them, numeric parameters
 # collapsed; every one must classify (report/tests/test_bench_report.py). The
 # run's directory, machine and source revision were not recorded.
+add	edwards107/+= montgomery affine, 8 accumulators
+add	edwards107/batch montgomery affine (tree sum)
 add	edwards127/+= montgomery affine, 8 accumulators
 add	edwards127/batch montgomery affine (tree sum)
+add	gf2_109/batch affine (tree sum)
+add	gf2_109/extended += affine, 8 accumulators
+add	gf2_109/normalize, batched
+add	gf2_122-gls/extended += affine, 8 accumulators
+add	gf2_122-gls/normalize, batched
+add	gf2_122/batch affine (tree sum)
+add	gf2_122/extended += affine, 8 accumulators
+add	gf2_122/normalize, batched
 add	gf2_127/batch affine (tree sum)
 add	gf2_127/extended += affine, 8 accumulators
 add	ristretto255/+=, 1 accumulator
 add	ristretto255/+=, 8 accumulators
 add	ristretto255/-=, 8 accumulators
 add	secp256k1/combine_keys (jacobian += affine)
+add	weier107/batch affine (tree sum)
 add	weier127/batch affine (tree sum)
 add	xor-sha256/xor 32B
 agm	order
@@ -17,21 +28,68 @@ agm	tables
 agm	trace
 curvegen/certify	gf2_127 agm+sieve/index 30
 curvegen/count	edwards127
+curvegen/count	edwards61x2
 curvegen/count	gf2_127
+curvegen/count	twisted-goldilocks2
+curvegen/count	twisted61x2
+curvegen/count	twisted64x2
 curvegen/count	weier127
+curvegen/count	weier61x2
 curvegen/find	gf2_127 agm+sieve/index 30
+curvegen/verify_accept	edwards107
 curvegen/verify_accept	edwards127
+curvegen/verify_accept	edwards128
+curvegen/verify_accept	edwards61x2
+curvegen/verify_accept	gf2_109
+curvegen/verify_accept	gf2_122
+curvegen/verify_accept	gf2_122-gls
 curvegen/verify_accept	gf2_127
+curvegen/verify_accept	twisted-goldilocks2
+curvegen/verify_accept	twisted61x2
+curvegen/verify_accept	twisted64x2
+curvegen/verify_accept	weier107
 curvegen/verify_accept	weier127
+curvegen/verify_accept	weier61x2
+curvegen/verify_full	edwards107/3 rejections
 curvegen/verify_full	edwards127/3 rejections
+curvegen/verify_full	edwards128/3 rejections
+curvegen/verify_full	edwards61x2/3 rejections
+curvegen/verify_full	gf2_109/3 rejections
+curvegen/verify_full	gf2_122-gls/3 rejections
+curvegen/verify_full	gf2_122/3 rejections
 curvegen/verify_full	gf2_127/3 rejections
+curvegen/verify_full	twisted-goldilocks2/3 rejections
+curvegen/verify_full	twisted61x2/3 rejections
+curvegen/verify_full	twisted64x2/3 rejections
+curvegen/verify_full	weier107/3 rejections
 curvegen/verify_full	weier127/3 rejections
+curvegen/verify_full	weier61x2/3 rejections
+digest	edwards107/batch
 digest	edwards127/batch
+digest	gf2_109/batch
+digest	gf2_122-gls/batch
+digest	gf2_122/batch
 digest	gf2_127/batch
 digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
+digest	weier107/batch
 digest	weier127/batch
 digest	xor-sha256
+field	fp107 schoolbook/mul latency (dependent chain)
+field	fp107 schoolbook/mul throughput (8 chains)
+field	fp107/add
+field	fp107/batch invert (product tree)
+field	fp107/invert
+field	fp107/mul latency (dependent chain)
+field	fp107/mul throughput (8 chains)
+field	fp107/neg
+field	fp107/pack
+field	fp107/pow_p34 (x^(2^105-1))
+field	fp107/sqrt (x^(2^105))
+field	fp107/sqrt_ratio
+field	fp107/square latency (dependent chain)
+field	fp107/square throughput (8 chains)
+field	fp107/unpack
 field	fp127/add
 field	fp127/batch invert (product tree)
 field	fp127/invert
@@ -45,6 +103,69 @@ field	fp127/sqrt_ratio
 field	fp127/square latency (dependent chain)
 field	fp127/square throughput (8 chains)
 field	fp127/unpack
+field	fp128/add
+field	fp128/invert
+field	fp128/mul latency (dependent chain)
+field	fp128/mul throughput (8 chains)
+field	fp128/neg
+field	fp128/pack
+field	fp128/sqrt
+field	fp128/sqrt_ratio
+field	fp128/square latency (dependent chain)
+field	fp128/square throughput (8 chains)
+field	fp128/sub
+field	fp128/unpack
+field	fp61x2/add
+field	fp61x2/batch invert (product tree)
+field	fp61x2/invert
+field	fp61x2/mul latency (dependent chain)
+field	fp61x2/mul throughput (8 chains)
+field	fp61x2/neg
+field	fp61x2/pack
+field	fp61x2/sqrt
+field	fp61x2/sqrt_ratio
+field	fp61x2/square latency (dependent chain)
+field	fp61x2/square throughput (8 chains)
+field	fp61x2/sub
+field	fp61x2/unpack
+field	fp64x2/add
+field	fp64x2/batch invert (product tree)
+field	fp64x2/invert
+field	fp64x2/mul latency (dependent chain)
+field	fp64x2/mul throughput (8 chains)
+field	fp64x2/neg
+field	fp64x2/pack
+field	fp64x2/sqrt
+field	fp64x2/sqrt_ratio
+field	fp64x2/square latency (dependent chain)
+field	fp64x2/square throughput (8 chains)
+field	fp64x2/sub
+field	fp64x2/unpack
+field	gf2_109/batch invert (product tree)
+field	gf2_109/halftrace
+field	gf2_109/halftrace (byte tables)
+field	gf2_109/invert
+field	gf2_109/mul latency (dependent chain)
+field	gf2_109/mul throughput (8 chains)
+field	gf2_109/normalize (to_u128)
+field	gf2_109/sqrt
+field	gf2_109/square latency (dependent chain)
+field	gf2_109/square throughput (8 chains)
+field	gf2_109/trace
+field	gf2_122/batch invert (product tree)
+field	gf2_122/invert
+field	gf2_122/mul latency (dependent chain)
+field	gf2_122/mul throughput (8 chains)
+field	gf2_122/mul_base (by a GF(2^61) constant) latency (dependent chain)
+field	gf2_122/mul_base (by a GF(2^61) constant) throughput (8 chains)
+field	gf2_122/mul_u2 (by a^2 = 1 + a) latency (dependent chain)
+field	gf2_122/mul_u2 (by a^2 = 1 + a) throughput (8 chains)
+field	gf2_122/normalize (to_u128)
+field	gf2_122/qsolve (z^2 + z = c, 2 base halftraces)
+field	gf2_122/sqrt
+field	gf2_122/square latency (dependent chain)
+field	gf2_122/square throughput (8 chains)
+field	gf2_122/trace
 field	gf2_127/batch invert (product tree)
 field	gf2_127/halftrace
 field	gf2_127/halftrace (byte tables)
@@ -57,115 +178,490 @@ field	gf2_127/sqrt
 field	gf2_127/square latency (dependent chain)
 field	gf2_127/square throughput (8 chains)
 field	gf2_127/trace
+field	goldilocks2/add
+field	goldilocks2/batch invert (product tree)
+field	goldilocks2/invert
+field	goldilocks2/mul latency (dependent chain)
+field	goldilocks2/mul throughput (8 chains)
+field	goldilocks2/neg
+field	goldilocks2/pack
+field	goldilocks2/sqrt
+field	goldilocks2/sqrt_ratio
+field	goldilocks2/square latency (dependent chain)
+field	goldilocks2/square throughput (8 chains)
+field	goldilocks2/sub
+field	goldilocks2/unpack
+group.add	binary-lambda.109/mode=latency
+group.add	binary-lambda.109/mode=throughput
+group.add	binary-lambda.122-gls/mode=latency
+group.add	binary-lambda.122-gls/mode=throughput
+group.add	binary-lambda.122/mode=latency
+group.add	binary-lambda.122/mode=throughput
 group.add	binary-lambda.127/mode=latency
 group.add	binary-lambda.127/mode=throughput
+group.add	binary-u.109/mode=latency
+group.add	binary-u.109/mode=throughput
+group.add	binary-u.122-gls/mode=latency
+group.add	binary-u.122-gls/mode=throughput
+group.add	binary-u.122/mode=latency
+group.add	binary-u.122/mode=throughput
 group.add	binary-u.127/mode=latency
 group.add	binary-u.127/mode=throughput
+group.add	binary-w.109/mode=latency
+group.add	binary-w.109/mode=throughput
+group.add	binary-w.122-gls/mode=latency
+group.add	binary-w.122-gls/mode=throughput
+group.add	binary-w.122/mode=latency
+group.add	binary-w.122/mode=throughput
 group.add	binary-w.127/mode=latency
 group.add	binary-w.127/mode=throughput
+group.add	binary.109/mode=latency
+group.add	binary.109/mode=throughput
+group.add	binary.122-gls/mode=latency
+group.add	binary.122-gls/mode=throughput
+group.add	binary.122/mode=latency
+group.add	binary.122/mode=throughput
 group.add	binary.127/mode=latency
 group.add	binary.127/mode=throughput
+group.add	edwards.107/mode=latency
+group.add	edwards.107/mode=throughput
 group.add	edwards.127/mode=latency
 group.add	edwards.127/mode=throughput
+group.add	edwards.128/mode=latency
+group.add	edwards.128/mode=throughput
+group.add	edwards.61x2/mode=latency
+group.add	edwards.61x2/mode=throughput
+group.add	twisted.61x2/mode=latency
+group.add	twisted.61x2/mode=throughput
+group.add	twisted.64x2/mode=latency
+group.add	twisted.64x2/mode=throughput
+group.add	twisted.goldilocks2/mode=latency
+group.add	twisted.goldilocks2/mode=throughput
+group.add	weier-jacobian.107/mode=latency
+group.add	weier-jacobian.107/mode=throughput
 group.add	weier-jacobian.127/mode=latency
 group.add	weier-jacobian.127/mode=throughput
+group.add	weier-jacobian.61x2/mode=latency
+group.add	weier-jacobian.61x2/mode=throughput
+group.add	weier.107/mode=latency
+group.add	weier.107/mode=throughput
 group.add	weier.127/mode=latency
 group.add	weier.127/mode=throughput
+group.add	weier.61x2/mode=latency
+group.add	weier.61x2/mode=throughput
+group.decode	binary-lambda.109/mode=batch,n=1024
+group.decode	binary-lambda.109/mode=indep
+group.decode	binary-lambda.122-gls/mode=batch,n=1024
+group.decode	binary-lambda.122-gls/mode=indep
+group.decode	binary-lambda.122/mode=batch,n=1024
+group.decode	binary-lambda.122/mode=indep
 group.decode	binary-lambda.127/mode=batch,n=1024
 group.decode	binary-lambda.127/mode=indep
+group.decode	binary-u.109/mode=batch,n=1024
+group.decode	binary-u.109/mode=indep
+group.decode	binary-u.122-gls/mode=batch,n=1024
+group.decode	binary-u.122-gls/mode=indep
+group.decode	binary-u.122/mode=batch,n=1024
+group.decode	binary-u.122/mode=indep
 group.decode	binary-u.127/mode=batch,n=1024
 group.decode	binary-u.127/mode=indep
+group.decode	binary-w.109/mode=batch,n=1024
+group.decode	binary-w.109/mode=indep
+group.decode	binary-w.122-gls/mode=batch,n=1024
+group.decode	binary-w.122-gls/mode=indep
+group.decode	binary-w.122/mode=batch,n=1024
+group.decode	binary-w.122/mode=indep
 group.decode	binary-w.127/mode=batch,n=1024
 group.decode	binary-w.127/mode=indep
+group.decode	binary.109/mode=batch,n=1024
+group.decode	binary.109/mode=indep
+group.decode	binary.122-gls/mode=batch,n=1024
+group.decode	binary.122-gls/mode=indep
+group.decode	binary.122/mode=batch,n=1024
+group.decode	binary.122/mode=indep
 group.decode	binary.127/mode=batch,n=1024
 group.decode	binary.127/mode=indep
+group.decode	edwards.107/mode=batch,n=1024
+group.decode	edwards.107/mode=indep
 group.decode	edwards.127/mode=batch,n=1024
 group.decode	edwards.127/mode=indep
+group.decode	edwards.128/mode=batch,n=1024
+group.decode	edwards.128/mode=indep
+group.decode	edwards.61x2/mode=batch,n=1024
+group.decode	edwards.61x2/mode=indep
+group.decode	twisted.61x2/mode=batch,n=1024
+group.decode	twisted.61x2/mode=indep
+group.decode	twisted.64x2/mode=batch,n=1024
+group.decode	twisted.64x2/mode=indep
+group.decode	twisted.goldilocks2/mode=batch,n=1024
+group.decode	twisted.goldilocks2/mode=indep
+group.decode	weier-jacobian.107/mode=batch,n=1024
+group.decode	weier-jacobian.107/mode=indep
 group.decode	weier-jacobian.127/mode=batch,n=1024
 group.decode	weier-jacobian.127/mode=indep
+group.decode	weier-jacobian.61x2/mode=batch,n=1024
+group.decode	weier-jacobian.61x2/mode=indep
+group.decode	weier.107/mode=batch,n=1024
+group.decode	weier.107/mode=indep
 group.decode	weier.127/mode=batch,n=1024
 group.decode	weier.127/mode=indep
+group.decode	weier.61x2/mode=batch,n=1024
+group.decode	weier.61x2/mode=indep
+group.encode	binary-lambda.109/mode=batch,n=1024
+group.encode	binary-lambda.109/mode=indep
+group.encode	binary-lambda.122-gls/mode=batch,n=1024
+group.encode	binary-lambda.122-gls/mode=indep
+group.encode	binary-lambda.122/mode=batch,n=1024
+group.encode	binary-lambda.122/mode=indep
 group.encode	binary-lambda.127/mode=batch,n=1024
 group.encode	binary-lambda.127/mode=indep
+group.encode	binary-u.109/mode=batch,n=1024
+group.encode	binary-u.109/mode=indep
+group.encode	binary-u.122-gls/mode=batch,n=1024
+group.encode	binary-u.122-gls/mode=indep
+group.encode	binary-u.122/mode=batch,n=1024
+group.encode	binary-u.122/mode=indep
 group.encode	binary-u.127/mode=batch,n=1024
 group.encode	binary-u.127/mode=indep
+group.encode	binary-w.109/mode=batch,n=1024
+group.encode	binary-w.109/mode=indep
+group.encode	binary-w.122-gls/mode=batch,n=1024
+group.encode	binary-w.122-gls/mode=indep
+group.encode	binary-w.122/mode=batch,n=1024
+group.encode	binary-w.122/mode=indep
 group.encode	binary-w.127/mode=batch,n=1024
 group.encode	binary-w.127/mode=indep
+group.encode	binary.109/mode=batch,n=1024
+group.encode	binary.109/mode=indep
+group.encode	binary.122-gls/mode=batch,n=1024
+group.encode	binary.122-gls/mode=indep
+group.encode	binary.122/mode=batch,n=1024
+group.encode	binary.122/mode=indep
 group.encode	binary.127/mode=batch,n=1024
 group.encode	binary.127/mode=indep
+group.encode	edwards.107/mode=batch,n=1024
+group.encode	edwards.107/mode=indep
 group.encode	edwards.127/mode=batch,n=1024
 group.encode	edwards.127/mode=indep
+group.encode	edwards.128/mode=batch,n=1024
+group.encode	edwards.128/mode=indep
+group.encode	edwards.61x2/mode=batch,n=1024
+group.encode	edwards.61x2/mode=indep
+group.encode	twisted.61x2/mode=batch,n=1024
+group.encode	twisted.61x2/mode=indep
+group.encode	twisted.64x2/mode=batch,n=1024
+group.encode	twisted.64x2/mode=indep
+group.encode	twisted.goldilocks2/mode=batch,n=1024
+group.encode	twisted.goldilocks2/mode=indep
+group.encode	weier-jacobian.107/mode=batch,n=1024
+group.encode	weier-jacobian.107/mode=indep
 group.encode	weier-jacobian.127/mode=batch,n=1024
 group.encode	weier-jacobian.127/mode=indep
+group.encode	weier-jacobian.61x2/mode=batch,n=1024
+group.encode	weier-jacobian.61x2/mode=indep
+group.encode	weier.107/mode=batch,n=1024
+group.encode	weier.107/mode=indep
 group.encode	weier.127/mode=batch,n=1024
 group.encode	weier.127/mode=indep
+group.encode	weier.61x2/mode=batch,n=1024
+group.encode	weier.61x2/mode=indep
+group.equals	binary-lambda.109
+group.equals	binary-lambda.122
+group.equals	binary-lambda.122-gls
 group.equals	binary-lambda.127
+group.equals	binary-u.109
+group.equals	binary-u.122
+group.equals	binary-u.122-gls
 group.equals	binary-u.127
+group.equals	binary-w.109
+group.equals	binary-w.122
+group.equals	binary-w.122-gls
 group.equals	binary-w.127
+group.equals	binary.109
+group.equals	binary.122
+group.equals	binary.122-gls
 group.equals	binary.127
+group.equals	edwards.107
 group.equals	edwards.127
+group.equals	edwards.128
+group.equals	edwards.61x2
+group.equals	twisted.61x2
+group.equals	twisted.64x2
+group.equals	twisted.goldilocks2
+group.equals	weier-jacobian.107
 group.equals	weier-jacobian.127
+group.equals	weier-jacobian.61x2
+group.equals	weier.107
 group.equals	weier.127
+group.equals	weier.61x2
+group.is_identity	binary-lambda.109
+group.is_identity	binary-lambda.122
+group.is_identity	binary-lambda.122-gls
 group.is_identity	binary-lambda.127
+group.is_identity	binary-u.109
+group.is_identity	binary-u.122
+group.is_identity	binary-u.122-gls
 group.is_identity	binary-u.127
+group.is_identity	binary-w.109
+group.is_identity	binary-w.122
+group.is_identity	binary-w.122-gls
 group.is_identity	binary-w.127
+group.is_identity	binary.109
+group.is_identity	binary.122
+group.is_identity	binary.122-gls
 group.is_identity	binary.127
+group.is_identity	edwards.107
 group.is_identity	edwards.127
+group.is_identity	edwards.128
+group.is_identity	edwards.61x2
+group.is_identity	twisted.61x2
+group.is_identity	twisted.64x2
+group.is_identity	twisted.goldilocks2
+group.is_identity	weier-jacobian.107
 group.is_identity	weier-jacobian.127
+group.is_identity	weier-jacobian.61x2
+group.is_identity	weier.107
 group.is_identity	weier.127
+group.is_identity	weier.61x2
+group.neg	binary-lambda.109
+group.neg	binary-lambda.122
+group.neg	binary-lambda.122-gls
 group.neg	binary-lambda.127
+group.neg	binary-u.109
+group.neg	binary-u.122
+group.neg	binary-u.122-gls
 group.neg	binary-u.127
+group.neg	binary-w.109
+group.neg	binary-w.122
+group.neg	binary-w.122-gls
 group.neg	binary-w.127
+group.neg	binary.109
+group.neg	binary.122
+group.neg	binary.122-gls
 group.neg	binary.127
+group.neg	edwards.107
 group.neg	edwards.127
+group.neg	edwards.128
+group.neg	edwards.61x2
+group.neg	twisted.61x2
+group.neg	twisted.64x2
+group.neg	twisted.goldilocks2
+group.neg	weier-jacobian.107
 group.neg	weier-jacobian.127
+group.neg	weier-jacobian.61x2
+group.neg	weier.107
 group.neg	weier.127
+group.neg	weier.61x2
+group.prepare	binary-lambda.109/mode=batch,n=1024
+group.prepare	binary-lambda.109/mode=indep
+group.prepare	binary-lambda.122-gls/mode=batch,n=1024
+group.prepare	binary-lambda.122-gls/mode=indep
+group.prepare	binary-lambda.122/mode=batch,n=1024
+group.prepare	binary-lambda.122/mode=indep
 group.prepare	binary-lambda.127/mode=batch,n=1024
 group.prepare	binary-lambda.127/mode=indep
+group.prepare	binary-u.109/mode=batch,n=1024
+group.prepare	binary-u.109/mode=indep
+group.prepare	binary-u.122-gls/mode=batch,n=1024
+group.prepare	binary-u.122-gls/mode=indep
+group.prepare	binary-u.122/mode=batch,n=1024
+group.prepare	binary-u.122/mode=indep
 group.prepare	binary-u.127/mode=batch,n=1024
 group.prepare	binary-u.127/mode=indep
+group.prepare	binary-w.109/mode=batch,n=1024
+group.prepare	binary-w.109/mode=indep
+group.prepare	binary-w.122-gls/mode=batch,n=1024
+group.prepare	binary-w.122-gls/mode=indep
+group.prepare	binary-w.122/mode=batch,n=1024
+group.prepare	binary-w.122/mode=indep
 group.prepare	binary-w.127/mode=batch,n=1024
 group.prepare	binary-w.127/mode=indep
+group.prepare	binary.109/mode=batch,n=1024
+group.prepare	binary.109/mode=indep
+group.prepare	binary.122-gls/mode=batch,n=1024
+group.prepare	binary.122-gls/mode=indep
+group.prepare	binary.122/mode=batch,n=1024
+group.prepare	binary.122/mode=indep
 group.prepare	binary.127/mode=batch,n=1024
 group.prepare	binary.127/mode=indep
+group.prepare	edwards.107/mode=batch,n=1024
+group.prepare	edwards.107/mode=indep
 group.prepare	edwards.127/mode=batch,n=1024
 group.prepare	edwards.127/mode=indep
+group.prepare	edwards.128/mode=batch,n=1024
+group.prepare	edwards.128/mode=indep
+group.prepare	edwards.61x2/mode=batch,n=1024
+group.prepare	edwards.61x2/mode=indep
+group.prepare	twisted.61x2/mode=batch,n=1024
+group.prepare	twisted.61x2/mode=indep
+group.prepare	twisted.64x2/mode=batch,n=1024
+group.prepare	twisted.64x2/mode=indep
+group.prepare	twisted.goldilocks2/mode=batch,n=1024
+group.prepare	twisted.goldilocks2/mode=indep
+group.prepare	weier-jacobian.107/mode=batch,n=1024
+group.prepare	weier-jacobian.107/mode=indep
 group.prepare	weier-jacobian.127/mode=batch,n=1024
 group.prepare	weier-jacobian.127/mode=indep
+group.prepare	weier-jacobian.61x2/mode=batch,n=1024
+group.prepare	weier-jacobian.61x2/mode=indep
+group.prepare	weier.107/mode=batch,n=1024
+group.prepare	weier.107/mode=indep
 group.prepare	weier.127/mode=batch,n=1024
 group.prepare	weier.127/mode=indep
+group.prepare	weier.61x2/mode=batch,n=1024
+group.prepare	weier.61x2/mode=indep
+group.sub	binary-lambda.109/mode=latency
+group.sub	binary-lambda.109/mode=throughput
+group.sub	binary-lambda.122-gls/mode=latency
+group.sub	binary-lambda.122-gls/mode=throughput
+group.sub	binary-lambda.122/mode=latency
+group.sub	binary-lambda.122/mode=throughput
 group.sub	binary-lambda.127/mode=latency
 group.sub	binary-lambda.127/mode=throughput
+group.sub	binary-u.109/mode=latency
+group.sub	binary-u.109/mode=throughput
+group.sub	binary-u.122-gls/mode=latency
+group.sub	binary-u.122-gls/mode=throughput
+group.sub	binary-u.122/mode=latency
+group.sub	binary-u.122/mode=throughput
 group.sub	binary-u.127/mode=latency
 group.sub	binary-u.127/mode=throughput
+group.sub	binary-w.109/mode=latency
+group.sub	binary-w.109/mode=throughput
+group.sub	binary-w.122-gls/mode=latency
+group.sub	binary-w.122-gls/mode=throughput
+group.sub	binary-w.122/mode=latency
+group.sub	binary-w.122/mode=throughput
 group.sub	binary-w.127/mode=latency
 group.sub	binary-w.127/mode=throughput
+group.sub	binary.109/mode=latency
+group.sub	binary.109/mode=throughput
+group.sub	binary.122-gls/mode=latency
+group.sub	binary.122-gls/mode=throughput
+group.sub	binary.122/mode=latency
+group.sub	binary.122/mode=throughput
 group.sub	binary.127/mode=latency
 group.sub	binary.127/mode=throughput
+group.sub	edwards.107/mode=latency
+group.sub	edwards.107/mode=throughput
 group.sub	edwards.127/mode=latency
 group.sub	edwards.127/mode=throughput
+group.sub	edwards.128/mode=latency
+group.sub	edwards.128/mode=throughput
+group.sub	edwards.61x2/mode=latency
+group.sub	edwards.61x2/mode=throughput
+group.sub	twisted.61x2/mode=latency
+group.sub	twisted.61x2/mode=throughput
+group.sub	twisted.64x2/mode=latency
+group.sub	twisted.64x2/mode=throughput
+group.sub	twisted.goldilocks2/mode=latency
+group.sub	twisted.goldilocks2/mode=throughput
+group.sub	weier-jacobian.107/mode=latency
+group.sub	weier-jacobian.107/mode=throughput
 group.sub	weier-jacobian.127/mode=latency
 group.sub	weier-jacobian.127/mode=throughput
+group.sub	weier-jacobian.61x2/mode=latency
+group.sub	weier-jacobian.61x2/mode=throughput
+group.sub	weier.107/mode=latency
+group.sub	weier.107/mode=throughput
 group.sub	weier.127/mode=latency
 group.sub	weier.127/mode=throughput
+group.sub	weier.61x2/mode=latency
+group.sub	weier.61x2/mode=throughput
+h2c	binary-lambda.109/mode=batch,n=1024
+h2c	binary-lambda.109/mode=indep
+h2c	binary-lambda.122-gls/mode=batch,n=1024
+h2c	binary-lambda.122-gls/mode=indep
+h2c	binary-lambda.122/mode=batch,n=1024
+h2c	binary-lambda.122/mode=indep
 h2c	binary-lambda.127/mode=batch,n=1024
 h2c	binary-lambda.127/mode=indep
+h2c	binary-u.109/mode=batch,n=1024
+h2c	binary-u.109/mode=indep
+h2c	binary-u.122-gls/mode=batch,n=1024
+h2c	binary-u.122-gls/mode=indep
+h2c	binary-u.122/mode=batch,n=1024
+h2c	binary-u.122/mode=indep
 h2c	binary-u.127/mode=batch,n=1024
 h2c	binary-u.127/mode=indep
+h2c	binary-w.109/mode=batch,n=1024
+h2c	binary-w.109/mode=indep
+h2c	binary-w.122-gls/mode=batch,n=1024
+h2c	binary-w.122-gls/mode=indep
+h2c	binary-w.122/mode=batch,n=1024
+h2c	binary-w.122/mode=indep
 h2c	binary-w.127/mode=batch,n=1024
 h2c	binary-w.127/mode=indep
+h2c	binary.109/mode=batch,n=1024
+h2c	binary.109/mode=indep
+h2c	binary.122-gls/mode=batch,n=1024
+h2c	binary.122-gls/mode=indep
+h2c	binary.122/mode=batch,n=1024
+h2c	binary.122/mode=indep
 h2c	binary.127/mode=batch,n=1024
 h2c	binary.127/mode=indep
+h2c	edwards.107/mode=batch,n=1024
+h2c	edwards.107/mode=indep
 h2c	edwards.127/mode=batch,n=1024
 h2c	edwards.127/mode=indep
+h2c	edwards.128/mode=batch,n=1024
+h2c	edwards.128/mode=indep
+h2c	edwards.61x2/mode=batch,n=1024
+h2c	edwards.61x2/mode=indep
+h2c	twisted.61x2/mode=batch,n=1024
+h2c	twisted.61x2/mode=indep
+h2c	twisted.64x2/mode=batch,n=1024
+h2c	twisted.64x2/mode=indep
+h2c	twisted.goldilocks2/mode=batch,n=1024
+h2c	twisted.goldilocks2/mode=indep
+h2c	weier-jacobian.107/mode=batch,n=1024
+h2c	weier-jacobian.107/mode=indep
 h2c	weier-jacobian.127/mode=batch,n=1024
 h2c	weier-jacobian.127/mode=indep
+h2c	weier-jacobian.61x2/mode=batch,n=1024
+h2c	weier-jacobian.61x2/mode=indep
+h2c	weier.107/mode=batch,n=1024
+h2c	weier.107/mode=indep
 h2c	weier.127/mode=batch,n=1024
 h2c	weier.127/mode=indep
+h2c	weier.61x2/mode=batch,n=1024
+h2c	weier.61x2/mode=indep
 h2c_parts	digest/sha512 (ristretto input)
 h2c_parts	ristretto255/from_uniform_bytes (2 maps + add)
+hash_to_curve	edwards107/edwards-native try-and-increment
+hash_to_curve	edwards107/elligator2 x1
 hash_to_curve	edwards127/edwards-native try-and-increment
 hash_to_curve	edwards127/elligator2 x1
+hash_to_curve	gf2_109-lambda/try-and-increment to (x, λ)
+hash_to_curve	gf2_109-lambda/try-and-increment to (x, λ), batched
+hash_to_curve	gf2_109-w/pornin map x1 to (x, λ)
+hash_to_curve	gf2_109-w/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_109/pornin map x1
+hash_to_curve	gf2_109/pornin map x1, batched
+hash_to_curve	gf2_122-gls-lambda/pornin map x1 to (x, λ)
+hash_to_curve	gf2_122-gls-lambda/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_122-gls-lambda/try-and-increment to (x, λ)
+hash_to_curve	gf2_122-gls-lambda/try-and-increment to (x, λ), batched
+hash_to_curve	gf2_122-gls-u/pornin map x1 to (u, v)
+hash_to_curve	gf2_122-gls-u/pornin map x1 to (u, v), batched
+hash_to_curve	gf2_122-gls-w/pornin map x1 to (x, λ)
+hash_to_curve	gf2_122-gls-w/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_122-gls/pornin map x1
+hash_to_curve	gf2_122-gls/pornin map x1, batched
+hash_to_curve	gf2_122-lambda/pornin map x1 to (x, λ)
+hash_to_curve	gf2_122-lambda/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_122-lambda/try-and-increment to (x, λ)
+hash_to_curve	gf2_122-lambda/try-and-increment to (x, λ), batched
+hash_to_curve	gf2_122-u/pornin map x1 to (u, v)
+hash_to_curve	gf2_122-u/pornin map x1 to (u, v), batched
+hash_to_curve	gf2_122-w/pornin map x1 to (x, λ)
+hash_to_curve	gf2_122-w/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_122/pornin map x1
+hash_to_curve	gf2_122/pornin map x1, batched
+hash_to_curve	gf2_127-lambda/try-and-increment to (x, λ)
+hash_to_curve	gf2_127-lambda/try-and-increment to (x, λ), batched
+hash_to_curve	gf2_127-w/pornin map x1 to (x, λ)
+hash_to_curve	gf2_127-w/pornin map x1 to (x, λ), batched
 hash_to_curve	gf2_127/pornin map x1
 hash_to_curve	gf2_127/pornin map x1, batched
 hash_to_curve	gf2_127/pornin map x2
@@ -173,11 +669,16 @@ hash_to_curve	ristretto255/hash_from_bytes<Sha512>
 hash_to_curve	secp256k1/ellswift decode
 hash_to_curve	secp256k1/try-and-increment (parse)
 hash_to_curve	sha256 (XOR baseline)
+hash_to_curve	weier107/sswu x1
 hash_to_curve	weier127/sswu x1
+negate	edwards107/extended (-X, -T)
 negate	edwards127/extended (-X, -T)
+negate	gf2_109/affine (y += x)
+negate	gf2_122/affine (y += x)
 negate	gf2_127/affine (y += x)
 negate	ristretto255/-P
 negate	secp256k1/PublicKey::negate
+negate	weier107/projective (-Y)
 negate	weier127/projective (-Y)
 on_curve	ristretto255/decompress (valid, inv sqrt)
 on_curve	secp256k1/x: parse compressed (sqrt)

@@ -73,17 +73,46 @@ macro_rules! binary_field {
 
 pub mod field {
     binary_field!(gf2_127, crate::field::gf2_127::Gf);
+    binary_field!(gf2_109, crate::field::gf2_109::Gf);
+    binary_field!(gf2_122, crate::field::gf2_122::Gf);
+    binary_field!(gf2_61, crate::field::gf2_122::Gf61);
 
     pub mod halftrace {
         #[inline(never)]
         pub fn gf2_127(a: crate::field::gf2_127::Gf) -> crate::field::gf2_127::Gf {
             crate::field::gf2_127::halftrace8(a)
         }
+        #[inline(never)]
+        pub fn gf2_109(a: crate::field::gf2_109::Gf) -> crate::field::gf2_109::Gf {
+            crate::field::gf2_109::halftrace8(a)
+        }
+        #[inline(never)]
+        pub fn gf2_122(a: crate::field::gf2_122::Gf) -> crate::field::gf2_122::Gf {
+            a.qsolve()
+        }
     }
 
     pub mod prime {
+        use p3_field::PrimeCharacteristicRing;
+
         prime_field!(fp127, crate::field::fp127::Fp, square: |a: crate::field::fp127::Fp| a.square(),
             invert: |a: crate::field::fp127::Fp| a.invert(), sqrt: |a: crate::field::fp127::Fp| a.sqrt());
+        prime_field!(fp107, crate::field::fp107::Fp, square: |a: crate::field::fp107::Fp| a.square(),
+            invert: |a: crate::field::fp107::Fp| a.invert(), sqrt: |a: crate::field::fp107::Fp| a.sqrt());
+        prime_field!(fp128, crate::field::fp128::Fp, square: |a: crate::field::fp128::Fp| a.square(),
+            invert: |a: crate::field::fp128::Fp| a.invert(), sqrt: |a: crate::field::fp128::Fp| a.sqrt());
+        prime_field!(fp61, crate::field::fp61x2::Fp, square: |a: crate::field::fp61x2::Fp| a.square(),
+            invert: |a: crate::field::fp61x2::Fp| a.invert(), sqrt: |a: crate::field::fp61x2::Fp| a.sqrt());
+        prime_field!(fp61x2, crate::field::fp61x2::Fq, square: |a: crate::field::fp61x2::Fq| a.square(),
+            invert: |a: crate::field::fp61x2::Fq| a.invert(), sqrt: |a: crate::field::fp61x2::Fq| a.sqrt());
+        prime_field!(fp64, crate::field::fp64x2::Fp, square: |a: crate::field::fp64x2::Fp| a.square(),
+            invert: |a: crate::field::fp64x2::Fp| a.invert(), sqrt: |a: crate::field::fp64x2::Fp| a.sqrt());
+        prime_field!(fp64x2, crate::field::fp64x2::Fq, square: |a: crate::field::fp64x2::Fq| a.square(),
+            invert: |a: crate::field::fp64x2::Fq| a.invert(), sqrt: |a: crate::field::fp64x2::Fq| a.sqrt());
+        prime_field!(goldilocks, crate::field::goldilocks2::Fp, square: |a: crate::field::goldilocks2::Fp| a.square(),
+            invert: crate::field::goldilocks2::invert_base, sqrt: crate::field::goldilocks2::sqrt_base);
+        prime_field!(goldilocks2, crate::field::goldilocks2::Fq, square: |a: crate::field::goldilocks2::Fq| a.square(),
+            invert: crate::field::goldilocks2::invert, sqrt: crate::field::goldilocks2::sqrt);
     }
 }
 
@@ -144,14 +173,72 @@ pub mod group {
         binary127_w,
         crate::curve::binary::wcodec::Curve<crate::curve::binary127::M127>
     );
+    family!(binary109, crate::curve::binary109::Curve);
+    family!(
+        binary109_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary109::M109>
+    );
+    family!(
+        binary109_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary109::M109>
+    );
+    family!(binary122, crate::curve::binary122::Dense);
+    family!(
+        binary122_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary122::M122>
+    );
+    family!(binary122_gls, crate::curve::binary122::Gls);
+    family!(
+        binary122_gls_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary122::M122Gls>
+    );
+    family!(
+        binary122_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary122::M122>
+    );
+    family!(
+        binary122_gls_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary122::M122Gls>
+    );
     family!(edwards127, crate::curve::edwards127::Curve);
+    family!(edwards107, crate::curve::edwards107::Curve);
+    family!(twisted128, crate::curve::twisted128::Curve);
     family!(weier127, crate::curve::weier127::OddCurve);
     family!(
         weier127_jacobian,
         crate::curve::weier::jacobian::Curve<crate::field::fp127::Fp>
     );
+    family!(weier107, crate::curve::weier107::OddCurve);
+    family!(
+        weier107_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp107::Fp>
+    );
     family!(
         binary127_u,
         crate::curve::binary::unscaled::Curve<crate::curve::binary127::M127>
+    );
+    family!(
+        binary109_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary109::M109>
+    );
+    family!(
+        binary122_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary122::M122>
+    );
+    family!(
+        binary122_gls_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary122::M122Gls>
+    );
+    family!(edwards61x2, crate::curve::edwards61x2::Curve);
+    family!(weier61x2, crate::curve::weier61x2::OddCurve);
+    family!(
+        weier61x2_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp61x2::Fq>
+    );
+    family!(twisted61x2, crate::curve::twisted61x2::Curve);
+    family!(twisted64x2, crate::curve::twisted64x2::Curve);
+    family!(
+        twisted_goldilocks2,
+        crate::curve::twisted_goldilocks2::Curve
     );
 }

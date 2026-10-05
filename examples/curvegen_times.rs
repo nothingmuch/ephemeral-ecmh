@@ -43,15 +43,17 @@
 //! The 107- and 128-bit families have no Rust prover (their certificates
 //! come from Sage), so they have no rows.
 
+use ephemeral_ecmh::curve::binary109;
 use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, AdmissibleR, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve, SmallL,
-    Verdict, Weier127,
+    self, Binary109, Binary127, Dense122, Edwards61x2, Edwards127, Factor, Family, Gls122,
+    NoFactor, NoSieve, Rejection, Sieve, SmallL, Twisted61x2, Twisted64x2, TwistedGoldilocks2,
+    Verdict, Weier61x2, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error, Policy};
-use ephemeral_ecmh::curvegen::sieve;
+use ephemeral_ecmh::curvegen::{select_fp2, select109, select122, sieve};
 use ephemeral_ecmh::hash::Salted;
 use std::cell::Cell;
 use std::fs::File;
@@ -230,6 +232,11 @@ impl<C, S: Sieve<C>> Sieve<C> for Tally<S> {
 
 type Verify<C> = fn(&[u8; 32], &Certificate) -> Result<C, Error>;
 
+/// `select109::verify` on the prover's zero-padded witnesses.
+fn verify_gf2_109(seed: &[u8; 32], cert: &Certificate) -> Result<binary109::Curve, Error> {
+    select109::verify(seed, &prove::certificate109(cert.clone()))
+}
+
 /// One row per seed for family F, searched with `count` and `factor`, and
 /// sieved by `sieves`, find's and prove's.
 #[allow(clippy::too_many_arguments)]
@@ -319,8 +326,30 @@ fn main() {
     let l = |b: sieve::Bounds| (SmallL(b.find), SmallL(b.prove));
     let v = select::verify_gf2_127;
     family::<Binary127, _>(o, "gf2_127", "pari", s, Pari, Pari, n, v);
+    let v = verify_gf2_109;
+    family::<Binary109, _>(o, "gf2_109", "agm", s, Agm, NoFactor, n, v);
+    family::<Binary109, _>(o, "gf2_109", "agm+factor", s, Agm, Pari, n, v);
+    family::<Binary109, _>(o, "gf2_109", "pari", s, Pari, Pari, n, v);
+    let v = select122::verify_dense;
+    family::<Dense122, _>(o, "gf2_122", "agm", s, Agm, NoFactor, n, v);
+    family::<Dense122, _>(o, "gf2_122", "pari", s, Pari, NoFactor, n, v);
+    let v = select122::verify_gls;
+    family::<Gls122, _>(o, "gf2_122-gls", "agm", s, Agm, NoFactor, n, v);
+    family::<Gls122, _>(o, "gf2_122-gls", "pari", s, Pari, NoFactor, n, v);
     let (v, b) = (select::verify_fp127, l(sieve::EDWARDS127));
     family::<Edwards127, _>(o, "edwards127", "pari+sieve", s, Pari, Pari, b, v);
     let (v, b) = (select::verify_weier127, l(sieve::WEIER127));
     family::<Weier127, _>(o, "weier127", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_edwards61x2, l(sieve::EDWARDS61X2));
+    family::<Edwards61x2, _>(o, "edwards61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_weier61x2, l(sieve::WEIER61X2));
+    family::<Weier61x2, _>(o, "weier61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_twisted61x2, l(sieve::TWISTED61X2));
+    family::<Twisted61x2, _>(o, "twisted61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_twisted64x2, l(sieve::TWISTED64X2));
+    family::<Twisted64x2, _>(o, "twisted64x2", "pari+sieve", s, Pari, Pari, b, v);
+    let v = select_fp2::verify_twisted_goldilocks2;
+    let b = l(sieve::TWISTED_GOLDILOCKS2);
+    let name = "twisted-goldilocks2";
+    family::<TwistedGoldilocks2, _>(o, name, "pari+sieve", s, Pari, Pari, b, v);
 }

@@ -14,9 +14,10 @@
 //!
 //! | model                     | fields                          | T&I | Elligator 2 | SSWU | Pornin |
 //! |---------------------------|---------------------------------|-----|-------------|------|--------|
-//! | Edwards, a = 1            | F_p (127)                       | yes | yes         | (1)  | (3)    |
-//! | short Weierstrass, a = -3 | F_p (127)                       | yes | (2)         | yes  | (3)    |
-//! | binary, a = 1             | GF(2^127)                       | yes | (4)         | (4)  | yes    |
+//! | Edwards, a = 1            | F_p (127, 107); GF(p^2) (61)    | yes | yes         | (1)  | (3)    |
+//! | twisted Edwards, a = -1   | F_p (128); GF(p^2) (all three)  | yes | yes         | (1)  | (3)    |
+//! | short Weierstrass, a = -3 | F_p (127, 107); GF(p^2) (61)    | yes | (2)         | yes  | (3)    |
+//! | binary, a = 1 or a = u    | GF(2^127), GF(2^109), GF(2^122) | yes | (4)         | (4)  | yes    |
 //!
 //! 1. SSWU applies to y^2 = x^3 + Ax + B with AB != 0. These curves have a
 //!    point of order 2, hence a Montgomery model, to which Elligator 2

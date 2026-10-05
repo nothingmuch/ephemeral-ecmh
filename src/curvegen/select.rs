@@ -66,6 +66,7 @@
 //! The weakness is accepted: under this heuristic the probability is about
 //! 2^-52 per epoch, and by the union bound at most T * 2^-52 across T
 //! epochs; a descent compromises only the epoch whose curve it reaches.
+//! [`super::select109`] and [`super::select122`] discuss GF(2^109) and
 //! GF(2^122).
 
 use super::criteria::{AdmissibleR, Criteria, OrderError};
@@ -73,10 +74,10 @@ pub use super::number::{EMBEDDING_MIN, embedding_degree_ok, is_prime};
 
 use crate::curve::binary::{self, Model};
 use crate::curve::encoding::Signed;
-use crate::curve::{binary127, edwards, edwards127, weier, weier127};
-use crate::field::OddField;
+use crate::curve::{binary127, edwards, edwards127, twisted, weier, weier127};
 use crate::field::fp127::{Fp, P};
 use crate::field::gf2_127::{MASK127, from_u128};
+use crate::field::{OddField, Packed};
 use crate::hash::{Salted, halves};
 
 pub const TAG_GF2_127: &[u8] = b"ephemeral-ecmh/curve/gf2";
@@ -290,6 +291,28 @@ impl<const N: usize, F: OddField + Signed<Bytes = [u8; N]>> Arithmetic<N> for ed
     }
     fn mul(&self, p: &Self::Point, k: u128) -> Self::Point {
         edwards::Curve::mul(self, p, k)
+    }
+    fn is_identity(&self, p: &Self::Point) -> bool {
+        p.is_identity()
+    }
+}
+
+/// In the quotient E/⟨T⟩, which the twisted codec represents.
+impl<F: Packed> Arithmetic<{ twisted::BYTES }> for twisted::Curve<F> {
+    type Affine = twisted::Affine<F>;
+    type Point = twisted::Point<F>;
+
+    fn decode(&self, enc: [u8; twisted::BYTES]) -> Option<Self::Affine> {
+        twisted::Curve::decode(self, enc)
+    }
+    fn hash(&self, salt: &Salted, msg: &[u8]) -> Self::Affine {
+        self.hash_to_curve(salt, msg)
+    }
+    fn lift(&self, p: &Self::Affine) -> Option<Self::Point> {
+        (!p.is_identity()).then(|| self.from_affine(p))
+    }
+    fn mul(&self, p: &Self::Point, k: u128) -> Self::Point {
+        twisted::Curve::mul(self, p, k)
     }
     fn is_identity(&self, p: &Self::Point) -> bool {
         p.is_identity()
@@ -704,7 +727,11 @@ mod tests {
             degenerates
         }
         let seed = &[3; 32];
-        let n = check(|j| Weier127::candidate(seed, j), seed);
+        let n = check(|j| Weier127::candidate(seed, j), seed)
+            + check(
+                |j| crate::curvegen::select_fp2::Weier61x2::candidate(seed, j),
+                seed,
+            );
         assert!(n > 0, "no (0 : 0 : 0) was produced");
     }
 }

@@ -3,7 +3,7 @@
 use super::curve::cubic_irreducible;
 use super::{Affine, Curve};
 use crate::curve::{encoding, h2c::Map};
-use crate::field::{OddField, Packed, Prime, fp127};
+use crate::field::{OddField, Packed, Prime, fp61x2, fp107, fp127};
 use core::fmt::Debug;
 
 /// The ratio-root operation used by SSWU, including its nonsquare branch.
@@ -37,7 +37,29 @@ macro_rules! three_mod_four {
     };
 }
 
+three_mod_four!(fp107::Fp);
 three_mod_four!(fp127::Fp);
+
+/// q = 1 mod 4, so no root of -Z gives the non-square branch: a second
+/// ratio root, of Zn/d, follows a failed one.
+impl SswuField for fp61x2::Fq {
+    type Ratio = Self;
+
+    fn prepare_ratio(z: Self) -> Self {
+        z
+    }
+
+    #[inline]
+    fn ratio_root(n: Self, d: Self, &z: &Self) -> (bool, Self) {
+        match Self::sqrt_ratio(n, d) {
+            Some(r) => (true, r),
+            None => (
+                false,
+                Self::sqrt_ratio(z * n, d).expect("Z is a non-square"),
+            ),
+        }
+    }
+}
 
 /// A deterministic map with per-curve setup amortized across inputs.
 ///

@@ -356,4 +356,6 @@ mod tests {
     }
 
     suite!(weier127, fp127, Fp, fp);
+    suite!(weier107, fp107, Fp, fp);
+    suite!(weier61x2, fp61x2, Fq, fq);
 }
