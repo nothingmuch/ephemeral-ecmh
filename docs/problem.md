@@ -34,7 +34,8 @@ for instance by broadcasting them. It authors items whose hashes satisfy a
 relation, aiming to make two honest peers fail to reconcile, or obtain a wrong
 difference, when the items lie in the symmetric difference of their sets; items
 common to both sets cancel. The RIBLT's mapping of items to coded symbols admits
-a similar attack that does not involve the checksum.
+a similar attack that does not involve the checksum ([Known
+weaknesses](ecc_security.md#known-weaknesses)).
 
 The items, the salt and the curve are public, so the timing of the computation
 reveals nothing that the adversary could not compute itself, and implementations
@@ -60,7 +61,8 @@ enters, and two items whose elements and signs agree hash to the same point on
 every curve that accepts that element. Without the salt, such a pair would cost
 about $2^{64}$ digests once and serve in every namespace; with it, the search is
 repeated for each namespace. An unsalted mapping would likewise let colliding
-schedules be searched for before the beacon. The two keys serve different
+schedules be searched for before the beacon ([Known
+weaknesses](ecc_security.md#known-weaknesses)). The two keys serve different
 ends. The hash to the curve keeps the public salt, under which an item's point
 identifies it, and resists collisions, in every session of the namespace. The
 schedule is better keyed by a secret that each pair of peers shares, where one
@@ -117,7 +119,8 @@ probability [maitin-shepard-et-al-2016, Section 4.1, Theorem 1, and Appendix A].
 An encoding that misses a fixed fraction of the points can qualify: their
 characteristic-2 Shallue–van de Woestijne encoding misses about $9/32$ of them
 and has $\beta$ close to 3 [maitin-shepard-et-al-2016, Section 4.2]. Whether the
-maps used here meet these hypotheses is open.
+maps used here meet these hypotheses is open ([Known
+weaknesses](ecc_security.md#known-weaknesses)).
 
 A participating peer can always prevent reconciliation by misrepresenting its
 set; no checksum prevents this, and it is not considered. Corrupt coded symbols

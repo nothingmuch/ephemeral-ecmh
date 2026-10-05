@@ -6,6 +6,7 @@ okf_version: "0.2"
 
 * [Background](background.md) - The RIBLT checksum, its linearity over $\mathbb{F}_2$ (yangl1996/riblt#3), why AdHash does not repair it, and keyed and group-based alternatives.
 * [Problem statement](problem.md) - The adversary, the beacon-salted setting and its reference work factor, per-namespace curves against precomputation, curve selection and certificates, design criteria and scope.
+* [Security considerations](ecc_security.md) - Nominal rho costs per family, extension-field attacks, the limits of the security evidence, and the known weaknesses.
 * [Measurement methodology](methodology.md) - What the benchmarks measure, the decision table and dominance rule, how to run checks, benchmarks and reports, and how results are published.
 
 # Reference

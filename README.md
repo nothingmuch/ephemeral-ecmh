@@ -90,8 +90,8 @@ long that is.
 An ECMH sums hashed points in an elliptic-curve group. For maps to the curve
 that satisfy the hypotheses of the known reductions, its collision resistance
 reduces to the discrete-logarithm problem in that group
-[maitin-shepard-et-al-2016]; whether the maps used here satisfy them is open.
-The curves in use
+[maitin-shepard-et-al-2016]; whether the maps used here satisfy them is open
+([Known weaknesses](docs/ecc_security.md#known-weaknesses)). The curves in use
 for this purpose have about $2^{256}$ points and about 128-bit security, and
 hashing an item to them costs far more than the SHA-256 hash of the XOR
 checksum. A shorter horizon

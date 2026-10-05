@@ -33,6 +33,13 @@ the same distinctions.
 
 ### Generic discrete-logarithm bounds and attacks
 
+- `pollard-1978`. The rho method: $\sqrt{\pi r/2}$ expected group operations and
+  constant memory. The reference attack behind every "rho" figure in the report.
+- `wiener-zuccherato-1998`, `duursma-gaudry-morain-1999`. Rho runs $\sqrt{2}$
+  faster with the negation map and $\sqrt{2m}$ faster on curves with an
+  automorphism group of order $2m$ (Koblitz curves, curves with efficiently
+  computable endomorphisms). The security chapter divides the reference work
+  factor by $sqrt{2}$ for the negation map, which every family admits.
 - `bernstein-lange-2012`, `bernstein-lange-2013`. With a precomputed table of
   size about $N^{2/3}$, each further discrete logarithm in a group of size $N$
   costs about $N^{1/3}$ operations. A fixed curve would let an attacker amortize
@@ -81,7 +88,8 @@ the same distinctions.
   sums can be matched on bits, as in $\mathbb{Z}/2^n$ or $\mathbb{Z}/r$.
   Elliptic-curve groups have no such representation, so without discrete
   logarithms the $k$-sum bound is not the attack cost for these checksums; with
-  them, the checksum is AdHash modulo $r$ and the algorithm applies.
+  them, the checksum is AdHash modulo $r$ and the algorithm applies ([Known
+  weaknesses](ecc_security.md#known-weaknesses)).
 - `phan-wagner-2006`. Collisions in randomize-then-combine hashes of
   pair-chained message blocks: repeated blocks, coinciding padding and cyclic
   chaining give distinct messages with equal hashes, in several cases with
@@ -159,7 +167,8 @@ the same distinctions.
   fail to synchronize. It reports collisions of 256-bit XOR fingerprints in two
   seconds by Gaussian elimination and of sums modulo $2^{256}$ in about 28 hours
   with a $k$-dimensional birthday solver, the kind of problem to which known
-  discrete logarithms reduce the checksum, and judges ECMH collisions
+  discrete logarithms reduce the checksum ([Known
+  weaknesses](ecc_security.md#known-weaknesses)), and judges ECMH collisions
   infeasible but ECMH slower, with a single reference implementation.
 - `corallo-2016`. Compact block relay keys short transaction identifiers with
   SipHash under a hash of the block header and a nonce. The header commits to
