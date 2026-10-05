@@ -22,7 +22,7 @@
 //! so it counts in full unless the family or sieve already supplies one.
 //! Structural exclusions follow the family's certificate-entry convention.
 
-use super::criteria::OrderError;
+use super::criteria::{Filter, OrderError};
 use crate::curve::binary127;
 use crate::curvegen::select::{self, Policy, is_prime};
 use crate::hash::Salted;
@@ -48,6 +48,42 @@ pub struct NoFactor;
 impl Factor for NoFactor {
     fn smallest_prime_factor(&mut self, _: u128) -> Option<u128> {
         None
+    }
+}
+
+/// Early abort with a witness: a rejection entry that `select` accepts for
+/// this candidate, or `None` to have it counted. It must never reject the
+/// candidate `select` would accept.
+pub trait Sieve<C> {
+    fn reject(&mut self, c: &C) -> Option<Rejection>;
+}
+
+// The same witness sieve must skip exactly the same candidates in either path.
+impl<C, S: Sieve<C>> Filter<C> for S {
+    fn rejects(&mut self, c: &C) -> bool {
+        self.reject(c).is_some()
+    }
+}
+
+/// Supplies no rejection witnesses; remaining candidates need a point count.
+#[derive(Clone, Copy, Debug)]
+pub struct NoSieve;
+
+impl<C> Sieve<C> for NoSieve {
+    fn reject(&mut self, _: &C) -> Option<Rejection> {
+        None
+    }
+}
+
+/// The small-l torsion sieve (`sieve`) over odd l up to the bound; the
+/// families' own 8 and 2 come first, as in `select`, unless
+/// `Family::quick_reject` has settled them already.
+#[derive(Clone, Copy, Debug)]
+pub struct SmallL(pub u32);
+
+impl Sieve<binary127::Curve> for SmallL {
+    fn reject(&mut self, c: &binary127::Curve) -> Option<Rejection> {
+        crate::curvegen::sieve::gf2_127(c, self.0)
     }
 }
 
