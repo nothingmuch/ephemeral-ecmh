@@ -27,10 +27,10 @@ The book builds with:
 nix build .#site
 ```
 
-A reference measurement run:
+A group measurement run:
 
 ```sh
-nix run .#bench-run -- --name experiment compare
+nix run .#bench-run -- --name experiment group
 ```
 Each run is identified by a fresh UUIDv7, which sorts by start time and needs no
 coordination between machines. The executables come from a Nix derivation built

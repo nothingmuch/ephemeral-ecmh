@@ -20,6 +20,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import rules
+from matplotlib.legend_handler import HandlerTuple
+from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
 
@@ -44,6 +46,8 @@ LOG_RATIO = 10
 TOP = 3
 # the README's candidates, then the references riblt-ecmh and Bitcoin use
 REPRESENTATIVES = (
+    "gf2_109",
+    "gf2_127",
     "ristretto255",
     "secp256k1",
 )
@@ -187,6 +191,17 @@ def shown(best: pd.DataFrame, top: int = TOP) -> list:
     tied = rest[rest.value_lo_ns <= first.value_hi_ns.max()].head(top)
     keep = {*first.index, *tied.index, *REPRESENTATIVES, BASELINE}
     return [f for f in best.index if f in keep]
+
+
+def per_base(best: pd.DataFrame, bases: dict) -> list:
+    """Of best, as for shown(), the fastest family of each base family in
+    bases, family to base, in the order of rules.FAMILY_ORDER: lines of one
+    hue would not be told apart, and the grids list the rest."""
+    first = {}
+    for f in best.sort_values("value_ns").index:
+        first.setdefault(bases[f], f)
+    order = {b: i for i, b in enumerate(rules.FAMILY_ORDER)}
+    return sorted(first.values(), key=lambda f: order.get(bases[f], len(order)))
 
 
 def of(n: int, total: int) -> str:
@@ -447,6 +462,11 @@ def plot_layer(
     stem = out / slug(layer)
     if layer in ("field", "group ops"):
         return None
+    sweep = (t.group == "h2c").any()
+    if layer == "hash to curve" and sweep:
+        return _hash_sweep(d, stem, formats, footer)
+    if layer == rules.EXPERIMENTAL and sweep:
+        return _maps(t, stem, formats, footer)
     return _layer_bars(d, layer, stem, formats, footer)
 
 
@@ -492,6 +512,228 @@ def _layer_bars(d: pd.DataFrame, layer: str, stem: Path, formats, footer):
     alt = (
         f"{layer}: a bar per benchmark and its 95% confidence-interval box with an estimate line, a panel per "
         "operation" + (", on a log scale" if log else "") + "."
+    )
+    return save(fig, stem, formats, alt, footer)
+
+
+def markers(d: pd.DataFrame, families: list) -> dict:
+    """A marker per family of families that d measures, distinct among those
+    sharing a hue."""
+    bases = dict(zip(d.family, d.base))
+    seen: dict = {}
+    out = {}
+    for f in families:
+        if f not in bases:
+            continue
+        b = bases[f]
+        out[f] = MARKERS[seen.get(b, 0) % len(MARKERS)]
+        seen[b] = seen.get(b, 0) + 1
+    return out
+
+
+MARKERS = "os^Dv"
+
+
+def lines(ax, d: pd.DataFrame, x: str, families: list, alone=None, mark=None):
+    """A line per family of families over x, its interval a band. With alone,
+    the name of a boolean column, the rows where it holds are a second line,
+    dark and dashed, and the rest light and solid. mark, from markers() over
+    every panel's rows, keeps a family's marker when a panel lacks others."""
+    mark = mark or markers(d, families)
+    for fam in families:
+        f = d[d.family == fam]
+        for one in (True, False) if alone else (None,):
+            g = (f[f[alone] == one] if alone else f).sort_values(x)
+            if g.empty:
+                continue
+            base = g.base.iloc[0]
+            light = alone is not None and not one
+            c = color(base, light)
+            style = ":" if base == BASELINE else "--" if one else "-"
+            ax.plot(
+                g[x],
+                g.value_ns,
+                style,
+                color=c,
+                marker=mark[fam],
+                markersize=3.5,
+                markeredgecolor=color(base),
+                linewidth=2 if light else 1.4,
+            )
+            ax.fill_between(
+                g[x], g.value_lo_ns, g.value_hi_ns, color=c, alpha=0.2, linewidth=0
+            )
+    ax.set_xscale("log")
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    axis(ax, True, "y")
+    ax.grid(axis="x", which="major", color=GRID, linewidth=0.8)
+
+
+def base_of(d: pd.DataFrame, family: str) -> str:
+    return d[d.family == family].base.iloc[0]
+
+
+def family_legend(fig, d: pd.DataFrame, families: list, extra=(), light=False):
+    """A family's dark line, and with light its light line beside it."""
+    mark = markers(d, families)
+
+    def handle(f, shade):
+        return Line2D(
+            [],
+            [],
+            color=color(base_of(d, f), shade),
+            linestyle=":" if base_of(d, f) == BASELINE else "-",
+            linewidth=2 if shade else 1.4,
+            marker=mark[f],
+            markersize=3.5,
+            markeredgecolor=color(base_of(d, f)),
+        )
+
+    handles = [
+        (handle(f, False), handle(f, True)) if light else handle(f, False)
+        for f in families
+    ]
+    labels = [f"{f} (baseline)" if base_of(d, f) == BASELINE else f for f in families]
+    for h, label in extra:
+        handles.append(h)
+        labels.append(label)
+    fig.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncol=4,
+        handler_map={tuple: HandlerTuple(ndivide=None, pad=0.6)},
+        handlelength=4 if light else 2,
+    )
+
+
+def leaders(d: pd.DataFrame) -> pd.DataFrame:
+    """Each family's fastest row of d, the measure shown() ranks by."""
+    return d.loc[d.groupby("family").value_ns.idxmin()].set_index("family")[
+        ["value_ns", "value_lo_ns", "value_hi_ns"]
+    ]
+
+
+AXES = {
+    "m": "sketch cells m, log scale",
+    "d": "set difference d (sketch of 2d cells or more), log scale",
+}
+
+
+def _hash_sweep(d: pd.DataFrame, stem: Path, formats, footer):
+    h = d[(d.operation == "hash to curve") & d.group.isin(["h2c", "hash_to_curve"])]
+    # the coordinates and codecs of a curve hash alike: the map is the curve's
+    h = h[[rules.curve(f) == f for f in h.family]]
+    h = h[(h.group == "h2c") | (h.family == BASELINE)]
+    h = h.assign(n=[n if m == "batch" else 1 for n, m in zip(h.batch_n, h["mode"])])
+    # the representatives, and the fastest of each base family beside them
+    fastest = per_base(leaders(h), dict(zip(h.family, h.base)))
+    order = {b: i for i, b in enumerate(rules.FAMILY_ORDER)}
+    families = sorted(
+        {f for f in [*REPRESENTATIVES, *fastest] if (h.family == f).any()},
+        key=lambda f: (order.get(base_of(h, f), len(order)), f),
+    )
+    drawn = [f for f in families if f != BASELINE]
+    fig, ax = plt.subplots(figsize=(FIG_W, 4.6), layout="constrained")
+    lines(ax, h, "n", drawn)
+    extra = []
+    if BASELINE in families:
+        # measured one at a time only: a level to compare against
+        x = h[h.family == BASELINE].value_ns.min()
+        ax.axhline(x, color=color(BASELINE), linestyle=":", linewidth=1.4)
+        ax.annotate(
+            f"{BASELINE}, one at a time: {fmt_time(x)}",
+            (1, x),
+            xycoords=ax.get_yaxis_transform(),
+            xytext=(0, 3),
+            textcoords="offset points",
+            ha="right",
+            fontsize=SMALL,
+            color=TEXT_2,
+        )
+        level = Line2D([], [], color=color(BASELINE), linestyle=":", linewidth=1.4)
+        extra.append((level, f"{BASELINE} (baseline), one at a time"))
+    ax.set_xlabel("batch size n (1: one at a time), log scale")
+    ax.set_title("try-and-increment, time per item", loc="left", color=TEXT)
+    family_legend(fig, h, drawn, extra)
+    shows = of(len(families), h.family.nunique()) or "all shown"
+    fig.suptitle(
+        f"Hash to curve against batch size ({shows})",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = (
+        "Hash to curve by try-and-increment: time per item against batch size "
+        "on log axes, one at a time at n = 1; the representative curves and "
+        "the fastest of each base family, a marker per curve within a hue, "
+        "and the XOR baseline as a level, intervals as bands. "
+        "The other maps are in the comparison maps figure, hash to addend "
+        "and the steps of a hash in the table."
+    )
+    return save(fig, stem, formats, alt, footer)
+
+
+def _maps(t: pd.DataFrame, stem: Path, formats, footer):
+    """The comparison maps beside try-and-increment on the same curves and
+    the fastest try-and-increment curves: a row per curve and method, one
+    at a time dark and batched light."""
+    ex = t[t.layer == rules.EXPERIMENTAL]
+    h2c = t[(t.layer == "hash to curve") & (t.group == "h2c")]
+    h2c = h2c[[rules.curve(f) == f for f in h2c.family]]
+    largest = h2c[h2c["mode"] == "batch"].batch_n.max()
+    h2c = h2c[(h2c["mode"] != "batch") | (h2c.batch_n == largest)]
+    native = t[(t.layer == "hash to curve") & t.label.str.contains("try-and-increment")]
+    native = native[native.operation == "hash to curve"]
+    best = leaders(h2c)
+    fastest = list(best.sort_values("value_ns").index[:TOP])
+    curves = [*fastest, *(f for f in dict.fromkeys(ex.family) if f not in fastest)]
+    rows = []
+    for src, method in ((h2c, "try-and-increment"), (native, None), (ex, None)):
+        for r in src[src.family.isin(curves)].itertuples():
+            name = method or r.label.split("/", 1)[1].removesuffix(", batched")
+            rows.append(
+                {
+                    "row": f"{r.family}: {name}",
+                    "family": r.family,
+                    "base": r.base,
+                    "variant": "batched" if r.mode == "batch" else "one at a time",
+                    "value_ns": r.value_ns,
+                    "value_lo_ns": r.value_lo_ns,
+                    "value_hi_ns": r.value_hi_ns,
+                }
+            )
+    m = pd.DataFrame(rows)
+
+    def rank(r):
+        fam, method = r.split(": ", 1)
+        return curves.index(fam), method != "try-and-increment", method
+
+    order = sorted(dict.fromkeys(m.row), key=rank)
+    fig, ax = plt.subplots(
+        figsize=(FIG_W, 0.9 + 0.5 * len(order)), layout="constrained"
+    )
+    variants = ["one at a time", "batched"]
+    pair_bars(ax, m, order, variants, log=True, row="row")
+    titled(
+        ax,
+        "time per item",
+        f"{variant_key(variants)}, try-and-increment in batches of {largest:g}",
+    )
+    fig.suptitle(
+        "Comparison maps beside try-and-increment, time per item",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = (
+        "Comparison maps (Pornin's binary map, Elligator 2, SSWU) on a log "
+        "scale beside try-and-increment on the same curves and on the three "
+        "curves where it is fastest: a row per curve and method, one at a time "
+        "and batched as a dark and a light bar of the family's colour."
     )
     return save(fig, stem, formats, alt, footer)
 

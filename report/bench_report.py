@@ -395,6 +395,43 @@ def _tex_int(n: int) -> str:
 
 
 # the steps benches/group.rs times at several batch sizes
+SWEEP = [
+    ("h2c", "hash to curve"),
+    ("group.prepare", "prepare"),
+    ("group.encode", "encode"),
+    ("group.decode", "decode"),
+]
+
+
+def batch_size_grid(t: pd.DataFrame) -> Grid | None:
+    """Each batched step's time per item at each batch size the benches
+    sweep, beside its time alone; None without a sweep."""
+    per = t[(t.unit == "ns/elem") & t.group.isin([g for g, _ in SWEEP])]
+    sizes = sorted({int(n) for n in per.batch_n.dropna()})
+    if len(sizes) < 2:
+        return None
+    cols, cells = [], {}
+    for group, head in SWEEP:
+        d = per[per.group == group]
+        if d.empty:
+            continue
+        cols.append(Col((group, "alone"), head, "alone"))
+        cols += [Col((group, n), head, f"$n = {n}$") for n in sizes]
+        for r in d.itertuples():
+            if r.mode == "per-element":
+                cells[(str(r.family), (group, "alone"))] = r
+            elif r.mode == "batch" and pd.notna(r.batch_n):
+                cells[(str(r.family), (group, int(r.batch_n)))] = r
+    groups = grouped(rules.CURVE_GROUPS, {f for f, _ in cells})
+    for _, rows in groups:
+        for row in rows:
+            for c in cols:
+                r = cells.get((row.label, c.key))
+                if r is not None:
+                    row.values[c.key] = r.value_ns
+                    row.cis[c.key] = (r.value_lo_ns, r.value_hi_ns)
+                    row.tips[c.key] = r.full_id
+    return Grid(cols, groups, corner="curve")
 
 
 # the dominant operations: (layer, operation, head, sub)
@@ -599,6 +636,30 @@ def provenance(m: dict | None) -> str:
         m.get("started", "")[:10],
     ]
     return " · ".join(p for p in parts if p)
+
+
+def rho_bits(r: int, automorphisms: int) -> float:
+    """log2 of rho's expected group operations in a group of prime order r,
+    sqrt(pi r / (2 a)), with a the order of the automorphism group the walk
+    quotients by: nominal, the generic bound and no structural attack."""
+    return (math.log2(math.pi) + math.log2(r) - math.log2(2 * automorphisms)) / 2
+
+
+def fixtures(t, meta) -> dict[str, dict]:
+    """Each observed group-suite family's certified fixture, as bench-run
+    recorded the executable's declaration, or None where it recorded none.
+    Runs before 2026-10-03 recorded only the status: their fixtures have no
+    r, so no rho."""
+    records = (meta or {}).get("group_fixtures", {})
+    if not isinstance(records, dict):
+        records = {}
+    group = t[t.group.str.startswith("group.") | (t.group == "h2c")]
+    families = sorted({f.split("/")[0] for f in group.function if isinstance(f, str)})
+    out = {}
+    for f in families:
+        rec = records.get(f)
+        out[f] = {"status": rec} if isinstance(rec, str) else rec
+    return out
 
 
 def blocks(

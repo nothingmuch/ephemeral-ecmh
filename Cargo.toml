@@ -27,6 +27,10 @@ secp256k1 = "0.33.1"
 name = "compare"
 harness = false
 
+[[bench]]
+name = "group"
+harness = false
+
 # The per-commit test check: dev's debug assertions and overflow checks,
 # but optimized, since the curvegen tests (sieve and AGM against Sage,
 # BSGS against brute force) take 20x longer at opt-level 0. They run no

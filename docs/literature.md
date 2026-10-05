@@ -38,8 +38,8 @@ the same distinctions.
 - `wiener-zuccherato-1998`, `duursma-gaudry-morain-1999`. Rho runs $\sqrt{2}$
   faster with the negation map and $\sqrt{2m}$ faster on curves with an
   automorphism group of order $2m$ (Koblitz curves, curves with efficiently
-  computable endomorphisms). The security chapter divides the reference work
-  factor by $sqrt{2}$ for the negation map, which every family admits.
+  computable endomorphisms). The report divides the reference work factor by
+  $sqrt{2}$ for the negation map, which every family admits.
 - `bernstein-lange-2012`, `bernstein-lange-2013`. With a precomputed table of
   size about $N^{2/3}$, each further discrete logarithm in a group of size $N$
   costs about $N^{1/3}$ operations. A fixed curve would let an attacker amortize

@@ -2,6 +2,7 @@ import io
 import json
 import math
 import re
+import shutil
 from pathlib import Path
 
 import bench_report as br
@@ -17,12 +18,21 @@ LAYERS = [
     "field",
     "group ops",
     "hash to curve",
+    "comparison maps",
     "digest",
 ]
 
 # the workload, and the smaller-field variants the rules must name
 EXTRA = [
+    ("group.add", "binary-lambda.127/mode=throughput", None, 1024),
+    ("group.add", "binary-w.127/mode=throughput", None, 1024),
     # one family's pipeline, through the group traits
+    ("h2c", "binary.127/mode=indep", None, 1024),
+    ("h2c", "binary.127/mode=batch,n=1024", None, 1024),
+    ("group.prepare", "binary.127/mode=indep", None, 1024),
+    ("group.prepare", "binary.127/mode=batch,n=1024", None, 1024),
+    ("group.add", "binary.127/mode=throughput", None, 1024),
+    ("group.add", "binary.127/mode=latency", None, 1024),
     # a λ family's hash straight to its addend
 ]
 
@@ -98,6 +108,10 @@ def test_current_suite_is_fully_classified(table):
             ("field", "gf2_127", "batch invert", "batch"),
         ),
         ("field/gf2/halftrace", ("field", "gf2_127", "halftrace", "per-element")),
+        (
+            "add/gf2/extended += affine, 1 accumulator",
+            ("group ops", "gf2_127", "add", "latency"),
+        ),
         ("add/xor-sha256/xor 32B", ("group ops", "xor", "add", "per-element")),
         (
             "add/secp256k1/combine_keys (jacobian += affine)",
@@ -112,7 +126,24 @@ def test_current_suite_is_fully_classified(table):
             ("hash to curve", "ristretto255", "hash to curve", "per-element"),
         ),
         # maps that are not uniform, or not proven so, stand apart
+        (
+            "hash_to_curve/gf2_127/pornin map x1, batched",
+            ("comparison maps", "gf2_127", "one map", "batch"),
+        ),
+        (
+            "hash_to_curve/gf2_127/pornin map x2",
+            (
+                "comparison maps",
+                "gf2_127",
+                "two maps summed",
+                "per-element",
+            ),
+        ),
         # the map straight to an addend: a comparison map that is also a prepare
+        (
+            "hash_to_curve/gf2_127-u/pornin map x1 to (u, v), batched",
+            ("comparison maps", "gf2_127-u", "one map to addend", "batch"),
+        ),
         (
             "hash_to_curve/secp256k1/ellswift decode",
             ("hash to curve", "secp256k1", "hash to curve", "per-element"),
@@ -121,16 +152,41 @@ def test_current_suite_is_fully_classified(table):
             "hash_to_curve/sha256 (XOR baseline)",
             ("hash to curve", "xor", "hash to curve", "per-element"),
         ),
+        (
+            "h2c_parts/gf2 t&i/1. invert x, batched",
+            ("hash to curve", "gf2_127", "steps: gf2 t&i", "batch"),
+        ),
+        ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
         # GF(2^122): qsolve sits with the halftraces
         # a batch to affine, not a sum
         # benches/group.rs: layered ids, the family spelled <name>.<bits>
+        (
+            "group.add/binary.127/mode=throughput",
+            ("group ops", "gf2_127", "add", "throughput"),
+        ),
+        (
+            "h2c/binary.127/mode=batch,n=1024",
+            ("hash to curve", "gf2_127", "hash to curve", "batch"),
+        ),
         # Identifiers with an explicit 127-bit field width.
         (
             "field/gf2_127/mul latency (dependent chain)",
             ("field", "gf2_127", "mul", "latency"),
         ),
+        (
+            "h2c_parts/gf2_127 t&i/1. invert x, batched",
+            ("hash to curve", "gf2_127", "steps: gf2_127 t&i", "batch"),
+        ),
         # binary127::lambda: gf2_127's curves, λ-projective accumulators
+        (
+            "group.add/binary-lambda.127/mode=throughput",
+            ("group ops", "gf2_127-lambda", "add", "throughput"),
+        ),
+        (
+            "h2c/binary-lambda.127/mode=batch,n=1024",
+            ("hash to curve", "gf2_127-lambda", "hash to curve", "batch"),
+        ),
         # riblt.peel's parameters say whether it peels in batches
         # the two XOR baselines are told apart by their hash
         # binary122: GLS constants, λ accumulators, and both
@@ -154,7 +210,10 @@ def test_classify(full_id, want):
 
 @pytest.mark.parametrize(
     "old, new",
-    [],
+    [
+        ("gf2/mul latency (dependent chain)", "gf2_127/mul latency (dependent chain)"),
+        ("gf2 pornin/2. invert m1 m2 m3", "gf2_127 pornin/2. invert m1 m2 m3"),
+    ],
 )
 def test_both_spellings_name_one_family(old, new):
     assert rules.family(old) == rules.family(new)
@@ -169,6 +228,30 @@ def test_curvegen_names_each_family(group, function, parameter, operation):
     f = rules.classify(group, function, parameter, False)
     fam = function.split("/")[0].split(" ")[0]
     assert (f.layer, f.family, f.operation) == ("curve generation", fam, operation)
+
+
+@pytest.mark.parametrize(
+    "spelling, curve, field, bits",
+    [
+        ("binary-u.127", "gf2_127-u", "gf2_127", 127),
+    ],
+)
+@pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
+def test_unscaled_binary_families_are_distinct(spelling, curve, field, bits, group):
+    f = rules.classify(group, spelling + "/mode=throughput", None, True)
+    assert (f.family, f.base, f.bits) == (curve, "gf2_127", bits)
+    assert rules.family(curve) == (curve, "gf2_127", bits)
+    assert rules.FIELD_OF[curve] == field
+    assert curve in rules.CURVES
+    assert any(name == curve for _, rows in rules.CURVE_GROUPS for name, _ in rows)
+
+
+@pytest.mark.parametrize("acc", rules.ACCUMULATORS)
+@pytest.mark.parametrize("bits, gls", rules.BINARY)
+@pytest.mark.parametrize("group", ["group.add", "h2c"])
+def test_binary_spellings_keep_their_width_and_representation(acc, bits, gls, group):
+    f = rules.classify(group, f"binary{acc}.{bits}{gls}/mode=throughput", None, True)
+    assert (f.family, f.base, f.bits) == (f"gf2_{bits}{gls}{acc}", "gf2_127", bits)
 
 
 @pytest.mark.parametrize(
@@ -206,6 +289,35 @@ def test_explicit_square_throughput_is_present_in_elementary_table(tmp_path):
     row = e[(e.facet == "field square") & (e.variant == "throughput")]
     assert len(row) == 1
     assert row.iloc[0].value_ns == pytest.approx(2.0)
+
+
+def test_addend_equality_is_present_in_elementary_table(tmp_path):
+    root = tmp_path / "criterion"
+    write_bench(
+        root,
+        "group.equals",
+        "binary.127",
+        None,
+        64.0,
+        128.0,
+        192.0,
+        {"Elements": 64},
+    )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    assert br.unclassified(table).empty
+    e = br.elementary(table)
+    row = e[e.facet == "equals addend"]
+    assert len(row) == 1
+    assert row.iloc[0].value_ns == pytest.approx(2.0)
+    grid = br.elementary_grid(e, fields=False)
+    key = ("equals addend", "")
+    assert [column.key for column in grid.cols] == [key]
+    assert grid.rows()[0].values[key] == pytest.approx(2.0)
+    rendered = br.to_html([("grid", grid)])
+    assert "equals addend" in rendered
+    assert "group.equals/binary.127" in rendered
 
 
 def test_every_base_has_a_dark_and_a_light_shade():
@@ -253,6 +365,17 @@ def test_svg_is_deterministic(rendered, tmp_path):
     assert (tmp_path / "digest.svg").read_bytes() == (out / "digest.svg").read_bytes()
 
 
+def test_point_outside_its_ci(tmp_path):
+    # criterion's slope is a least-squares fit, its CI bootstrap percentiles
+    root = tmp_path / "criterion"
+    write_bench(root, "digest", "gf2/x2", None, 1000.0, 950.0, 1100.0, {"Elements": 10})
+    write_bench(
+        root, "digest", "gf2/x3", None, 1000.0, 1200.0, 1100.0, {"Elements": 10}
+    )
+    t = br.report(root, tmp_path / "out", formats=("svg",))
+    assert len(t) == 2 and (tmp_path / "out" / "digest.svg").exists()
+
+
 def test_empty_tree_is_an_error(tmp_path):
     with pytest.raises(SystemExit):
         br.report(tmp_path, tmp_path / "out")
@@ -261,6 +384,73 @@ def test_empty_tree_is_an_error(tmp_path):
 def test_no_machine_is_flagged(rendered):
     md = (rendered[0] / "report.md").read_text()
     assert "## Machine\n\nUnknown: no meta.json" in md
+
+
+def test_runs_before_r_was_recorded_still_render(tmp_path):
+    root = tmp_path / "criterion"
+    write_bench(
+        root, "group.add", "binary.127/mode=latency", None, 1, 2, 3, {"Elements": 1}
+    )
+    table = br.tidy(br.load(root)[0])
+    meta = {"group_fixtures": {"binary.127": "certified"}}
+    md = br.to_markdown(br.blocks(table, {}, [], "old", meta=meta))
+    assert "## Machine" in md
+    assert br.fixtures(table, meta) == {"binary.127": {"status": "certified"}}
+
+
+def test_rho_is_sqrt_pi_r_over_2a():
+    r = 2**126
+    assert br.rho_bits(r, 2) == pytest.approx(math.log2(math.sqrt(math.pi * r / 4)))
+    # a further sqrt 2 for an automorphism group of order 4
+    assert br.rho_bits(r, 2) - br.rho_bits(r, 4) == pytest.approx(0.5)
+
+
+def test_machine(tmp_path):
+    run = tmp_path / "run"
+    write_bench(run / "criterion", "digest", "gf2/batch", None, 1.0, 2.0, 3.0, None)
+    meta = {
+        "name": "box",
+        "host": "box.local",
+        "cpu": "Some CPU",
+        "cores": 8,
+        "memory": 16 * 2**30,
+        "rustflags": "-C target-cpu=native",
+        "target_features": ["avx", "pclmulqdq", "sse4.1"],
+        "commit": "abc123",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+        "started": "2026-10-03T00:22:23Z",
+        "profile": "quick",
+    }
+    (run / "meta.json").write_text(json.dumps(meta))
+    br.report(run, tmp_path / "out", formats=("svg",))
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "## Machine" in md
+    assert "| CPU | Some CPU, 8 cores, 16 GiB |" in md
+    assert "| field backend features | pclmulqdq, sse4.1 |" in md
+    assert "| commit | abc123 |" in md
+    # published without the hostname, and named by the run
+    published = json.loads((tmp_path / "out" / "meta.json").read_text())
+    assert published == {k: v for k, v in meta.items() if k != "host"}
+    assert "box.local" not in md and "benchmarks from run box." in md
+    # every page and figure says which run, machine, build and sources
+    line = "box · Some CPU · rustc 1.98.1 · RUSTFLAGS=-C target-cpu=native"
+    line += " · abc123 · quick profile · 2026-10-03"
+    assert md.endswith(f"---\n\n{line}\n") and "| profile | quick |" in md
+    assert f"<footer>{line}</footer>" in (tmp_path / "out" / "report.html").read_text()
+    assert line in (tmp_path / "out" / "digest.svg").read_text()
+    dirty = run.parent / "dirty"
+    write_bench(dirty / "criterion", "digest", "gf2/batch", None, 1.0, 2.0, 3.0, None)
+    (dirty / "meta.json").write_text(json.dumps(meta | {"dirty": True}))
+    br.report(dirty, tmp_path / "out3", formats=("svg",))
+    md = (tmp_path / "out3" / "report.md").read_text()
+    assert "| commit | abc123 (uncommitted edits) |" in md
+    # so does the criterion directory, beside it; a bare one has none
+    br.report(run / "criterion", tmp_path / "out1", formats=("svg",))
+    assert "| CPU | Some CPU" in (tmp_path / "out1" / "report.md").read_text()
+    bare = tmp_path / "bare"
+    write_bench(bare, "digest", "gf2/batch", None, 1.0, 2.0, 3.0, None)
+    br.report(bare, tmp_path / "out2", formats=("svg",))
+    assert "Unknown: no meta.json" in (tmp_path / "out2" / "report.md").read_text()
 
 
 def test_index_lists_the_runs_newest_first(tmp_path):
@@ -287,6 +477,17 @@ def test_index_lists_the_runs_newest_first(tmp_path):
     assert "| [x86](x86/report/report.md) | 2026-10-03T09:00:00Z | AMD EPYC |" in md
     with pytest.raises(SystemExit, match="no report.html"):
         br.index(tmp_path / "empty")
+
+
+def test_raw_tables_tell_operations_apart(tmp_path):
+    # group.rs's ids are <op>/<family>/<parameters>: without the operation
+    # a family's add and subtract rows read alike
+    for group in ("group.add", "group.sub"):
+        f = "binary.127/mode=throughput"
+        write_bench(tmp_path, group, f, None, 1.0, 2.0, 3.0, {"Elements": 1})
+    d = br.display_table(br.tidy(br.load(tmp_path)[0]))
+    assert len(set(d.benchmark)) == 1
+    assert list(d.operation) == ["add", "subtract"]
 
 
 def test_fmt_time():
@@ -472,6 +673,25 @@ def test_export_keeps_the_load_and_the_report_shows_it(run, tmp_path):
     br.report(dest, tmp_path / "out", formats=("svg",))
     page = (tmp_path / "out" / "report.md").read_text()
     assert "runnable, mean" in page and "idle before" in page
+
+
+def test_export_refuses_what_its_report_would_lack(tmp_path):
+    run = tmp_path / "run"
+    write_bench(run / "criterion", "digest", "gf2/batch", None, 1.0, 2.0, 3.0, None)
+    with pytest.raises(SystemExit, match="no meta.json"):
+        br.export(run, tmp_path / "a")
+    (run / "meta.json").write_text(json.dumps(RUN_META))
+    d = write_bench(run / "criterion", "digest", "gf2/streaming", None, 1, 2, 3)
+    (d / "new" / "estimates.json").unlink()
+    with pytest.raises(SystemExit, match="gf2_streaming"):
+        br.export(run, tmp_path / "b")
+    with pytest.raises(SystemExit, match="no criterion results"):
+        br.export(tmp_path / "empty", tmp_path / "c")
+    shutil.rmtree(d)
+    (run / "meta.json").write_text(json.dumps({**RUN_META, "dirty": True}))
+    with pytest.raises(SystemExit, match="committed source"):
+        br.export(run, tmp_path / "d")
+    assert not any((tmp_path / n).exists() for n in "abcd")
 
 
 def test_compact_form_holds_one_statistic(run, tmp_path):

@@ -46,7 +46,7 @@
 # Nothing builds while anything is timed, and the suites run serially:
 # don't build or bench anything else on the machine meanwhile.
 
-default_suites=(compare)
+default_suites=(compare group)
 profile=quick
 suites=()
 while (($#)); do
@@ -304,6 +304,26 @@ for s in "${suites[@]}"; do
   during "$s"
   # --bench, as cargo passes it: criterion times only when it's given
   "$bins/bin/$s" --bench "$@" 2>&1 | tee "$run/log/$s"
+  if [[ $s == group ]]; then
+    # Read declarations emitted by the executable whose timings were recorded.
+    # Missing declarations remain unknown; source revision alone implies none.
+    group_fixtures=$(jq -Rn '
+      [inputs | select(startswith("group-fixture\t")) | split("\t")
+        # name, r as the certificate verified it, a probable prime (a string:
+        # it exceeds a double),
+        # the cofactor and the automorphism group order rho can use
+        | if length == 5 and .[1] != "" and (.[2] | test("^r=[0-9]+$"))
+             and (.[3] | test("^cofactor=[0-9]+$"))
+             and (.[4] | test("^automorphisms=[0-9]+$"))
+          then {key: .[1], value: {r: .[2][2:],
+                                   cofactor: (.[3][9:] | tonumber),
+                                   automorphisms: (.[4][14:] | tonumber)}}
+          else error("invalid group-fixture declaration") end]
+      | group_by(.key)
+      | map(if (map(.value) | unique | length) == 1 then .[0]
+            else error("conflicting group-fixture declarations") end)
+      | from_entries' "$run/log/$s")
+  fi
   meta
 done
 

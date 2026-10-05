@@ -13,23 +13,41 @@ field	gf2/sqrt		1296.8	1299.4	1304.1	1024	1.27
 field	gf2/halftrace		31053	31175	31364	1024	30.44
 field	gf2/trace		341.84	342.84	343.91	1024	0.33
 field	gf2/batch invert (product tree)		3743.7	3745.6	3747.6	1024	3.66
+on_curve	gf2/x: Tr(b/x) = 0 (1 I)		339370	340130	341060	1024	332.16
+on_curve	gf2/x: Tr(b/x) = 0, batched inversion		4657.2	4666.3	4680.4	1024	4.56
 on_curve	secp256k1/x: parse compressed (sqrt)		2.3309e+06	2.3331e+06	2.3352e+06	1024	2278.37
 on_curve	ristretto255/decompress (valid, inv sqrt)		2.4198e+06	2.4216e+06	2.4235e+06	1024	2364.9
 hash_to_curve	sha256 (XOR baseline)		23643	23665	23690	1024	23.11
+hash_to_curve	gf2/try-and-increment		886880	890630	895050	1024	869.79
+hash_to_curve	gf2/try-and-increment, batched		98907	99270	99691	1024	96.95
+hash_to_curve	gf2/pornin map x1		550200	551740	553330	1024	538.82
+hash_to_curve	gf2/pornin map x1, batched		136090	137040	138540	1024	133.83
+hash_to_curve	gf2/pornin map x2		1.1118e+06	1.1162e+06	1.1209e+06	1024	1090.08
 hash_to_curve	ristretto255/hash_from_bytes<Sha512>		4.9081e+06	4.9121e+06	4.9163e+06	1024	4797.08
 hash_to_curve	secp256k1/try-and-increment (parse)		4.6675e+06	4.6758e+06	4.6893e+06	1024	4566.21
 hash_to_curve	secp256k1/ellswift decode		5.1896e+06	5.1939e+06	5.198e+06	1024	5072.02
 h2c_parts	digest/sha512 (ristretto input)		64147	64239	64331	1024	62.74
 h2c_parts	ristretto255/from_uniform_bytes (2 maps + add)		4.8262e+06	4.8355e+06	4.8455e+06	1024	4722.1
+negate	gf2/affine (y += x)		1415.3	1417.3	1419.8	1024	1.38
+negate	gf2/extended (S += T)		2658.2	2663.3	2669.6	1024	2.6
 negate	ristretto255/-P		6349.4	6376.3	6403.7	1024	6.23
 negate	secp256k1/PublicKey::negate		12951	12998	13049	1024	12.69
 add	xor-sha256/xor 32B		386.49	387.21	388.1	1024	0.38
+add	gf2/batch affine (tree sum)		16542	16584	16646	1024	16.2
+add	gf2/extended += affine, 1 accumulator		23296	23358	23430	1024	22.81
+add	gf2/extended += affine, 8 accumulators		19081	19109	19140	1024	18.66
+add	gf2/extended += extended, 1 accumulator		22640	22676	22717	1024	22.14
+add	gf2/extended += extended, 8 accumulators		14486	14708	15016	1024	14.36
 add	ristretto255/+=, 1 accumulator		69543	69606	69686	1024	67.98
 add	ristretto255/+=, 8 accumulators		71516	72986	76208	1024	71.28
 add	secp256k1/combine_keys (jacobian += affine)		90976	91054	91138	1024	88.92
 digest	xor-sha256		27549	27713	27908	1024	27.06
+digest	gf2/batch		116380	116600	116860	1024	113.87
+digest	gf2/streaming		956050	958360	960630	1024	935.89
 digest	ristretto255/streaming		4.9888e+06	5.0012e+06	5.0219e+06	1024	4884
 digest	secp256k1/try-and-increment + combine_keys		4.7665e+06	4.7709e+06	4.7754e+06	1024	4659.18
 digest	secp256k1/ellswift + combine_keys		5.3055e+06	5.3445e+06	5.4089e+06	1024	5219.21
+add	gf2/extended -= affine, 1 accumulator		23587.1	23705.6	23824.1	1024	23.15
+add	gf2/extended -= affine, 8 accumulators		19216.1	19312.6	19409.2	1024	18.86
 add	ristretto255/-=, 1 accumulator		69100.4	69447.7	69794.9	1024	67.82
 add	ristretto255/-=, 8 accumulators		66410.6	66744.3	67078	1024	65.18

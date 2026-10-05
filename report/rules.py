@@ -13,7 +13,7 @@ OTHER = "other"
 # (regex on the group id, layer); one figure per layer, in this order.
 LAYERS = [
     (r"^field$", "field"),
-    (r"^(negate|add)$", "group ops"),
+    (r"^(negate|add|group\.\w+)$", "group ops"),
     (r"^(hash_to_curve|h2c|h2c_parts|on_curve)$", "hash to curve"),
     (r"^digest$", "digest"),
 ]
@@ -27,10 +27,31 @@ LAYERS = [
 # among H outputs to a relation among H' outputs by multiplying coefficients
 # by the corresponding signs. Fixed-sign x lifts are retained for the signed
 # multiset-hash comparison under this relation.
+EXPERIMENTAL = "comparison maps"
+MAPS = [
+    # Pornin's map taken straight to a model's addend (benches/compare.rs,
+    # compare109.rs): one map that also stands for the prepare
+    (r"map x1 to \((x, λ|u, v)\)", "one map to addend"),
+    (r"map x1|elligator2 x1|sswu x1", "one map"),
+    (r"map x2", "two maps summed"),
+]
 
 LAYER_ORDER = [layer for _, layer in LAYERS] + [OTHER]
+LAYER_ORDER.insert(LAYER_ORDER.index("hash to curve") + 1, EXPERIMENTAL)
 # what each layer is, when its benches don't say
-LAYER_NOTES = {}
+LAYER_NOTES = {
+    EXPERIMENTAL: "Maps from digests to points other than try-and-increment, "
+    "timed beside it: Pornin's map on binary curves, Elligator 2 on Edwards "
+    "curves and simplified SWU on Weierstrass curves, once, and Pornin's map "
+    "twice with the points summed; and Pornin's map taken straight to the "
+    "unscaled or $\\lambda$-affine addend, where it stands for a hash and a prepare "
+    "together, as try-and-increment to $(x, \\lambda)$ does. One map reaches at most "
+    "$2^{m-1}$ points of $E[r]$, not uniformly. The checksum needs relations to be hard to "
+    "find among hash outputs within the subset of the group that the hash "
+    "reaches, not outputs uniform on the group (docs/problem.md, Adversary). "
+    "Insertion estimates include each measured map with compatible preparation and "
+    "addition; Pornin already returns an extended binary addend.",
+}
 
 # Every family by name: (base family, field width in bits, or None). A
 # family other than its base is a variant: a smaller field (gf2_109,
@@ -47,7 +68,11 @@ ACCUMULATORS = ["", "-lambda", "-w", "-u"]
 UNGROUPED = {}
 FAMILIES = {
     "xor": ("xor", None),
-    "gf2_127": ("gf2_127", 127),
+    **{
+        f"gf2_{bits}{gls}{acc}": ("gf2_127", bits)
+        for bits, gls in BINARY
+        for acc in ACCUMULATORS
+    },
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -61,6 +86,11 @@ FAMILIES = {
 # xor-sha256.
 SPELLINGS = {
     **{name: name for name in FAMILIES},
+    **{
+        f"binary{acc}.{bits}{gls}": f"gf2_{bits}{gls}{acc}"
+        for bits, gls in BINARY
+        for acc in ACCUMULATORS
+    },
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
@@ -132,6 +162,14 @@ OPERATIONS = [
         "{op}",
     ),
     # benches/group.rs: <layer>.<op>/<family>.<bits>/<parameters>
+    (r"^group\.prepare$", r"", "prepare"),
+    (r"^group\.add$", r"", "add"),
+    (r"^group\.sub$", r"", "subtract"),
+    (r"^group\.neg$", r"", "negate"),
+    (r"^group\.is_identity$", r"", "is identity"),
+    (r"^group\.equals$", r"", "equals addend"),
+    (r"^group\.encode$", r"", "encode"),
+    (r"^group\.decode$", r"", "decode"),
     (r"^h2c$", r"", "hash to curve"),
     (r"^negate", r"", "negate"),
     # combine_keys sums the whole slice in Jacobian coordinates and
@@ -143,6 +181,7 @@ OPERATIONS = [
     (r"^add$", r"", "add"),
     # the λ families' hash straight to (x, λ) (benches/compare122.rs): its
     # output is an addend, so it stands for a hash and a prepare together
+    (r"^hash_to_curve", r"to \((x, λ|u, v)\)", "hash to addend"),
     (r"^hash_to_curve", r"", "hash to curve"),
     (r"^h2c_parts", r"^(?P<algo>[^/]+)/", "steps: {algo}"),
     (r"^on_curve", r"", "x on curve"),
@@ -191,7 +230,17 @@ ELEMENTARY = [
     ("point add", "latency", "group ops", "add", ("latency",)),
     ("point subtract", None, "group ops", "subtract", ("throughput", "per-element")),
     ("point negate", None, "group ops", "negate", None),
+    ("point prepare", "one at a time", "group ops", "prepare", ("per-element",)),
+    ("point prepare", "batched", "group ops", "prepare", ("batch",)),
+    ("is identity", None, "group ops", "is identity", None),
+    ("equals addend", "match", "group ops", "equals addend", ("match",)),
+    ("equals addend", "mismatch", "group ops", "equals addend", ("mismatch",)),
     # The unsplit per-element measurement contains mostly mismatches.
+    ("equals addend", None, "group ops", "equals addend", ("per-element",)),
+    ("encode", "one at a time", "group ops", "encode", ("per-element",)),
+    ("encode", "batched", "group ops", "encode", ("batch",)),
+    ("decode", "one at a time", "group ops", "decode", ("per-element",)),
+    ("decode", "batched", "group ops", "decode", ("batch",)),
     (
         "hash to curve",
         "one at a time",
@@ -215,6 +264,10 @@ FIELDS = {
 }
 CURVES = [
     "xor",
+    "gf2_127",
+    "gf2_127-lambda",
+    "gf2_127-w",
+    "gf2_127-u",
     "ristretto255",
     "secp256k1",
 ]
@@ -238,6 +291,15 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "GF(2^127), 16 bytes",
+        [
+            ("gf2_127", "(X:S:Z:T) extended accumulators, Pornin's formulas"),
+            ("gf2_127-lambda", "λ-projective (X:L:Z) accumulators"),
+            ("gf2_127-w", "λ-projective, w codec: hashes and decodes to λ-affine"),
+            ("gf2_127-u", "unscaled (X:S:Z), w codec, direct addend hashes"),
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -247,7 +309,12 @@ CURVE_GROUPS = [
 ]
 FIELD_GROUPS = [("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")])]
 # each curve's field, whose inversions its batches share
-FIELD_OF = {} | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
+FIELD_OF = {
+    "gf2_127": "gf2_127",
+    "gf2_127-lambda": "gf2_127",
+    "gf2_127-w": "gf2_127",
+    "gf2_127-u": "gf2_127",
+} | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the
 # same work, {mark: why}. λ-projective (and so the w codec's) and Jacobian
@@ -311,6 +378,10 @@ def classify(
         if m and re.search(gpat, group, re.IGNORECASE):
             op, rank = template.format(group=group, **m.groupdict()), i
             break
+    if layer == "hash to curve":
+        m, model = _first(MAPS, rest)
+        if m:
+            layer, op = EXPERIMENTAL, model or op
     _, mode = _first(MODES, rest)
     if mode is None:
         mode = "per-element" if elements else "total"

@@ -25,7 +25,8 @@ The table gives the nominal cost of rho with the negation map,
 $\sqrt{\pi r / 4}$ group operations [pollard-1978, wiener-zuccherato-1998],
 divided by a further $\sqrt{2}$ for the GLS automorphism group of order 4
 [duursma-gaudry-morain-1999], for the largest prime $r$ dividing each family's
-group order:
+group order. The "Families compared" table of each run report computes the same
+quantity from the $r$ recorded by that run's group suite:
 
 | Family | Group order | $\log_2$ of rho cost |
 |---|---|---|
