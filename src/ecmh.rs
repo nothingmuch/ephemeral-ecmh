@@ -296,6 +296,11 @@ mod tests {
         }
 
         #[test]
+        fn edwards107_ecmh(c in crate::curve::edwards107::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
         fn binary109_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(c, salt, xs, ys, perm)?;
         }
@@ -373,6 +378,21 @@ mod tests {
         #[test]
         fn binary122_gls_unscaled_ecmh(c in binary122::tests::gls::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier107_ecmh(c in crate::curve::weier107::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier107_jacobian_ecmh(c in crate::curve::weier107::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::weier::jacobian::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier107_jacobian_matches_weier107(c in crate::curve::weier107::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_same_digests(c, crate::curve::weier::jacobian::Curve(c), salt, xs, signs)?;
         }
     }
 }

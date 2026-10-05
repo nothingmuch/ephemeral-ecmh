@@ -35,8 +35,11 @@ fn registry_retains_the_recorded_group_inventory() {
         "binary.122",
         "binary.122-gls",
         "binary.127",
+        "edwards.107",
         "edwards.127",
+        "weier-jacobian.107",
         "weier-jacobian.127",
+        "weier.107",
         "weier.127",
     ]
     .into_iter()

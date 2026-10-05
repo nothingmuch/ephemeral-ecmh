@@ -7,13 +7,15 @@
 
 #[path = "common/kats.rs"]
 mod kats;
+#[path = "common/kats107.rs"]
+mod kats107;
 #[path = "common/kats109.rs"]
 mod kats109;
 #[path = "common/kats122.rs"]
 mod kats122;
 
 use ephemeral_ecmh::curvegen::select::{Certificate, Error};
-use ephemeral_ecmh::curvegen::{select, select109, select122};
+use ephemeral_ecmh::curvegen::{select, select107, select109, select122};
 
 /// A malformation applied to a valid (seed, certificate).
 #[derive(Clone, Copy, Debug)]
@@ -152,6 +154,7 @@ fn cert14(index: u32, r: u128, rejections: &[(u128, u128)]) -> Certificate<14> {
 }
 
 const P127: u128 = (1 << 127) - 1;
+const P107: u128 = (1 << 107) - 1;
 const Q127: u128 = 1 << 127;
 const Q109: u128 = 1 << 109;
 const Q122: u128 = 1 << 122;
@@ -192,6 +195,20 @@ fn malformed_certificates_keep_their_outcomes() {
         kats::WEIER127_CERTS,
         cert16,
         select::verify_weier127
+    );
+    family!(
+        "edwards107",
+        P107,
+        kats107::FP107_CERTS,
+        cert14,
+        select107::verify_fp107
+    );
+    family!(
+        "weier107",
+        P107,
+        kats107::WEIER107_CERTS,
+        cert14,
+        select107::verify_weier107
     );
     family!(
         "gf2_109",

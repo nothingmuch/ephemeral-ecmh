@@ -185,10 +185,16 @@ pub mod group {
         crate::curve::binary::wcodec::Curve<crate::curve::binary122::M122Gls>
     );
     family!(edwards127, crate::curve::edwards127::Curve);
+    family!(edwards107, crate::curve::edwards107::Curve);
     family!(weier127, crate::curve::weier127::OddCurve);
     family!(
         weier127_jacobian,
         crate::curve::weier::jacobian::Curve<crate::field::fp127::Fp>
+    );
+    family!(weier107, crate::curve::weier107::OddCurve);
+    family!(
+        weier107_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp107::Fp>
     );
     family!(
         binary127_u,

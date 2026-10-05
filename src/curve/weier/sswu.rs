@@ -3,7 +3,7 @@
 use super::curve::cubic_irreducible;
 use super::{Affine, Curve};
 use crate::curve::{encoding, h2c::Map};
-use crate::field::{OddField, Packed, Prime, fp127};
+use crate::field::{OddField, Packed, Prime, fp107, fp127};
 use core::fmt::Debug;
 
 /// The ratio-root operation used by SSWU, including its nonsquare branch.
@@ -37,6 +37,7 @@ macro_rules! three_mod_four {
     };
 }
 
+three_mod_four!(fp107::Fp);
 three_mod_four!(fp127::Fp);
 
 /// A deterministic map with per-curve setup amortized across inputs.

@@ -40,11 +40,12 @@ use ephemeral_ecmh::curvegen::embedding_degree_ok;
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{Binary127, Edwards127, Family, Weier127};
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error};
-use ephemeral_ecmh::curvegen::{select109, select122};
+use ephemeral_ecmh::curvegen::{select107, select109, select122};
 use std::hint::black_box;
 use std::time::Duration;
 
 use common::families::kats;
+use common::families::kats107;
 use common::families::kats109;
 use common::families::kats122;
 
@@ -163,6 +164,22 @@ fn verify(c: &mut Criterion) {
         &fixtures!(kats::WEIER127_CERTS),
         select::accept_weier127,
         select::verify_weier127,
+    );
+    family(
+        c,
+        "edwards107",
+        (1 << 107) - 1,
+        &fixtures!(kats107::FP107_CERTS),
+        select107::accept_fp107,
+        select107::verify_fp107,
+    );
+    family(
+        c,
+        "weier107",
+        (1 << 107) - 1,
+        &fixtures!(kats107::WEIER107_CERTS),
+        select107::accept_weier107,
+        select107::verify_weier107,
     );
     family(
         c,

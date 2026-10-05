@@ -77,8 +77,11 @@ FAMILIES = {
     "fp127": ("fp127", 127),
     "fp107": ("fp127", 107),
     "edwards127": ("edwards127", 127),
+    "edwards107": ("edwards127", 107),
     "weier127": ("weier127", 127),
     "weier127-jacobian": ("weier127", 127),
+    "weier107": ("weier127", 107),
+    "weier107-jacobian": ("weier127", 107),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -97,8 +100,11 @@ SPELLINGS = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
+    "edwards.107": "edwards107",
     "edwards.127": "edwards127",
+    "weier.107": "weier107",
     "weier.127": "weier127",
+    "weier-jacobian.107": "weier107-jacobian",
     "weier-jacobian.127": "weier127-jacobian",
     "xor-sha256": "xor",
     "sha256": "xor",
@@ -322,8 +328,11 @@ CURVES = [
     "gf2_122-gls-w",
     "gf2_122-gls-u",
     "edwards127",
+    "edwards107",
     "weier127",
     "weier127-jacobian",
+    "weier107",
+    "weier107-jacobian",
     "ristretto255",
     "secp256k1",
 ]
@@ -391,6 +400,14 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "F_p, p = 2^107 − 1, 14 bytes",
+        [
+            ("edwards107", "a = 1 Edwards, extended += cached"),
+            ("weier107", "short Weierstrass, projective += affine"),
+            ("weier107-jacobian", "short Weierstrass, Jacobian += affine"),
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -421,7 +438,10 @@ FIELD_OF = {
     "gf2_109-u": "gf2_109",
     "edwards127": "fp127",
     "weier127": "fp127",
+    "edwards107": "fp107",
+    "weier107": "fp107",
     "weier127-jacobian": "fp127",
+    "weier107-jacobian": "fp107",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

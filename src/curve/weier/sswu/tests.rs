@@ -3,7 +3,92 @@
 //! the first certified Weier107/127 curves in the Sage certificate fixtures.
 
 use super::*;
-use crate::field::fp127;
+use crate::field::{fp107, fp127};
+
+#[test]
+fn reference_vectors_107() {
+    type Fp = fp107::Fp;
+    let curve = Curve::new(Fp::new(0x6beb73f4f8778caf14d57fb6175)).unwrap();
+    let map = Sswu::new(curve, Fp::new(0x7fffffffffffffffffffffffff8)).unwrap();
+    let vectors = [
+        (
+            0x0,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x762beca6971bf1938c0b4f16260,
+        ),
+        (
+            0x7ef1b30e4343858f5454fb40b4a,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x762beca6971bf1938c0b4f16260,
+        ),
+        (
+            0x10e4cf1bcbc7a70abab04bf4b5,
+            0x72da733c6d5b06b300fdf9e4197,
+            0x9d4135968e40e6c73f4b0e9d9f,
+        ),
+        (
+            0x1,
+            0x21c839dbba61b002dc717ee2b6b,
+            0x734b13a82ec324ced99f483da89,
+        ),
+        (
+            0x2,
+            0x22613614e796161a2a545021583,
+            0x5199050c77f390ffcc015658d34,
+        ),
+        (
+            0x3,
+            0x16a7571ebb230da7dae3fa5d8e5,
+            0x1bd4f47e80f14d645dd9516521b,
+        ),
+        (
+            0x4,
+            0x28265bc8630e89374b78068d0e0,
+            0x5d87e6abc1263585a66a291b4a6,
+        ),
+        (
+            0x5,
+            0x2297139fd947712b421da8a08e9,
+            0x766332aeb47f3bd8284897fb19b,
+        ),
+        (
+            0x11,
+            0x1710854cea9a33aaaf4713214e9,
+            0x4493a412692be93d19568e78fe1,
+        ),
+        (
+            0x7fffffffffffffffffffffffffe,
+            0x21c839dbba61b002dc717ee2b6b,
+            0xcb4ec57d13cdb312660b7c2576,
+        ),
+        (
+            0x7fffffffffffffffffffffffffd,
+            0x22613614e796161a2a545021583,
+            0x2e66faf3880c6f0033fea9a72cb,
+        ),
+    ];
+    for (u, x, y) in vectors {
+        let p = map.map_to_curve(Fp::new(u));
+        assert_eq!(
+            p,
+            Affine {
+                x: Fp::new(x),
+                y: Fp::new(y)
+            }
+        );
+        assert!(curve.is_on_curve(&p));
+    }
+}
+
+#[test]
+fn rejects_invalid_z_107() {
+    type Fp = fp107::Fp;
+    let curve = Curve::new(Fp::new(0x6beb73f4f8778caf14d57fb6175)).unwrap();
+    for z in [0, 1, fp107::P - 1] {
+        assert!(Sswu::new(curve, Fp::new(z)).is_none());
+    }
+}
+
 #[test]
 fn reference_vectors_127() {
     type Fp = fp127::Fp;
@@ -249,6 +334,7 @@ macro_rules! suite {
     };
 }
 
+suite!(small, fp107, 0x6beb73f4f8778caf14d57fb6175, P - 7, 3, P - 8);
 suite!(
     large,
     fp127,

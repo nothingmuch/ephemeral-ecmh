@@ -5,6 +5,11 @@
 //!   GF(2^61)\[u\] with a = u and B dense or in GF(2^61) (GLS), sharing
 //!   the laws of `binary`, with its λ-projective accumulators
 //!   `binary::lambda`.
+//! - `edwards127`, `edwards107`: complete Edwards curves over F_p, for
+//!   p = 2^127 - 1 and 2^107 - 1, sharing the laws of `edwards`.
+//! - `weier127`, `weier107`: short Weierstrass curves over the same two
+//!   prime fields, sharing the laws of `weier`. Their selectors require
+//!   prime order.
 //!
 //! Constructing a curve does not certify its order. Family-specific
 //! `curvegen` verifiers check the stated order policy, subject to their
@@ -15,8 +20,10 @@ pub mod binary109;
 pub mod binary122;
 pub mod binary127;
 pub mod edwards;
+pub mod edwards107;
 pub mod edwards127;
 pub mod encoding;
 pub mod h2c;
 pub mod weier;
+pub mod weier107;
 pub mod weier127;

@@ -26,6 +26,9 @@ LAYERS = [
 # the workload, and the smaller-field variants the rules must name
 EXTRA = [
     ("add", "gf2_109/extended += affine, 8 accumulators", None, 1024),
+    ("add", "edwards107/+= cached, 8 accumulators", None, 1024),
+    ("hash_to_curve", "weier107/try-and-increment", None, 1024),
+    ("hash_to_curve", "edwards107/montgomery try-and-increment", None, 1024),
     ("group.add", "binary-lambda.127/mode=throughput", None, 1024),
     ("group.add", "binary-w.127/mode=throughput", None, 1024),
     ("group.add", "binary.122/mode=throughput", None, 1024),
@@ -205,6 +208,10 @@ def test_current_suite_is_fully_classified(table):
             ("comparison maps", "edwards127", "one map", "per-element"),
         ),
         (
+            "hash_to_curve/weier107/sswu x1",
+            ("comparison maps", "weier107", "one map", "per-element"),
+        ),
+        (
             "hash_to_curve/weier127/sswu x1",
             ("comparison maps", "weier127", "one map", "per-element"),
         ),
@@ -234,6 +241,7 @@ def test_current_suite_is_fully_classified(table):
             "add/gf2_109/extended += affine, 8 accumulators",
             ("group ops", "gf2_109", "add", "throughput"),
         ),
+        ("digest/edwards107/batch", ("digest", "edwards107", "digest", "batch")),
         # GF(2^122): qsolve sits with the halftraces
         (
             "field/gf2_122/qsolve (z^2 + z = c, 2 base halftraces)",
@@ -242,6 +250,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "field/gf2_122/mul_base (by a GF(2^61) constant) throughput (8 chains)",
             ("field", "gf2_122", "mul_base", "throughput"),
+        ),
+        (
+            "hash_to_curve/weier107/try-and-increment",
+            ("hash to curve", "weier107", "hash to curve", "per-element"),
         ),
         ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
         (
@@ -268,9 +280,14 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_127", "add", "throughput"),
         ),
         (
+            "group.sub/edwards.107/mode=latency",
+            ("group ops", "edwards107", "subtract", "latency"),
+        ),
+        (
             "group.prepare/binary.109/mode=batch,n=1024",
             ("group ops", "gf2_109", "prepare", "batch"),
         ),
+        ("group.neg/weier.107", ("group ops", "weier107", "negate", "per-element")),
         (
             "group.is_identity/weier.127",
             ("group ops", "weier127", "is identity", "per-element"),
@@ -290,6 +307,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "h2c/binary.127/mode=batch,n=1024",
             ("hash to curve", "gf2_127", "hash to curve", "batch"),
+        ),
+        (
+            "h2c/weier.107/mode=indep",
+            ("hash to curve", "weier107", "hash to curve", "per-element"),
         ),
         # Identifiers with an explicit 127-bit field width.
         (
@@ -347,6 +368,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "group.add/weier-jacobian.127/mode=throughput",
             ("group ops", "weier127-jacobian", "add", "throughput"),
+        ),
+        (
+            "group.encode/weier-jacobian.107/mode=batch,n=64",
+            ("group ops", "weier107-jacobian", "encode", "batch"),
         ),
         # Plonky3's fields
         (

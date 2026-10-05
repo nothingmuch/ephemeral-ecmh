@@ -36,6 +36,8 @@ quantity from the $r$ recorded by that run's group suite:
 | Binary, $\mathrm{GF}(2^{109})$ | $2r$, $r$ near $2^{108}$ | 53.8 |
 | Weierstrass, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $r$ | 63.3 |
 | Edwards, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $4r$ | 62.3 |
+| Weierstrass, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $r$ | 53.3 |
+| Edwards, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $4r$ | 52.3 |
 
 The setting is an ephemeral public namespace, with salt and curve derived from a
 beacon value. It is distinct from a secret-keyed namespace, in which keyed XOR
@@ -55,6 +57,12 @@ certify primality.
 
 Each weakness below is accepted at the reference work factor, stated as an
 assumption on the application, or left open, as indicated.
+
+**Generic work factor.** The 107- and 109-bit families have rho costs of
+$2^{52.3}$ to $2^{53.8}$, in the lower part of the reference range.
+Curve-specific precomputation is limited, not excluded, by deriving a curve per
+beacon value ([Precomputation and per-namespace
+curves](problem.md#precomputation-and-per-namespace-curves)).
 
 **Weil descent.** A $\mathrm{GF}(2^{127})$ curve is reachable by the generalized
 GHS descent with heuristic probability about $2^{-52}$ per beacon value, and no

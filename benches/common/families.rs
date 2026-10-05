@@ -5,12 +5,14 @@
 //! remain the caller's choice. Only metadata consumed by the suites lives here.
 
 use ephemeral_ecmh::curve::{self, binary, weier};
-use ephemeral_ecmh::curvegen::{select, select109, select122};
+use ephemeral_ecmh::curvegen::{select, select107, select109, select122};
 use ephemeral_ecmh::field::OddField;
 use ephemeral_ecmh::group::{Decode, HashToCurve, Negate};
 
 #[path = "../../tests/common/kats.rs"]
 pub(crate) mod kats;
+#[path = "../../tests/common/kats107.rs"]
+pub(crate) mod kats107;
 #[path = "../../tests/common/kats109.rs"]
 pub(crate) mod kats109;
 #[path = "../../tests/common/kats122.rs"]
@@ -186,4 +188,8 @@ registry! {
         ("binary", "122", 2, 2), binary;
     binary122_gls: curve::binary122::Gls, kats122::GF2_122_GLS_CERTS, select122::verify_gls,
         ("binary", "122-gls", 2, 4), binary;
+    edwards107: curve::edwards107::Curve, kats107::FP107_CERTS, select107::verify_fp107,
+        ("edwards", "107", 4, 2), single;
+    weier107: curve::weier107::OddCurve, kats107::WEIER107_CERTS, odd(select107::verify_weier107),
+        ("weier", "107", 1, 2), weier;
 }
