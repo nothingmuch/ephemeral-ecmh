@@ -16,6 +16,9 @@ agm	order
 agm	tables
 agm	trace
 curvegen/certify	gf2_127 agm+sieve/index 30
+curvegen/count	edwards127
+curvegen/count	gf2_127
+curvegen/count	weier127
 curvegen/find	gf2_127 agm+sieve/index 30
 curvegen/verify_accept	edwards127
 curvegen/verify_accept	gf2_127

@@ -7,6 +7,8 @@ license = "MIT"
 publish = false
 
 [features]
+# point counting with PARI/GP (links libpari; see build.rs)
+pari = []
 # src/asm_probes.rs, for nix run .#asm-report
 asm-probes = []
 
@@ -42,6 +44,19 @@ harness = false
 [[bench]]
 name = "group"
 harness = false
+
+[[bench]]
+name = "curvegen"
+harness = false
+required-features = ["pari"]
+
+[[example]]
+name = "curvegen_stats"
+required-features = ["pari"]
+
+[[example]]
+name = "curvegen_times"
+required-features = ["pari"]
 
 # The per-commit test check: dev's debug assertions and overflow checks,
 # but optimized, since the curvegen tests (sieve and AGM against Sage,

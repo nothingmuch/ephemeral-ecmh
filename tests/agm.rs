@@ -1,5 +1,5 @@
-//! Rust point counts against PARI-derived sage/agm_vectors.sage vectors
-//! and the binary certificates of sage/kat.sage.
+//! Rust point counts against sage/agm_vectors.sage, the binary
+//! certificates of sage/kat.sage, and PARI itself (feature `pari`).
 
 #[path = "common/agm_vectors.rs"]
 mod agm_vectors;

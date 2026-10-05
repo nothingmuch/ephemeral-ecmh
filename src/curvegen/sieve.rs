@@ -59,6 +59,31 @@
 //!   0.31 of the candidates to count, against 0.51 for 3. PARI's 3.5 ms
 //!   count would call for 11 (0.35 ms saved against 0.23), which leaves
 //!   0.29.
+//! - F_p: the rule for 8 (Edwards) or 2 (Weierstrass) comes
+
+//!   first, two square roots or a cubic's roots in 1 to 11 us. Then the T a
+//!   rejection saves depends on the caller, so each family has a bound
+//!   per caller (`Bounds`). `prove` saves PARI's full count; `find` only
+//!   SEA's early abort, which stops at the first Elkies prime dividing
+//!   #E and so ends early on exactly the candidates the sieve rejects.
+//!   Timed on an M4 over 250 candidates per family, T is the full count
+//!   and A(l) the mean early abort on candidates whose smallest prime
+//!   factor, after 8 or 2, is l (3 is sometimes an Atkin prime, and then
+//!   SEA counts in full):
+//!
+//!   | family              | T     | A(3)    | A(5)    | A(7)   | A(11)  | find | prove |
+//!   |---------------------|-------|---------|---------|--------|--------|------|-------|
+//!   | edwards127          | 54 ms | 3.2 ms  | 0.74 ms | 1.5 ms | 3.2 ms |    5 |    13 |
+//!   | weier127            | 56 ms | 0.32 ms | 0.86 ms | 1.7 ms | 1.8 ms |    5 |    13 |
+//!
+//!   For `prove`, 13 is worthwhile (3.5 ms against 4.5) and 17 is not (10 ms
+//!   against 3.5); for `find`, 5 is worthwhile (88 us against 0.19 ms) and 7 is
+//!   not (0.31 ms against 0.22 or 0.25). The sieve leaves 0.17 of the Edwards
+//!   candidates to count at 13 (0.23 at 5) and 0.11 of the Weierstrass ones
+//!   (0.16 at 5). Summed over the same candidates, the measured times put the
+//!   best bound at 11 to 13 for `prove` and 5 for `find`, within 2% of the
+//!   chosen ones.
+//!
 //!
 //! Over F_p, Karatsuba products with Barrett reduction (not implemented in
 //! `poly`) would replace the 3/2 d^2 M of a squaring mod psi_l by about

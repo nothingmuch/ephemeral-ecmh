@@ -39,6 +39,7 @@ from figures import (
     fmt_time,
     plot_elementary,
     plot_layer,
+    plot_selection,
 )
 from tables import PLAIN, Col, Grid, Row
 
@@ -707,6 +708,8 @@ def blocks(
     elem_fig=None,
     meta=None,
     load=None,
+    runs=None,
+    selection_fig=None,
 ):
     b = [("h1", "Benchmark report")]
     intro = (
@@ -736,6 +739,8 @@ def blocks(
             )
         )
         b.append(("table", load_table(load)))
+    if runs is not None and len(runs):
+        b.extend(selection_blocks(runs, selection_fig, t))
     if elem is not None and len(elem):
         b.extend(elementary_blocks(elem, elem_fig))
     b.append(("h2", "Coverage"))
@@ -758,6 +763,75 @@ def blocks(
             b.append(("details", "Figure", [("img", fig)]))
         b.append(("details", f"{len(d)} benchmarks", [("table", display_table(d))]))
     return b
+
+
+def selection_blocks(runs, fig=None, t=None):
+    """The curve-selection section: what finding, proving and verifying
+    each family's curve took per seed, the figure for the method that finds
+    fastest, and every method's means; with the run's benchmarks `t`, the
+    embedding-degree bound's share of accepting a curve."""
+    chosen = fastest_method(runs)
+    what = (
+        "Curve selection as this run timed it, once per seed "
+        f"({runs.seed.nunique()} seeds): find searches a seed's candidates for "
+        "an acceptable curve; prove searches them again and certifies each "
+        "rejection and the acceptance; verify checks that certificate. The "
+        "figure shows each family's method that finds fastest, a bar at the "
+        "seeds' mean in a box from the fastest seed to the slowest, and how "
+        "the prover's time divides among the search's phases; the table lists "
+        "every method ([[problem.md#parameter-selection-and-verification|Parameter selection and verification]])."
+    )
+    if t is not None:
+        what += embedding_share(t)
+    g = runs.groupby(["family", "method"])
+    mean = g.mean(numeric_only=True)
+    count = mean.prove_count_s
+    table = pd.DataFrame(
+        {
+            "seeds": g.seed.count(),
+            "candidates": mean.candidates.round(1),
+            "point counts (prove)": mean.prove_counts.round(1),
+            "find": [fmt_time(v * 1e9) for v in mean.find_s],
+            "prove": [fmt_time(v * 1e9) for v in mean.prove_s],
+            "verify": [fmt_time(v * 1e9) for v in mean.verify_s],
+            "counting, of prove": [f"{100 * v:.0f}%" for v in count / mean.prove_s],
+        }
+    ).reset_index()
+    shown = set(zip(chosen.family, chosen.method))
+    table.insert(
+        2,
+        "shown",
+        ["yes" if k in shown else "" for k in zip(table.family, table.method)],
+    )
+    b = [("h2", "Curve selection"), ("p", what)]
+    if fig:
+        b.append(("img", fig))
+    b.append(("table", table))
+    return b
+
+
+def embedding_share(t: pd.DataFrame) -> str:
+    """A sentence on the embedding-degree bound's time against the whole
+    acceptance check, over the families the run timed both for, or ""."""
+
+    def times(group):
+        d = t[t.group == f"curvegen/{group}"]
+        return pd.Series(d.value_ns.values, index=d.family.astype(str))
+
+    e, a = times("embedding"), times("verify_accept")
+    both = e.index.intersection(a.index)
+    if both.empty:
+        return ""
+    e, a = e[both], a[both]
+    share = e / a
+    return (
+        f" Accepting a curve ({fmt_time(a.min())} to {fmt_time(a.max())}, "
+        "curvegen/verify_accept) includes the embedding-degree bound, a "
+        "baby-step giant-step search for $q^k = 1 \\bmod r$ with "
+        f"$k \\le 2^{{20}}$, which alone takes {fmt_time(e.min())} to "
+        f"{fmt_time(e.max())} (curvegen/embedding), {100 * share.min():.0f}% to "
+        f"{100 * share.max():.0f}% of it; rejected candidates do not reach it."
+    )
 
 
 def elementary_blocks(elem, elem_fig=None):
@@ -946,6 +1020,14 @@ def analyse(
     }
     elem = elementary(t)
     elem_fig = plot_elementary(elem, out, formats, footer) if len(elem) else {}
+    runs = selection_runs(root)
+    # runs whose curvegen.csv predates proving and its phases have no section
+    runs = runs if "prove_count_s" in runs else None
+    selection_fig = (
+        plot_selection(fastest_method(runs), out, formats, footer)
+        if runs is not None and len(runs)
+        else None
+    )
     t.to_csv(out / "tidy.csv", index=False)
     elem.to_csv(out / "elementary.csv", index=False)
     coverage(t).to_csv(out / "coverage.csv")
@@ -960,6 +1042,8 @@ def analyse(
         elem_fig,
         meta,
         machine_load(root),
+        runs=runs,
+        selection_fig=selection_fig,
     )
     bs.append(("footer", footer or run_name(root, meta)))
     for s in skipped:

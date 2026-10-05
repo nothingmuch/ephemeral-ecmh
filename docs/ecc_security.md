@@ -65,5 +65,7 @@ the cofactor times $r$ is conditional on the primality of $r$.
 
 **Pairing reductions.** The embedding degree of $r$ is checked to exceed
 $2^{20}$, which excludes the reductions of Menezes–Okamoto–Vanstone and
-Frey–Rück to that bound; the degree is not otherwise determined. Anomalous
-curves, of order $q$, are rejected.
+Frey–Rück to that bound; the degree is not otherwise determined. The check, a
+baby-step giant-step search for $q^k = 1 \bmod r$, takes about $2^{11}$ products
+modulo $r$, which the curve-generation benchmarks time alone
+(`curvegen/embedding`). Anomalous curves, of order $q$, are rejected.

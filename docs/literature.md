@@ -49,6 +49,10 @@ the same distinctions.
 
 ### Point counting and curve generation
 
+- `schoof-1995`. Schoof's algorithm and the Elkies–Atkin improvements (SEA):
+  polynomial-time point counting over any finite field. PARI's `ellsea` runs it
+  for the odd-field families, with the Elkies-prime early abort the `pari`
+  module uses.
 - `ansi-x9-62-1998`, `rfc5639`, `baigneres-et-al-2015`,
   `lenstra-wesolowski-2017`. Curves derived from public randomness. X9.62's
   verifiably random curves and Brainpool's verifiably pseudo-random ones hash a
@@ -66,6 +70,9 @@ the same distinctions.
   bound on each block's min-entropy, and the cost to a miner of biasing the
   output by withholding blocks, which is the manipulation this study leaves to
   the protocol.
+- `pari-gp`, `sagemath`. The point-counting and primality oracle for
+  fixtures and the `pari` feature, and the system in which the reference
+  programs under `sage/` are written; Sage counts points through PARI.
 
 ## Hash-to-curve, encodings, ECMH and inversion
 

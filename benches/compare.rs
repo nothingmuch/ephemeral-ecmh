@@ -4,7 +4,7 @@
 //!   nix develop -c cargo bench --bench compare
 //!
 //! Curve fixtures have seed-derived dense parameters from
-//! `tests/common/kats.rs`.
+//! `tests/common/kats.rs`; `curvegen.rs` times their certificate verification.
 //! Most iterations process N synthetic 36-byte items. Criterion records the
 //! iteration time and element throughput; the report normalizes per element.
 //! Ristretto255, libsecp256k1, and XOR-SHA256 provide fixed-group and hash

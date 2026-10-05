@@ -57,6 +57,8 @@
               version = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
               RUSTFLAGS = rustflags;
               CARGO_PROFILE = "bench";
+              cargoExtraArgs = "--locked --features pari";
+              buildInputs = [ pkgs.pari ];
             };
         in
         craneLib.mkCargoDerivation (
@@ -67,6 +69,8 @@
             doInstallCargoArtifacts = false;
             buildPhaseCargoCommand = ''
               cargo bench $cargoExtraArgs --no-run --message-format=json-render-diagnostics >bench.json
+              cargo build $cargoExtraArgs --profile bench --example curvegen_times \
+                --message-format=json-render-diagnostics >example.json
             '';
             installPhaseCommand = ''
               mkdir -p $out/bin

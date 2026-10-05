@@ -302,6 +302,7 @@ def test_both_spellings_name_one_family(old, new):
             "0",
             "find (Rust: AGM + sieve)",
         ),
+        ("curvegen/embedding", "gf2_127", "0", "embedding-degree bound"),
     ],
 )
 def test_curvegen_names_each_family(group, function, parameter, operation):
@@ -703,6 +704,47 @@ def test_addend_equality_splits_matches_from_mismatches(tmp_path):
 
 
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)
+
+
+def test_curve_selection_shows_every_method_and_the_fastest_drawn(tmp_path):
+    phases = "candidate,quick,sieve,count,factor,witness,accept"
+    cols = ",".join(f"prove_{p}_s" for p in phases.split(","))
+    (tmp_path / "curvegen.csv").write_text(
+        "family,method,seed,candidates,prove_counts,find_s,prove_s,verify_s,"
+        + cols
+        + "\n"
+        "gf2_127,agm+sieve,0,30,8,0.01,0.02,0.0001,0,0,0.005,0.012,0,0,0.001\n"
+        "gf2_127,agm+sieve,1,50,10,0.03,0.04,0.0003,0,0,0.01,0.025,0,0,0.001\n"
+        "gf2_127,pari,0,30,30,0.2,0.3,0.0001,0,0,0,0.29,0,0,0.001\n"
+        "weier127,pari+sieve,0,200,20,1.0,1.3,0.0002,0.01,0,0.1,1.1,0.05,0,0.01\n"
+    )
+    runs = br.selection_runs(tmp_path)
+    assert set(br.fastest_method(runs).method) == {"agm+sieve", "pari+sieve"}
+    _, _, table = br.selection_blocks(runs)
+    t = table[1].set_index(["family", "method"])
+    assert t.loc[("gf2_127", "agm+sieve"), "shown"] == "yes"
+    assert t.loc[("gf2_127", "pari"), "shown"] == ""
+    assert t.loc[("gf2_127", "agm+sieve"), "prove"] == "30.0 ms"
+    # 18.5 ms of 30 ms counting
+    assert t.loc[("gf2_127", "agm+sieve"), "counting, of prove"] == "62%"
+    fig = figures.plot_selection(br.fastest_method(runs), tmp_path, ["png"])
+    assert "certify" in fig.alt and (tmp_path / "selection.png").is_file()
+
+
+def test_embedding_share_relates_the_bound_to_acceptance(tmp_path):
+    root = tmp_path / "criterion"
+    for fam, embedding, accept in [("gf2_127", 30e3, 60e3), ("edwards127", 20e3, 80e3)]:
+        write_bench(
+            root, "curvegen/embedding", fam, "0", embedding, embedding, embedding
+        )
+        write_bench(root, "curvegen/verify_accept", fam, "0", accept, accept, accept)
+    # timed only for acceptance: not part of the comparison
+    write_bench(root, "curvegen/verify_accept", "weier127", "0", 1e6, 1e6, 1e6)
+    t = br.tidy(br.load(root)[0])
+    text = br.embedding_share(t)
+    assert "25% to 50%" in text
+    assert "1 ms" not in text and "1.00 ms" not in text
+    assert br.embedding_share(t[t.group != "curvegen/embedding"]) == ""
 
 
 RUN_META = {

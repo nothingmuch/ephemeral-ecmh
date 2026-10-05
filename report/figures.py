@@ -22,8 +22,8 @@ import pandas as pd
 import rules
 from matplotlib.legend_handler import HandlerTuple
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
-from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+from matplotlib.patches import Patch, Rectangle
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter, PercentFormatter
 
 TEXT = "#0b0b0b"
 TEXT_2 = "#52514e"
@@ -780,6 +780,103 @@ def _seeds(d: pd.DataFrame, stem: Path, formats, footer):
         ", on log scales." if log else "."
     )
     return save(fig, stem, formats, alt, footer)
+
+
+# Curve selection, end to end (curvegen.csv).
+
+# the phases curvegen_times records, in search order, in the Tableau 10
+# hues that no family in the figure has; find has no factor or witness phase
+PHASES = [
+    ("candidate", "#9c755f"),
+    ("quick", "#76b7b2"),
+    ("sieve", "#ff9da7"),
+    ("count", "#e15759"),
+    ("factor", "#edc948"),
+    ("witness", "#b07aa1"),
+    ("accept", "#bab0ac"),
+]
+UNTIMED = SURFACE
+
+
+def plot_selection(runs: pd.DataFrame, out: Path, formats, footer="") -> Figure:
+    """Each family's curve selection by one method, a row per seed in runs:
+    finding a curve and proving it, the seeds' mean as a bar and their range
+    as a box; verifying the certificate; and the prover's time by phase."""
+    s = runs.assign(base=[rules.family(f)[1] for f in runs.family])
+    fams = list(s.groupby("family").prove_s.mean().sort_values().index)
+    long = pd.concat(
+        [
+            s.assign(variant=v, value=s[f"{v}_s"] * 1e9)
+            for v in ("find", "prove", "verify")
+        ]
+    )
+    d = (
+        long.groupby(["family", "variant", "base"])
+        .value.agg(value_ns="mean", value_lo_ns="min", value_hi_ns="max")
+        .reset_index()
+    )
+    fig = plt.figure(figsize=(FIG_W, 1.2 + 0.42 * len(fams)), layout="constrained")
+    search, check, share = fig.subplots(
+        1, 3, sharey=True, gridspec_kw={"width_ratios": [2.2, 1.2, 1.6]}
+    )
+    pair_bars(search, d, fams, ["find", "prove"], True, row="family")
+    titled(search, "find (dark) and prove (light)", "per seed: mean bar, range box")
+    pair_bars(check, d, fams, ["verify"], True, row="family")
+    # a narrow panel: decades only
+    check.xaxis.set_major_locator(LogLocator(base=10, subs=(1.0,)))
+    titled(check, "verify the certificate")
+    mean = s.groupby("family").mean(numeric_only=True)
+    for i, f in enumerate(fams):
+        shares = [
+            (mean.at[f, f"prove_{p}_s"] / mean.at[f, "prove_s"], c)
+            for p, c in PHASES
+            if f"prove_{p}_s" in mean
+        ]
+        shares.append((1 - sum(w for w, _ in shares), UNTIMED))
+        left = 0.0
+        for w, c in shares:
+            if w > 0:
+                share.barh(
+                    -i,
+                    w,
+                    left=left,
+                    height=0.7,
+                    color=c,
+                    edgecolor=TEXT_2 if c == UNTIMED else SURFACE,
+                    linewidth=0.6,
+                )
+                left += w
+    share.set_xlim(0, 1)
+    share.xaxis.set_major_formatter(PercentFormatter(1))
+    share.tick_params(axis="y", length=0)
+    titled(share, "the prover's time by phase")
+    present = [
+        (p, c) for p, c in PHASES if (s.get(f"prove_{p}_s", pd.Series([0])) > 0).any()
+    ]
+    fig.legend(
+        [Patch(facecolor=c) for _, c in present]
+        + [Patch(facecolor=UNTIMED, edgecolor=TEXT_2)],
+        [p for p, _ in present] + ["outside the phases"],
+        loc="outside lower center",
+        ncol=len(present) + 1,
+    )
+    methods = ", ".join(sorted(set(s.method)))
+    fig.suptitle(
+        f"Curve selection, end to end, over {s.seed.nunique()} seeds ({methods})",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = (
+        "Curve selection per family on log time axes: the mean time to find a "
+        "curve (dark) and to find and certify one (light), with a box from the "
+        "fastest to the slowest seed; the mean time to verify the certificate; "
+        "and, as shares of the mean proving time, the time spent deriving "
+        "candidates, in quick rejection, sieving, point counting, factoring, "
+        "rejection witnesses and acceptance."
+    )
+    return save(fig, out / "selection", formats, alt, footer)
 
 
 # The per-item cost of insertion.

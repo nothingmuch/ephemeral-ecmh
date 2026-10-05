@@ -244,11 +244,27 @@ a rejected composite. Direct selection can proceed without those witnesses;
 the prover reports failure rather than skipping an uncertifiable candidate.
 Whenever certification succeeds, its selected index agrees with direct
 selection under the same candidate criteria and filters that reject only
+candidates failing those criteria.
 
+The families differ in the cost of point counting. Two implementations count
+points here. PARI/GP [pari-gp] is a computer algebra system for number theory: a
+C library, PARI, with an interpreter, GP. The optional `pari` feature links the
+library and calls it for point counting and integer factorization
+([`curvegen::pari`](../src/curvegen/pari.rs)). SageMath (Sage) [sagemath], in
+which the reference programs are written, also counts points through PARI. The
 other implementation is this repository's own, in Rust, for binary fields only;
 
 (below $2^{16}$ in the 122-bit scripts, without a bound in the 109-bit one).
+Without PARI, the Rust prover reproduces the indices and orders of these
+certificates and the 122-bit certificates byte for byte; with PARI supplying the
+factors, it reproduces the 109-bit certificates byte for byte as well.
 
+Over prime fields, the corresponding method is the Schoof–Elkies–Atkin algorithm
+[schoof-1995], which requires modular polynomials. The repository does not
+implement it: prime-field and $\mathrm{GF}(p^2)$ curves are counted by PARI,
+which handles curves with complex multiplication by a small discriminant
+separately before falling back to it. A participant in a prime-field namespace
+who does not run PARI or an equivalent system must therefore rely on another
 party's certificate to establish which curve is in use, whereas a binary curve
 
 probability about $2^{-52}$ per epoch: 65 isogeny classes of order $2r$, against

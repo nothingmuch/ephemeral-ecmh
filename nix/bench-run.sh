@@ -46,7 +46,7 @@
 # Nothing builds while anything is timed, and the suites run serially:
 # don't build or bench anything else on the machine meanwhile.
 
-default_suites=(compare group agm sieve)
+default_suites=(compare group agm sieve curvegen)
 profile=quick
 suites=()
 while (($#)); do
@@ -73,9 +73,11 @@ done
 case $profile in
 quick)
   profile_args=()
+  curvegen_seeds=4
   ;;
 full)
   profile_args=(--warm-up-time 3 --measurement-time 5 --sample-size 100 --nresamples 100000)
+  curvegen_seeds=16
   ;;
 *)
   echo "bench-run: unknown profile $profile; quick or full" >&2
@@ -326,6 +328,13 @@ for s in "${suites[@]}"; do
   fi
   meta
 done
+
+# with curvegen, the searches too: timed once each, outside criterion
+if [[ " ${suites[*]} " == *" curvegen "* ]]; then
+  echo "bench-run: curvegen searches" >&2
+  during "curvegen searches"
+  "$bins/bin/curvegen_times" "$run/curvegen.csv" "${CURVEGEN_SEEDS:-$curvegen_seeds}" 2>&1 | tee "$run/log/curvegen_times"
+fi
 
 idle after
 kill "$sampler"
