@@ -205,6 +205,7 @@ def test_each_published_run_is_a_chapter_of_evidence(tmp_path):
     summary = (src / "SUMMARY.md").read_text()
     assert (
         "# Evidence\n\n- [G](g.md)\n"
+        "- [Summary across runs](summary-across-runs/report.md)\n"
         "- [Benchmark run m4-native](results/m4-native/report.md)\n"
         "- [Benchmark run x86-native](results/x86-native/report.md)\n\n# Reference"
     ) in summary

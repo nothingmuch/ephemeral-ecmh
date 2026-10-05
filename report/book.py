@@ -24,6 +24,7 @@ from pathlib import Path
 
 import bench_report
 import bibliography
+import summary as cross_run
 
 FRONTMATTER = re.compile(r"\A---\n.*?\n---\n+", re.DOTALL)
 LINK = re.compile(r"\]\(([^)\s]+)\)")
@@ -181,6 +182,15 @@ def assemble(root: Path, out: Path, repository: str, rev: str) -> None:
     index = (docs / "index.md").read_text()
     recorded = runs(root)
     published = []
+    if recorded:
+        page = "summary-across-runs/report.md"
+        text = cross_run.chapter(
+            [cross_run.Run.read(run) for run in recorded], src / "summary-across-runs"
+        )
+        (src / page).write_text(text)
+        published.append(
+            f"* [Summary across runs]({page}) - Measurements, batching, build comparisons and selection cost."
+        )
     published.extend(run_chapter(run, src) for run in recorded)
     index = with_entries(index, EVIDENCE, published)
     (src / "SUMMARY.md").write_text(summary(index))
