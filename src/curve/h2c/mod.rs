@@ -70,9 +70,10 @@ pub trait Map<P> {
     fn map(&self, c: u128) -> P;
 }
 
-/// Apply `map` to the low 128-bit half of `h.digest(msg, 0)`.
+/// Apply `map` to the low 128-bit half of `h.digest(msg, 0)`, which
+/// `Salted::half` evaluates alone.
 pub fn map1<P, M: Map<P>>(m: &M, h: &Salted, msg: &[u8]) -> P {
-    m.map(halves(&h.digest(msg, 0))[0])
+    m.map(h.half(msg, 0, 0))
 }
 
 /// Return the first point accepted by the candidate and lift operations in

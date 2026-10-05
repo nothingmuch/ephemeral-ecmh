@@ -92,8 +92,9 @@ $\mathrm{Map}(-u) = -\mathrm{Map}(u)$ for simplified SWU and Elligator 2
 [rfc9380, bernstein-et-al-2013]; to exploit one before the salt, two identifiers
 must agree up to sign as field elements in both halves, about 254 bits. The
 field is therefore chosen by cost: $\mathrm{GF}(2^{127})$ where the target has
-carry-less multiplication, $mathbb{F}_{2^{127} - 1}$ where it does not. The
-attempts of a try-and-increment map after the
+carry-less multiplication, $\mathbb{F}_{2^{127} - 1}$ where it does not, with
+Poly1305's $\mathbb{F}_{2^{130} - 5}$ measured as a comparison
+([`hash`](../src/hash.rs)). The attempts of a try-and-increment map after the
 first use further keys over the same identifier, so their candidates are linear
 in the first attempt's rather than independent; the deterministic maps, Pornin's
 [pornin-2023], Elligator 2 and simplified SWU, use only the first. For the
@@ -102,7 +103,11 @@ indefinitely only if their schedules agree entirely, which after the salt
 requires equal seeds, about $2^{64}$ identifiers. Schedules that agree on a
 prefix only delay decoding, at a cost that does not depend on the seed's width;
 that is a property of the sketch, not of its checksum. The implementation
-digests items with salted SHA-256 for both uses.
+digests items with salted SHA-256 for both uses by default.
+[`Riblt::projected`](../src/riblt.rs) keys cells by the items' identifiers and
+replaces both digests by projections, each under keys of its own and in a field
+chosen for its cost; both are benched ([Costs by
+lifetime](methodology.md#costs-by-lifetime)).
 
 What need not be uniform on the group, or indifferentiable from a random oracle,
 is the map from digests to points: relations must be hard to find within the

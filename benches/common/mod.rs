@@ -5,6 +5,8 @@
 #![allow(dead_code)]
 
 pub mod families;
+pub mod h2c;
+pub mod ristretto;
 
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput};

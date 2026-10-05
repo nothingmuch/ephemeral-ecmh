@@ -19,6 +19,10 @@ crrl = { version = "0.9.0", default-features = false, features = [
 ] }
 p3-field = "0.8"
 p3-goldilocks = "0.8"
+# the RIBLT mapping's generators (src/riblt.rs): xoshiro256++ by default,
+# ChaCha8 for comparison
+rand_chacha = { version = "0.9.0", default-features = false }
+rand_xoshiro = "0.7.0"
 sha2 = "0.11"
 
 [dev-dependencies]
@@ -28,8 +32,11 @@ criterion = { version = "0.8.2", default-features = false, features = [
   "rayon",
 ] }
 curve25519-dalek = { version = "5.0.0", features = ["digest"] }
+# the reference for hash.rs's F_(2^130 - 5)
+poly1305 = "0.8"
 proptest = "1"
 secp256k1 = "0.33.1"
+siphasher = "1"
 
 [[bench]]
 name = "compare"
@@ -61,6 +68,10 @@ harness = false
 
 [[bench]]
 name = "group"
+harness = false
+
+[[bench]]
+name = "riblt"
 harness = false
 
 [[bench]]

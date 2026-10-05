@@ -27,8 +27,8 @@ which holds exactly one item, and uses the checksum to recognize purity.
 
 In the construction studied here the checksum is an ECMH: a coded symbol holds
 the signed sum of the items' salted hashes to an elliptic curve, in place of the
-XOR of fixed-width hashes. The item field remains the XOR of the item bytes. A
-variant in which each item is itself a curve point,
+XOR of fixed-width hashes. The item field remains the XOR of the item bytes
+([Workload](workload.md)). A variant in which each item is itself a curve point,
 a 128-bit identifier recovered from the point sum, is not implemented.
 
 ## Linearity of the checksum

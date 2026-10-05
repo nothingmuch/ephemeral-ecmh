@@ -71,6 +71,10 @@ def theme():
         {
             "svg.hashsalt": "bench-report",
             "svg.fonttype": "none",
+            # variables are mathematical italic letters, not mathtext, whose
+            # SVG text names DejaVu Sans without a fallback; DejaVu Serif has
+            # the letters
+            "font.family": ["sans-serif", "DejaVu Serif"],
             "font.size": FONT,
             "axes.edgecolor": TEXT_2,
             "axes.facecolor": SURFACE,
@@ -465,6 +469,8 @@ def plot_layer(
     stem = out / slug(layer)
     if layer in ("field", "group ops"):
         return None
+    if layer == "RIBLT workload":
+        return _riblt(d, stem, formats, footer)
     sweep = (t.group == "h2c").any()
     if layer == "hash to curve" and sweep:
         return _hash_sweep(d, stem, formats, footer)
@@ -519,6 +525,11 @@ def _layer_bars(d: pd.DataFrame, layer: str, stem: Path, formats, footer):
         "operation" + (", on a log scale" if log else "") + "."
     )
     return save(fig, stem, formats, alt, footer)
+
+
+def _param(label: str, key: str) -> float | None:
+    m = re.search(rf"(?:^|[/,]){key}=(\d+)", label)
+    return float(m.group(1)) if m else None
 
 
 def markers(d: pd.DataFrame, families: list) -> dict:
@@ -624,6 +635,89 @@ AXES = {
     "m": "sketch cells m, log scale",
     "d": "set difference d (sketch of 2d cells or more), log scale",
 }
+
+
+def _riblt(d: pd.DataFrame, stem: Path, formats, footer):
+    d = d.assign(
+        m=[_param(s, "m") for s in d.parameter],
+        d=[_param(s, "d") for s in d.parameter],
+        unbatched=[",batch=false" in s for s in d.parameter],
+        prefiltered=["prefilter=true" in s for s in d.parameter],
+    )
+    bases = dict(zip(d.family, d.base))
+    enc = d[d.operation == "encode (hash + cells)"]
+    # ranked at a size every family measures: spot-checked families have one
+    sizes = [set(g.m) for _, g in enc.groupby("family")]
+    shared = set.intersection(*sizes) if sizes else set()
+    at = enc[enc.m == max(shared)] if shared else enc
+    families = per_base(leaders(at), bases)
+    peel = d.operation.str.startswith("peel")
+    panels = [
+        ("encode, per item", d[d.operation == "encode (hash + cells)"], "m", None),
+        ("cell updates, per item", d[d.operation == "cell updates"], "m", None),
+        (
+            (
+                "peel, per difference, no prefilter:\n"
+                "every cell of count ±1 is hashed and checked"
+            ),
+            d[peel & ~d.prefiltered],
+            "d",
+            "unbatched",
+        ),
+        (
+            (
+                "peel, per difference, prefilter: a cell whose\n"
+                "key does not map to it is skipped unhashed"
+            ),
+            d[peel & d.prefiltered],
+            "d",
+            "unbatched",
+        ),
+    ]
+    panels = [p for p in panels if p[1].family.isin(families).any()]
+    nrow = -(-len(panels) // 2)
+    fig = plt.figure(figsize=(FIG_W, 3.0 * nrow + 1.2), layout="constrained")
+    axes = fig.subplots(nrow, 2, squeeze=False)
+    mark = markers(d, families)
+    for ax, (title, p, x, alone) in zip(axes.flat, panels):
+        lines(ax, p, x, families, alone, mark)
+        ax.set_title(title, loc="left", color=TEXT)
+        ax.set_xlabel(AXES[x])
+    for ax in list(axes.flat)[len(panels) :]:
+        ax.set_visible(False)
+    extra = [
+        (
+            Line2D([], [], color=TEXT_2, linestyle="--", linewidth=1.4),
+            "dark, dashed: peel hashing one candidate at a time",
+        ),
+        (
+            Line2D([], [], color=color(BASELINE, True), linewidth=2),
+            "light: peel hashing each pass's candidates together",
+        ),
+    ]
+    family_legend(
+        fig, d, [f for f in families if (d.family == f).any()], extra, light=True
+    )
+    shows = of(len(families), d.family.nunique()) or "all shown"
+    fig.suptitle(
+        f"RIBLT workload, time per item or difference ({shows})",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = (
+        "RIBLT workload on log axes: time per item to encode and to update "
+        "cells against the number of cells m, and per difference to peel "
+        "against the number of differences d, the items in only one of the two "
+        "sets. Peeling takes cells whose count is +1 or -1 as candidates and "
+        "checks each by hashing its key; the prefilter first rejects a candidate "
+        "whose key's mapping does not include its cell. Each family's dark line "
+        "(dashed in the peel panels) hashes candidates one at a time and its "
+        "light line hashes each pass's candidates together; the fastest encoder "
+        "of each base family and the XOR baseline, intervals as bands."
+    )
+    return save(fig, stem, formats, alt, footer)
 
 
 def _hash_sweep(d: pd.DataFrame, stem: Path, formats, footer):
@@ -882,3 +976,126 @@ def plot_selection(runs: pd.DataFrame, out: Path, formats, footer="") -> Figure:
 # The per-item cost of insertion.
 
 # Tableau hues that no family is drawn in, so that a part is not read as one
+# a load's columns name it: "{key} map_ns" is the map digest and walk below m
+PARTS = [
+    ("hash", "hash_ns", "#76b7b2"),
+    ("prepare", "prepare_ns", "#ff9da7"),
+    ("map digest and indices", "{key} map_ns", "#edc948"),
+    ("\N{MATHEMATICAL ITALIC SMALL K} additions", "add_ns", "#bab0ac"),
+]
+
+
+def plot_insert(p: pd.DataFrame, loads, out: Path, formats, footer="") -> Figure:
+    """Each family's cheapest compatible batched recipe, split into its
+    parts; the references, which have no batched hash, hash one at a time."""
+    ref = p.family.astype(str).isin(rules.HASH_IS_ADDEND)
+    p = p[(p.hashing == "batched") | ref]
+    mid = loads[len(loads) // 2].key
+    p = p.loc[p.groupby("family", observed=True)[mid].idxmin()]
+    order = [c for _, rows in rules.CURVE_GROUPS for c, _ in rows]
+    p = p.assign(family=p.family.astype(str))
+    p = p[p.family.isin(order)].sort_values("family", key=lambda s: s.map(order.index))
+    lead = p.set_index("family").rename(
+        columns={
+            mid: "value_ns",
+            f"{mid} lo": "value_lo_ns",
+            f"{mid} hi": "value_hi_ns",
+        }
+    )
+    families = shown(lead[["value_ns", "value_lo_ns", "value_hi_ns"]])
+    p = p[p.family.isin(families)]
+    unbatched = set(rules.HASH_IS_ADDEND)
+    labels = [f"{f} (one at a time)" if f in unbatched else f for f in p.family]
+    totals = [p[ld.key] for ld in loads]
+    log = max(t.max() for t in totals) > LOG_RATIO * min(t.min() for t in totals)
+    mapped = p[f"{loads[0].key} map_ns"].notna().any()
+    parts = [x for x in PARTS if mapped or "map" not in x[1]]
+    ncol = 2
+    nrow = -(-len(loads) // ncol)
+    fig = plt.figure(
+        figsize=(FIG_W, (0.8 + 0.3 * len(p)) * nrow + 0.8), layout="constrained"
+    )
+    axes = fig.subplots(nrow, ncol, squeeze=False, sharey=True)
+    y = [-i for i in range(len(p))]
+    for ax, (key, _, k) in zip(axes.flat, loads):
+        left = [0.0] * len(p)
+        for name, col, colour in parts:
+            col = col.format(key=key)
+            w = [(k if col == "add_ns" else 1) * v for v in p[col].fillna(0)]
+            ax.barh(
+                y,
+                w,
+                left=left,
+                height=0.7,
+                color=colour,
+                edgecolor=SURFACE,
+                linewidth=0.6,
+            )
+            left = [a + b for a, b in zip(left, w)]
+        for yi, total in zip(y, left):
+            ax.text(
+                total * (1.12 if log else 1.02),
+                yi,
+                fmt_time(total),
+                va="center",
+                fontsize=SMALL,
+                color=TEXT_2,
+            )
+        axis(ax, log)
+        if log:
+            ax.set_xlim(p.hash_ns.min() / 1.6, max(left) * 3.5)
+        else:
+            ax.set_xlim(0, max(left) * 1.3)
+        ax.set_yticks(y, labels)
+        ax.tick_params(axis="y", length=0)
+        ax.set_title(load_title(key, k), loc="left", color=TEXT)
+    for ax in list(axes.flat)[len(loads) :]:
+        ax.set_visible(False)
+    fig.legend(
+        [Patch(facecolor=c) for _, _, c in parts],
+        [n for n, _, _ in parts],
+        loc="outside lower center",
+        ncol=len(parts),
+    )
+    total = lead.index.nunique()
+    fig.suptitle(
+        "Inserting an item into a sketch of m cells: a hash, "
+        + ("the cells it maps to, " if mapped else "")
+        + "and an addition to each of those k cells "
+        f"({of(len(families), total) or 'all shown'})",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = (
+        "The cost of inserting an item into a RIBLT as stacked bars of hash, "
+        "prepare, "
+        + (
+            "the map digest and the mapping's indices below m, the same for "
+            "every family, "
+            if mapped
+            else ""
+        )
+        + "and k point additions, a panel per number of coded symbols m, "
+        "k = 2(H_(m+1) - 1) being the number of symbols an item is added to on "
+        "average; the lowest compatible batched recipe per family is shown. "
+        "Preparation already included in a map has no separate segment. "
+        + (
+            "ristretto255 and the XOR baseline have no batched hash: they hash "
+            "one item at a time and add the hash output as is. "
+            if unbatched & set(p.family)
+            else ""
+        )
+        + ("The time axis is logarithmic. " if log else "")
+        + "All recipes and individual hashing are in the grids."
+    )
+    return save(fig, out / "insert", formats, alt, footer)
+
+
+def load_title(key: str, k: float) -> str:
+    """A panel's load: a RIBLT's coded symbols m and the symbols k an item
+    is added to among them, or k alone."""
+    if key.startswith("m="):
+        return f"sketch of m = {key[2:]} cells, k = {k:.2f} per item"
+    return f"k = {k:g} cells per item"

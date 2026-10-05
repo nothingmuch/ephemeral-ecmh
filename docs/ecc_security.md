@@ -90,3 +90,56 @@ Frey–Rück to that bound; the degree is not otherwise determined. The check, a
 baby-step giant-step search for $q^k = 1 \bmod r$, takes about $2^{11}$ products
 modulo $r$, which the curve-generation benchmarks time alone
 (`curvegen/embedding`). Anomalous curves, of order $q$, are rejected.
+
+**Mapping-seed collisions in the RIBLT.** This weakness belongs to the RIBLT's
+mapping, not to the checksum, and lies outside the research question; it is
+stated because the RIBLT comparison rows use both mappings. The cells an item
+maps to are determined by its digest under the mapping tag
+([`riblt`](../src/riblt.rs)), through the gap law of the reference
+implementation [yang-gilad-alizadeh-2024]. Two items whose generators start in
+the same state map to the same cells in the same order for every prefix of the
+coded symbols. If both lie in the symmetric difference, every cell they map to
+holds both: after the other items are peeled, its count is even and its checksum
+is the sum or difference of their two points, so no cell containing them becomes
+pure and neither item is recovered, unless a checksum collision or false
+singleton occurs independently. A finite peel returns failure; a rateless
+decoder that requests coded symbols until decoding succeeds does not terminate.
+No checksum collision is required, and the group's work factor does not enter.
+The reference implementation seeds a 64-bit multiplicative generator with the
+item's 64-bit hash. If the mapping input is public, two items with equal seeds
+are found by a birthday search over about $2^{32}$ digests, below the rho cost
+of every curve family compared, and an item sharing a chosen item's seed costs
+about $2^{64}$. Between honest items, a coincidence has probability about
+$n^2 / 2^{65}$ for $n$ items in the difference. Buchanan's implementation
+[riblt-ecmh] replaces the generator with ChaCha8, citing this case
+([yangl1996/riblt#3](https://github.com/yangl1996/riblt/issues/3), comment of
+2026-02-24). The implemented default seeds xoshiro256++ with the whole 256-bit
+map digest. Its state is the digest itself, so equal generator states require
+equal digests, at a cost of about $2^{128}$ for a pair, with one exception in
+$2^{256}$: the all-zero digest is reseeded from SplitMix64 and shares a state
+with the one digest that encodes that state. Since the generator runs through
+its $2^{256} - 1$ nonzero states in one cycle, distinct states yield distinct
+sample streams; whether two streams place their items in the same cells of a
+given table is the gap recurrence's matter, as for any generator. The generator
+need not be cryptographic: the digest is already a salted hash, and the mapping
+is public. The gap law is unchanged, and ChaCha8 (`ChaCha8`) and the 64-bit
+generator (`Mcg64`) remain as comparisons. Nor does the seed need 256 bits: a
+128-bit seed puts equal seeds at about $2^{64}$ identifiers after the salt.
+`Riblt::projected` seeds the generator with the whole projection of the item's
+identifier under keys of the mapping's own ([Adversary](problem.md#adversary)),
+in a field chosen for its cost apart from the checksum's. Its halves are a
+linear map of the identifier's halves under two keys, invertible unless a key
+is zero or the two are equal, so equal seeds require equal identifiers; under
+$\mathbb{F}_{2^{130} - 5}$, whose halves are truncated to 128 bits, they
+require a coincidence of 256 bits. Either costs about $2^{128}$. The
+projection's cost is benched, but it is not the default. The mapping need not
+depend only on the public salt
+of the checksum: a schedule keyed by a secret shared between the peers prevents
+a third party from searching offline for equal seeds, even with a 64-bit
+generator, while the checksum's namespace remains public. The coincidence
+between honest items is unchanged by the key, since it does not depend on who
+can compute seeds. Schedules that agree only on a prefix delay a rateless
+decoder without stalling it; that delay, and any other a third party induces
+through the schedule, concerns the sketch rather than its checksum and is not
+assessed ([Questions outside this
+study](problem.md#questions-outside-this-study)).

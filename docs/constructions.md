@@ -40,4 +40,5 @@ map is not indifferentiable from a random oracle, which the checksum does not
 require; the [Adversary](problem.md#adversary) section states what it does
 require, and a sufficient condition that is not established for these maps or
 for try-and-increment. The fixed-curve references use the maps named by their
-benchmarks.
+benchmarks. The RIBLT benchmarks hash each family by the construction its run
+measured cheapest ([The RIBLT plan](methodology.md#the-riblt-plan)).

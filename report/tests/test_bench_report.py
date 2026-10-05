@@ -25,6 +25,7 @@ LAYERS = [
 
 # the workload, and the smaller-field variants the rules must name
 EXTRA = [
+    ("riblt.encode", "binary.109", "m=150,n=3500", 3500),
     ("add", "gf2_109/extended += affine, 8 accumulators", None, 1024),
     ("add", "edwards107/+= cached, 8 accumulators", None, 1024),
     ("hash_to_curve", "weier107/try-and-increment", None, 1024),
@@ -341,7 +342,27 @@ def test_current_suite_is_fully_classified(table):
             ("hash to curve", "gf2_127-lambda", "hash to curve", "batch"),
         ),
         # riblt.peel's parameters say whether it peels in batches
+        (
+            "riblt.peel/binary.127/d=100,m=200,prefilter=true,batch=false",
+            ("RIBLT workload", "gf2_127", "peel, per difference", "per-element"),
+        ),
+        (
+            "riblt.peel/binary.127/d=100,m=200,prefilter=false,batch=true",
+            ("RIBLT workload", "gf2_127", "peel, per difference", "batch"),
+        ),
         # the two XOR baselines are told apart by their hash
+        (
+            "riblt.encode/xor-siphash.64/m=150,n=3500",
+            ("RIBLT workload", "xor-siphash", "encode (hash + cells)", "per-element"),
+        ),
+        (
+            "riblt.encode/edwards.128/m=150,n=3500",
+            ("RIBLT workload", "twisted128", "encode (hash + cells)", "per-element"),
+        ),
+        (
+            "riblt.encode/xor-sha256.64/m=150,n=3500",
+            ("RIBLT workload", "xor", "encode (hash + cells)", "per-element"),
+        ),
         # binary122: GLS constants, λ accumulators, and both
         (
             "group.add/binary.122/mode=latency",
@@ -422,6 +443,10 @@ def test_current_suite_is_fully_classified(table):
             "h2c_parts/gf2_122-gls t&i/2. test Tr(b/x) (rejected)",
             ("hash to curve", "gf2_122-gls", "steps: gf2_122-gls t&i", "per-element"),
         ),
+        (
+            "h2c.id/binary-u.127/proj=fp130,h2c=pornin-addend,mode=batch,n=1024",
+            ("hash to curve", "gf2_127-u", "ID to addend", "batch"),
+        ),
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
     ],
@@ -501,7 +526,7 @@ def test_quadratic_curve_identifiers(spelling, curve, base, field, bits, group):
         ("binary-u.122-gls", "gf2_122-gls-u", "gf2_122", 122),
     ],
 )
-@pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
+@pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c", "riblt.cells"])
 def test_unscaled_binary_families_are_distinct(spelling, curve, field, bits, group):
     f = rules.classify(group, spelling + "/mode=throughput", None, True)
     assert (f.family, f.base, f.bits) == (curve, "gf2_127", bits)
@@ -513,7 +538,7 @@ def test_unscaled_binary_families_are_distinct(spelling, curve, field, bits, gro
 
 @pytest.mark.parametrize("acc", rules.ACCUMULATORS)
 @pytest.mark.parametrize("bits, gls", rules.BINARY)
-@pytest.mark.parametrize("group", ["group.add", "h2c"])
+@pytest.mark.parametrize("group", ["group.add", "h2c", "riblt.peel"])
 def test_binary_spellings_keep_their_width_and_representation(acc, bits, gls, group):
     f = rules.classify(group, f"binary{acc}.{bits}{gls}/mode=throughput", None, True)
     assert (f.family, f.base, f.bits) == (f"gf2_{bits}{gls}{acc}", "gf2_127", bits)
@@ -533,6 +558,64 @@ def test_every_spelling_names_a_listed_family():
     assert set(rules.FAMILIES) <= set(rules.CURVES) | set(rules.FIELDS) | set(
         rules.UNGROUPED
     )
+
+
+@pytest.mark.parametrize(
+    "group, function, family, operation",
+    [
+        (
+            "riblt.encode",
+            "ristretto255/m=150,n=3500",
+            "ristretto255",
+            "encode (hash + cells)",
+        ),
+        (
+            "riblt.peel",
+            "ristretto255/d=4,m=10,prefilter=false,batch=false",
+            "ristretto255",
+            "peel, per difference",
+        ),
+        (
+            "riblt.stream",
+            "ristretto255/d=1000",
+            "ristretto255",
+            "rateless encode and decode, per difference",
+        ),
+        (
+            "riblt.stream",
+            "binary.127/d=10,map=mcg64",
+            "gf2_127",
+            "rateless encode and decode, per difference",
+        ),
+        (
+            "riblt.encode",
+            "xor-siphash.64/m=150,n=3500,map=mcg64",
+            "xor-siphash",
+            "encode (hash + cells)",
+        ),
+        ("riblt.mapping", "chacha8/next", "mapping", "mapping, per index"),
+        ("riblt.mapping", "sha256-ctr/item,m=150", "mapping", "mapping, per item"),
+        ("riblt.mapping", "projection-fp130/keys", "mapping", "per-salt keys"),
+        ("riblt.mapping", "salted-sha256/keys", "mapping", "per-salt keys"),
+        (
+            "riblt.mapping",
+            "projection-fp127/digest of id",
+            "mapping",
+            "map digest of an ID",
+        ),
+        (
+            "riblt.encode",
+            "binary.127/m=1350,n=3500,h2c=pornin,proj=fp130,mapproj=gf2_127",
+            "gf2_127",
+            "encode (hash + cells)",
+        ),
+    ],
+)
+def test_rateless_and_mapping_ids_are_classified(group, function, family, operation):
+    f = rules.classify(group, function, None, True)
+    assert (f.layer, f.family, f.operation) == ("RIBLT workload", family, operation)
+    assert f.mode == "per-element"
+    assert br.check_ids([f"{group}/{function}"]) == []
 
 
 def test_explicit_square_throughput_is_present_in_elementary_table(tmp_path):
@@ -640,12 +723,38 @@ def test_classify_total_without_throughput():
     )
 
 
+def test_unclassified_ids_are_an_error(tmp_path):
+    root = write_tree(ROWS, tmp_path / "criterion")
+    odd = [
+        ("mystery", "gf2/thing"),  # no layer
+        ("field", "fq/mul"),  # no family
+        ("riblt.encode", "binary.131/m=150,n=3500"),  # no such width
+        ("field", "gf2_127/frobnicate"),  # no operation
+    ]
+    for g, f in odd:
+        write_bench(root, g, f, None, 90.0, 100.0, 110.0, {"Elements": 1})
+    with pytest.raises(SystemExit, match="4 benchmark ids match no rule") as err:
+        br.report(root, tmp_path / "out", formats=("svg",))
+    for g, f in odd:
+        assert f"{g}/{f}" in str(err.value)
+    assert not (tmp_path / "out").exists()
+
+
 IDS = Path(__file__).parent / "fixtures" / "ids-2026-10-03.tsv"
 
 
 def ids() -> list[list[str]]:
     lines = IDS.read_text().splitlines()
     return [line.split("\t") for line in lines if not line.startswith("#")]
+
+
+def test_every_id_of_a_full_run_is_classified():
+    rows = ids()
+    assert len(rows) > 700
+    for group, function in rows:
+        f = rules.classify(group, function, None, True)
+        assert rules.OTHER not in (f.layer, f.family), (group, function)
+        assert f.op_rank < len(rules.OPERATIONS), (group, function)
 
 
 def test_listed_ids_are_checked_before_a_run(monkeypatch):
@@ -665,10 +774,258 @@ def test_listed_ids_are_checked_before_a_run(monkeypatch):
         br.main(["--check-ids"])
 
 
+def test_coverage_shows_what_was_not_measured(rendered):
+    out, t = rendered
+    c = br.coverage(t)
+    assert c.loc["gf2_127", "prepare"] == 2  # alone and batched
+    assert c.loc["gf2_127", "equals addend"] == 0
+    assert c.loc["gf2_109", "RIBLT, encode"] == 1
+    assert (c.loc["twisted64x2"] == 0).all()
+    rows = {r.label: r for r in br.coverage_grid(c).rows()}
+    assert rows["gf2_127"].values["prepare"] == 2
+    assert "equals addend" not in rows["gf2_127"].values
+    assert rows["twisted64x2"].values == {}
+    md = (out / "report.md").read_text()
+    assert "## Coverage" in md and "| twisted64x2 (" in md
+    assert (out / "coverage.csv").read_text().startswith("family,hash to curve,")
+
+
+def test_report_files(rendered):
+    out, t = rendered
+    md, page = (out / "report.md").read_text(), (out / "report.html").read_text()
+    # field and group operations are drawn once, in the elementary figures
+    drawn = [layer for layer in LAYERS if layer not in ("field", "group ops")]
+    for name in [figures.slug(layer) for layer in drawn + ["RIBLT workload"]] + [
+        "elementary-field",
+        "elementary-group",
+    ]:
+        assert (out / f"{name}.svg").exists(), name
+        assert f"]({name}.svg)" in md and f'src="{name}.svg"' in page
+    assert not (out / "field.svg").exists() and not (out / "group-ops.svg").exists()
+    # every benchmark appears in the tables
+    for label in t.label:
+        assert br._md_cell(label) in md
+    # a raw <Sha512> would render as an unknown HTML tag, i.e. nothing
+    assert "hash_from_bytes&lt;Sha512&gt;" in md and "<Sha512>" not in md
+
+
 def test_svg_is_deterministic(rendered, tmp_path):
     out, t = rendered
     br.plot_layer(t, "digest", tmp_path, ("svg",))
     assert (tmp_path / "digest.svg").read_bytes() == (out / "digest.svg").read_bytes()
+
+
+def test_riblt_figure_with_a_family_missing_from_a_panel(rendered, tmp_path):
+    # a spot-checked family lacks the sweeps the encode leaders have
+    _, t = rendered
+    w = t.layer == "RIBLT workload"
+    enc = t[w & (t.operation == "encode (hash + cells)")]
+    other = t[~t.family.isin(enc.family) & t.family.str.startswith("gf2_")].iloc[0]
+    cells = enc.assign(operation="cell updates", family=other.family, base=other.base)
+    br.plot_layer(pd.concat([t, cells]), "RIBLT workload", tmp_path, ("svg",))
+    assert (tmp_path / f"{figures.slug('RIBLT workload')}.svg").exists()
+
+
+def test_riblt_cost(rendered):
+    out, t = rendered
+    c = br.riblt_cost(t).set_index(["family", "hashing"])
+    gf2 = c.loc[("gf2_127", "batched")]
+    assert gf2["hash"] == "gf2/try-and-increment, batched"
+    assert gf2["add"] == "gf2/extended += extended, 8 accumulators"
+    k20 = br.mapping_degree(20)
+    assert gf2["m=20"] == pytest.approx(gf2.hash_ns + k20 * gf2.add_ns)
+    assert gf2["m=5"] == pytest.approx(96.94 + 2.9 * 14.36, abs=0.1)
+    # The minimum is chosen across TAI and comparison maps.
+    candidates = t[
+        (t.family == "gf2_127")
+        & t.layer.isin(["hash to curve", rules.EXPERIMENTAL])
+        & (t["mode"] == "per-element")
+    ]
+    assert c.loc[("gf2_127", "one at a time"), "hash_ns"] == candidates.value_ns.min()
+    assert (
+        c.loc[("edwards127", "one at a time"), "add"]
+        == "edwards/+= cached, 8 accumulators"
+    )
+    # combine_keys sums the whole batch: not an add, and secp256k1 has no other
+    assert "secp256k1" not in {f for f, _ in c.index}
+    assert ("edwards107", "one at a time") in c.index
+    assert ("weier107", "one at a time") not in c.index  # no add bench
+    assert {f for f, _ in c.index} >= {
+        "xor",
+        "gf2_127",
+        "edwards127",
+        "weier127",
+        "ristretto255",
+    }
+    csv = (out / "riblt_cost_lower_bound.csv").read_text()
+    assert csv.splitlines()[0].endswith("m=5,m=20,m=150,m=1350,m=12150")
+
+
+def test_mapping_degree_is_twice_a_harmonic_tail():
+    ks = [br.mapping_degree(m) for m in br.DEFAULT_MS]
+    assert ks == pytest.approx([2.90, 5.29, 9.20, 13.57, 17.96], abs=0.005)
+    assert [ld.key for ld in br.DEFAULT_LOADS] == [f"m={m}" for m in br.DEFAULT_MS]
+
+
+def test_pipeline_cost(rendered):
+    out, t = rendered
+    c = br.pipeline_cost(t).set_index(["family", "hashing", "recipe"])
+    # only families with group benches: the fixture's EXTRA binary.127, and
+    # gf2_122-lambda, whose only recipe here is its hash to (x, λ); and
+    # ristretto255, a reference. The fixture's XOR add has one accumulator,
+    # no throughput, so XOR has no recipe.
+    assert list(c.index) == [
+        ("gf2_122-lambda", "one at a time", "hash to addend"),
+        ("gf2_122-lambda", "batched", "hash to addend"),
+        ("gf2_127", "one at a time", "hash + prepare"),
+        ("gf2_127", "one at a time", "Pornin x1: hash to addend"),
+        ("gf2_127", "one at a time", "Pornin x2: hash to addend"),
+        ("gf2_127", "batched", "hash + prepare"),
+        ("gf2_127", "batched", "Pornin x1: hash to addend"),
+        ("ristretto255", "one at a time", "hash is the addend"),
+    ]
+    row = c.loc[("gf2_127", "batched", "hash + prepare")]
+    # EXTRA benches take 100 ns per element
+    assert (row.hash_ns, row.prepare_ns, row.add_ns) == (100, 100, 100)
+    assert row["m=20"] == pytest.approx(100 + 100 + br.mapping_degree(20) * 100)
+    fused = c.loc[("gf2_122-lambda", "batched", "hash to addend")]
+    assert pd.isna(fused.prepare_ns)
+    assert fused["m=20"] == pytest.approx(100 + br.mapping_degree(20) * 100)
+    csv = (out / "riblt_cost.csv").read_text().splitlines()[0]
+    assert csv.startswith("family,hashing,recipe,hash_ns,prepare_ns,add_ns,")
+    assert "in the hash" in br.cost_table(c.reset_index()).prepare.tolist()
+    md = (out / "report.md").read_text()
+    assert "<details><summary>Lower bound, every family</summary>" in md
+
+
+def test_pipeline_cost_reads_one_benchmark_per_term(tmp_path):
+    root = tmp_path / "criterion"
+    for g, f in [
+        ("h2c", "binary.127/mode=indep"),
+        ("group.prepare", "binary.127/mode=indep"),
+        ("group.add", "binary.127/mode=throughput"),
+        ("group.add", "binary.127/mode=throughput, again"),
+    ]:
+        write_bench(root, g, f, None, 90.0, 100.0, 110.0, {"Elements": 1})
+    df, _ = br.load(root)
+    with pytest.raises(ValueError, match="gf2_127 add: 2 benchmarks") as err:
+        br.pipeline_cost(br.tidy(df))
+    assert "group.add/binary.127/mode=throughput, again" in str(err.value)
+
+
+def test_elementary(rendered):
+    out, t = rendered
+    e = br.elementary(t).set_index(["operation", "curve"])
+    # the cheapest representation, in the named mode
+    assert (
+        e.loc[("point add, throughput", "gf2_127"), "bench"]
+        == "add/gf2/extended += extended, 8 accumulators"
+    )
+    assert (
+        e.loc[("point add, latency", "edwards127"), "bench"]
+        == "add/edwards/+= cached, 1 accumulator"
+    )
+    assert (
+        e.loc[("field mul, throughput", "fp127"), "bench"]
+        == "field/fp/mul throughput (8 chains)"
+    )
+    assert (
+        e.loc[("hash to curve, batched", "gf2_127"), "bench"]
+        == "hash_to_curve/gf2/try-and-increment, batched"
+    )
+    assert e.loc[("hash to curve, one at a time", "xor"), "bench"].startswith(
+        "hash_to_curve/sha256"
+    )
+    # a variant is its own row, and shares its operation's facet
+    assert e.loc[("hash to curve, batched", "gf2_127"), "facet"] == "hash to curve"
+    # a hash to (x, λ) is a hash and a prepare, not a hash to compare with
+    # the others
+    assert ("hash to curve, batched", "gf2_122-lambda") not in e.index
+    assert (
+        e.loc[("hash to addend, batched", "gf2_122-lambda"), "bench"]
+        == "hash_to_curve/gf2_122-lambda/try-and-increment to (x, λ), batched"
+    )
+    # field rows are per field, not repeated per curve
+    assert ("field mul, throughput", "edwards127") not in e.index
+    assert ("point add, throughput", "fp127") not in e.index
+    # λ: its own column, beside gf2_127 and in its colour
+    lam = e.loc[("point add, throughput", "gf2_127-lambda")]
+    assert lam.bench == "group.add/binary-lambda.127/mode=throughput"
+    assert lam.base == "gf2_127"
+    # rows grouped by field, each λ and w variant under its plain family
+    g = br.elementary_grid(br.elementary(t), fields=False)
+    curves = [r.label for r in g.rows()]
+    assert curves.index("gf2_127-lambda") == curves.index("gf2_127") + 1
+    assert curves.index("gf2_127-w") == curves.index("gf2_127") + 2
+    assert curves[0] == "xor" and not g.rows()[0].compare
+    fields = br.elementary_grid(br.elementary(t), fields=True)
+    # the fixture has no gf2_109 or fp107 field benches
+    assert [r.label for r in fields.rows()] == ["gf2_127", "fp127"]
+    assert [h for h, _ in fields.groups] == ["binary", "prime"]
+    # a binary field's add is an XOR, not timed; a prime field's is
+    gf2, fp = fields.rows()
+    assert gf2.values[br.FIELD_ADD] == "xor" and fp.values[br.FIELD_ADD] > 0
+    assert not e.bench.str.contains("pornin|elligator2").any()
+    md = (out / "report.md").read_text()
+    order = ["## Insertion", "## Batching"]
+    order += ["## Group operations", "## Field operations"]
+    order += ["## All benchmarks", "### field", "### hash to curve"]
+    order += ["### comparison maps", "### RIBLT workload", "### curve generation"]
+    order += ["<summary>Lower bound, every family</summary>"]
+    assert [md.index(h) for h in order] == sorted(md.index(h) for h in order)
+    # the layers' figures are reference, folded away like their tables
+    fig = re.search(
+        r"<details><summary>Figure</summary>\n\n!\[([^]]+)\]\(digest.svg\)", md
+    )
+    assert fig and fig.group(1).startswith("digest: a bar per benchmark")
+    for kind in ("field", "group"):
+        assert (out / f"elementary-{kind}.svg").exists()
+        assert f"](elementary-{kind}.svg)" in md
+    # the long tables fold away
+    assert "<details><summary>Which bench each cell is</summary>" in md
+    assert (
+        (out / "elementary.csv")
+        .read_text()
+        .startswith("operation,facet,variant,layer,")
+    )
+
+
+def test_unreadable_results_are_listed(tmp_path):
+    root = tmp_path / "criterion"
+    write_bench(root, "digest", "gf2/batch", None, 1.0, 2.0, 3.0, {"Elements": 2})
+    d = write_bench(
+        root, "digest", "gf2/streaming", None, 1.0, 2.0, 3.0, {"Elements": 2}
+    )
+    (d / "new" / "estimates.json").unlink()
+    (root / "report").mkdir()  # criterion's own html report: no benchmark.json
+    t = br.report(root, tmp_path / "out", loads=br.fixed_loads([2]), formats=("svg",))
+    assert list(t.full_id) == ["digest/gf2/batch"]
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "## Skipped" in md and "gf2_streaming" in md
+    assert str(tmp_path) not in md and f"benchmarks from run {tmp_path.name}." in md
+    assert br.riblt_cost(t, (2,)).empty  # no hash-to-curve bench
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda b: {k: v for k, v in b.items() if k != "group_id"},
+        lambda b: [],
+        lambda b: {**b, "throughput": {"Elements": "ten"}},
+    ],
+    ids=["missing field", "not an object", "bad throughput"],
+)
+def test_malformed_results_are_listed(tmp_path, damage):
+    root = tmp_path / "criterion"
+    write_bench(root, "digest", "gf2/batch", None, 1.0, 2.0, 3.0, {"Elements": 2})
+    d = write_bench(root, "digest", "gf2/streaming", None, 1.0, 2.0, 3.0)
+    bj = d / "new" / "benchmark.json"
+    bj.write_text(json.dumps(damage(json.loads(bj.read_text()))))
+    t = br.report(root, tmp_path / "out", loads=br.fixed_loads([2]), formats=("svg",))
+    assert list(t.full_id) == ["digest/gf2/batch"]
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "## Skipped" in md and "gf2_streaming" in md
+    assert str(tmp_path) not in md and f"benchmarks from run {tmp_path.name}." in md
 
 
 def test_point_outside_its_ci(tmp_path):
@@ -687,6 +1044,35 @@ def test_empty_tree_is_an_error(tmp_path):
         br.report(tmp_path, tmp_path / "out")
 
 
+def test_cli(tmp_path):
+    root = tmp_path / "criterion"
+    write_bench(
+        root,
+        "add",
+        "gf2/extended += affine, 8 accumulators",
+        None,
+        900.0,
+        1000.0,
+        1100.0,
+        {"Elements": 10},
+    )
+    write_bench(
+        root,
+        "hash_to_curve",
+        "gf2/try-and-increment",
+        None,
+        9e3,
+        1e4,
+        1.1e4,
+        {"Elements": 10},
+    )
+    br.main([str(root), str(tmp_path / "out"), "--k", "3", "--formats", "png"])
+    assert (tmp_path / "out" / "hash-to-curve.png").exists()
+    assert not (tmp_path / "out" / "hash-to-curve.svg").exists()
+    c = (tmp_path / "out" / "riblt_cost_lower_bound.csv").read_text().splitlines()
+    assert c[0].endswith(",k=3") and c[1].endswith(",1300.0")
+
+
 def test_no_machine_is_flagged(rendered):
     md = (rendered[0] / "report.md").read_text()
     assert "## Machine\n\nUnknown: no meta.json" in md
@@ -702,7 +1088,7 @@ def test_runs_before_r_was_recorded_still_render(tmp_path):
     )
     table = br.tidy(br.load(root)[0])
     meta = {"group_fixtures": {"binary.127": "certified"}}
-    md = br.to_markdown(br.blocks(table, {}, [], "old", meta=meta))
+    md = br.to_markdown(br.blocks(table, pd.DataFrame(), [], {}, [], "old", meta=meta))
     assert "## Machine" in md
     assert br.fixtures(table, meta) == {"binary.127": {"status": "certified"}}
 
@@ -717,7 +1103,7 @@ def test_curve_parameters_are_not_benchmark_results(tmp_path, record):
     assert not skipped
     table = br.tidy(df)
     meta = {"group_fixtures": {"binary.122-gls": record}} if record else None
-    blocks = br.blocks(table, {}, [], "fixture", meta=meta)
+    blocks = br.blocks(table, pd.DataFrame(), [], {}, [], "fixture", meta=meta)
     md, html = br.to_markdown(blocks), br.to_html(blocks)
     assert "Curve parameters" not in md and "Curve parameters" not in html
     assert "Certificate verified" not in md
@@ -937,8 +1323,198 @@ def test_grid_calls_overlapping_intervals_a_tie():
     assert "| a | **10.0 ns** |" in tables_md(g)
 
 
+def test_sum_ci_adds_independent_half_widths_in_quadrature():
+    def bench(v, lo, hi):
+        return pd.Series({"value_ns": v, "value_lo_ns": lo, "value_hi_ns": hi})
+
+    hsh, add = bench(100, 97, 104), bench(10, 9, 11)
+    v, lo, hi = br.sum_ci([(hsh, 1), (None, 1), (add, 4)])
+    assert v == 140
+    assert (v - lo, hi - v) == pytest.approx((5.0, 5.657), abs=1e-3)
+    assert all(map(math.isnan, br.sum_ci([(None, 1)])))
+
+
 def tables_md(g):
     return __import__("tables").to_markdown(g, br.fmt_time, br._md_cell)
+
+
+def test_batching_counts_the_inversions_shared():
+    p = pd.DataFrame(
+        [
+            ("gf2_127", "one at a time", "hash + prepare", 900.0, 400.0, 14.0),
+            ("gf2_127", "batched", "hash + prepare", 100.0, 4.0, 14.0),
+        ],
+        columns=["family", "hashing", "recipe", "hash_ns", "prepare_ns", "add_ns"],
+    )
+    e = pd.DataFrame(
+        {
+            "layer": ["field", "field"],
+            "facet": ["field invert", "field invert"],
+            "variant": ["one at a time", "batched"],
+            "curve": ["gf2_127", "gf2_127"],
+            "value_ns": [404.0, 4.0],
+        }
+    )
+    (row,) = br.batching_grid(p, e).rows()
+    assert row.values[("hash_ns", "inversions")] == 2.0
+    assert row.values[("prepare_ns", "inversions")] == 1.0  # 396 / 400, to a tenth
+    assert row.values[("hash_ns", "factor")] == 9.0
+    # no codec benches, no codec columns
+    assert not any(c.key[0] == "decode" for c in br.batching_grid(p, e).cols)
+    codec = pd.DataFrame(
+        {
+            "layer": ["group ops"] * 2,
+            "facet": ["decode"] * 2,
+            "variant": ["one at a time", "batched"],
+            "curve": ["gf2_127"] * 2,
+            "value_ns": [450.0, 50.0],
+        }
+    )
+    (row,) = br.batching_grid(p, pd.concat([e, codec])).rows()
+    assert row.values[("decode", "inversions")] == 1.0
+    assert row.values[("decode", "factor")] == 9.0
+
+
+def test_insert_grid_sums_the_parts(rendered):
+    out, t = rendered
+    loads = br.fixed_loads([1, 8])
+    g = br.insert_grid(br.pipeline_cost(t, loads), loads, "batched")
+    rows = {(r.label, r.note): r for r in g.rows()}
+    plain = next(r for (c, _), r in rows.items() if c == "gf2_127")
+    assert plain.values["k=8"] == pytest.approx(100 + 100 + 8 * 100)
+    # a λ family's hash to (x, λ) has no prepare
+    fused = next(r for (c, _), r in rows.items() if c == "gf2_122-lambda")
+    assert fused.values["prepare_ns"] == "in the hash"
+    # unlike rows say how: λ's formulas, and the suite its fused hash is from
+    assert set(fused.marks) == {"incomplete", "compare suite"}
+    assert plain.marks == {}
+    # each part names its benchmark and batch, the compare suites' too
+    batch = "h2c/binary.127/mode=batch,n=1024, in batches of 1024"
+    assert plain.tips["hash_ns"] == batch
+    assert plain.tips["add_ns"] == "group.add/binary.127/mode=throughput"
+    assert fused.tips["hash_ns"].endswith("to (x, λ), batched, in batches of 1024")
+    assert "prepare_ns" not in fused.tips
+    assert (out / "insert.svg").exists()
+    md = (out / "report.md").read_text()
+    assert "](insert.svg)" in md
+    assert "| gf2_122-lambda [incomplete] [compare suite] (hashed straight" in md
+    page = (out / "report.html").read_text()
+    assert '<span class="mark" title="its additions are not complete' in page
+
+
+def test_batch_sizes_sweep_but_the_largest_stands_for_batched(tmp_path):
+    root = write_tree(ROWS, tmp_path / "criterion")
+    sweep = [
+        ("h2c", "binary.127/mode=indep", 1024, 800.0),
+        ("h2c", "binary.127/mode=batch,n=8", 1024, 50.0),
+        ("h2c", "binary.127/mode=batch,n=1024", 1024, 100.0),
+        ("group.prepare", "binary.127/mode=batch,n=1024", 1024, 4.0),
+        ("group.add", "binary.127/mode=throughput", 1024, 14.0),
+    ]
+    for g, f, n, per in sweep:
+        write_bench(
+            root, g, f, None, 0.9 * per * n, per * n, 1.1 * per * n, {"Elements": n}
+        )
+    df, _ = br.load(root)
+    t = br.tidy(df)
+    # the smaller batch is cheaper here, but "batched" means the largest
+    (row,) = br.pipeline_cost(t)[
+        lambda p: (
+            (p.family == "gf2_127")
+            & (p.hashing == "batched")
+            & (p.recipe == "hash + prepare")
+        )
+    ].itertuples()
+    assert row.hash_ns == pytest.approx(100.0)
+    g = br.batch_size_grid(t)
+    (r,) = [r for r in g.rows() if r.label == "gf2_127"]
+    assert r.values[("h2c", 8)] == pytest.approx(50.0)
+    assert r.values[("h2c", 1024)] == pytest.approx(100.0)
+    assert r.values[("h2c", "alone")] == pytest.approx(800.0)
+
+
+def test_references_insert_their_hash_output(tmp_path):
+    root = tmp_path / "criterion"
+    rows = [
+        ("hash_to_curve", "ristretto255/hash_from_bytes<Sha512>", 5000.0),
+        ("add", "ristretto255/+=, 1 accumulator", 70.0),
+        ("add", "ristretto255/+=, 8 accumulators", 60.0),
+        ("hash_to_curve", "sha256 (XOR baseline)", 20.0),
+        # a single accumulator times no throughput: XOR stays out
+        ("add", "xor-sha256/xor 32B", 0.5),
+        ("h2c", "binary.127/mode=batch,n=1024", 100.0),
+        ("group.prepare", "binary.127/mode=batch,n=1024", 4.0),
+        ("group.add", "binary.127/mode=throughput", 14.0),
+    ]
+    for g, f, per in rows:
+        n = 1024
+        write_bench(
+            root, g, f, None, 0.9 * per * n, per * n, 1.1 * per * n, {"Elements": n}
+        )
+    loads = [br.Load("k=10", "k = 10", 10)]
+    p = br.pipeline_cost(br.tidy(br.load(root)[0]), loads)
+    ref = p[p.recipe == "hash is the addend"]
+    assert list(ref.family.astype(str)) == ["ristretto255"]
+    r = ref.iloc[0]
+    assert r.hashing == "one at a time" and pd.isna(r.prepare_ns)
+    assert r["k=10"] == pytest.approx(5000.0 + 10 * 60.0)
+    write_bench(
+        root,
+        "add",
+        "xor-sha256/xor 32B, 8 accumulators",
+        None,
+        0.9 * 512,
+        512,
+        1.1 * 512,
+        {"Elements": 1024},
+    )
+    p = br.pipeline_cost(br.tidy(br.load(root)[0]), loads)
+    xor = p[p.family.astype(str) == "xor"].set_index("recipe")
+    assert xor.loc["hash is the addend", "k=10"] == pytest.approx(20.0 + 10 * 0.5)
+    fig = figures.plot_insert(p, loads, tmp_path, ["png"])
+    assert "one item at a time" in fig.alt and "logarithmic" in fig.alt
+
+
+def test_insertion_counts_the_mapping_only_where_every_load_has_it(tmp_path):
+    root = tmp_path / "criterion"
+    rows = [
+        ("h2c", "binary.127/mode=batch,n=1024", 100.0),
+        ("group.prepare", "binary.127/mode=batch,n=1024", 4.0),
+        ("group.add", "binary.127/mode=throughput", 14.0),
+        ("riblt.mapping", "salted-sha256/digest", 50.0),
+        ("riblt.mapping", "xoshiro256pp/item,m=5", 7.0),
+        # another generator's walk is not the workload's
+        ("riblt.mapping", "chacha8/item,m=20", 1.0),
+    ]
+    for g, f, per in rows:
+        n = 1024
+        write_bench(
+            root, g, f, None, 0.9 * per * n, per * n, 1.1 * per * n, {"Elements": n}
+        )
+    loads = br.riblt_loads([5, 20])
+    p = br.pipeline_cost(br.tidy(br.load(root)[0]), loads)
+    r = p.iloc[0]
+    assert pd.isna(r["m=5 map_ns"]) and pd.isna(r["m=20 map_ns"])
+    assert r["m=5"] == pytest.approx(104.0 + loads[0].k * 14.0)
+    assert "were not timed" in br.insert_blocks(p, loads)[1][1]
+    write_bench(
+        root,
+        "riblt.mapping",
+        "xoshiro256pp/item,m=20",
+        None,
+        0.9 * 9 * 1024,
+        9 * 1024,
+        1.1 * 9 * 1024,
+        {"Elements": 1024},
+    )
+    p = br.pipeline_cost(br.tidy(br.load(root)[0]), loads)
+    r = p.iloc[0]
+    assert r["m=5 map_ns"] == pytest.approx(57.0)
+    assert r["m=20"] == pytest.approx(104.0 + loads[1].k * 14.0 + 59.0)
+    assert "xoshiro256pp/item,m=20" in r["m=20 map bench"]
+    assert "xoshiro256pp walk" in br.insert_blocks(p, loads)[1][1]
+    fig = figures.plot_insert(p, loads, tmp_path, ["png"])
+    assert "map digest" in fig.alt
 
 
 def test_addend_equality_splits_matches_from_mismatches(tmp_path):
@@ -969,6 +1545,154 @@ def test_addend_equality_splits_matches_from_mismatches(tmp_path):
 
 
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)
+DECISION_COSTS = {
+    "binary.127": (10, 100, 20, 30, 40),
+    # slower adds, cheaper hashing: neither dominates the other
+    "binary-w.127": (20, 90, 5, 30, 40),
+    # slower everywhere, and lower rho
+    "edwards.127": (30, 300, 30, 50, 60),
+    # no encoding measured
+    "weier.127": (10, 100, 20, None, 40),
+}
+DECISION_FIXTURES = {
+    "binary.127": {"r": str(2**126 + 1), "cofactor": 2, "automorphisms": 2},
+    "binary-w.127": {"r": str(2**126 + 1), "cofactor": 2, "automorphisms": 2},
+    "edwards.127": {"r": str(2**125 + 1), "cofactor": 4, "automorphisms": 2},
+    "weier.127": {"r": str(2**127 - 1), "cofactor": 1, "automorphisms": 2},
+}
+
+
+@pytest.fixture
+def decided(tmp_path):
+    return decide(tmp_path, DECISION_FIXTURES)
+
+
+def test_a_run_without_r_omits_the_security_column(tmp_path):
+    # runs before 2026-10-03 recorded only each fixture's status
+    d = decide(tmp_path, {f: "certified" for f in DECISION_FIXTURES})
+    assert d["rho"].isna().all() and d["dominated by"].isna().all()
+    blocks = br.decision_blocks(d)
+    md = br.to_markdown(blocks)
+    assert "No fixture's $r$ was recorded, so no family is compared on security" in md
+    assert "$\\log_2$ rho" not in md.split("\n| curve")[1]
+    page = br._html_body(blocks)
+    assert "security" not in page.split("<table")[1]
+    # every row is "not compared", which stays, as it says something
+    assert page.count(">not compared</td>") == len(d)
+
+
+def decide(tmp_path, fixtures):
+    run = tmp_path / "run"
+    n = 1024
+    batch = f"mode=batch,n={n}"
+    for fam, costs in DECISION_COSTS.items():
+        groups = ["group.add", "h2c", "group.prepare", "group.encode", "group.decode"]
+        for g, v in zip(groups, costs):
+            if v is not None:
+                mode = "mode=throughput" if g == "group.add" else batch
+                write_bench(
+                    run / "criterion",
+                    g,
+                    f"{fam}/{mode}",
+                    None,
+                    0.9 * v * n,
+                    v * n,
+                    1.1 * v * n,
+                    {"Elements": n},
+                )
+    (run / "curvegen.csv").write_text(
+        "family,method,seed,find_s,verify_s\n"
+        "gf2_127,agm+sieve,0,0.01,0.001\n"
+        "gf2_127,agm+sieve,1,0.03,0.003\n"
+        "gf2_127,pari,0,0.1,0.001\n"
+        "gf2_127,pari,1,0.3,0.003\n"
+    )
+    t = br.tidy(br.load(run / "criterion")[0])
+    meta = {"group_fixtures": fixtures}
+    return br.decision(
+        br.pipeline_cost(t),
+        br.elementary(t),
+        br.fixtures(t, meta),
+        br.selection(run / "criterion"),
+    )
+
+
+def test_decision_dominance(decided):
+    dom = decided["dominated by"]
+    assert dom["gf2_127"] == [] and dom["gf2_127-w"] == []
+    assert sorted(dom["edwards127"]) == ["gf2_127", "gf2_127-w"]
+    # a missing measurement takes no part, and leaves its sums unknown
+    assert dom["weier127"] is None
+    assert math.isnan(decided.loc["weier127", "round"])
+
+
+def test_decision_regimes(decided):
+    r = decided.loc["gf2_127"]
+    k = br.mapping_degree(br.ROUND_M)
+    assert br.ROUND_M == 1350
+    assert r["hash + prepare"] == pytest.approx(120)
+    assert r.retained == pytest.approx(120 + k * 10)
+    assert r["round"] == pytest.approx(
+        br.ROUND_N * k * 10 + br.ROUND_D * 120 + br.ROUND_M * (30 + 40)
+    )
+    assert r["round lo"] < r["round"] < r["round hi"]
+    assert r.rho == pytest.approx(62.8, abs=0.05)
+    assert decided.loc["edwards127", "rho"] == pytest.approx(62.3, abs=0.05)
+
+
+def test_decision_selection_is_the_faster_method(decided):
+    r = decided.loc["gf2_127"]
+    assert r.find == pytest.approx(0.02e9) and r.verify == pytest.approx(0.002e9)
+    assert r.seeds == 2 and r.method == "agm+sieve"
+    assert r["counting tools"] == "Rust (AGM), PARI"
+    # shared by the curve's representations; none timed for edwards127
+    assert decided.loc["gf2_127-w", "find"] == pytest.approx(0.02e9)
+    e = decided.loc["edwards127"]
+    assert math.isnan(e.find) and e["counting tools"] == "PARI"
+    assert pd.isna(e.method)
+
+
+def test_decision_leads_the_report(decided):
+    blocks = br.decision_blocks(decided)
+    md = br.to_markdown(blocks)
+    assert md.startswith("## Families compared")
+    assert "measured method" in md and "available tools" in md
+    assert "agm+sieve" in md and "Rust (AGM), PARI" in md
+    assert "gf2_127, gf2_127-w" in md and "not compared" in md and "none" in md
+    # selection means are shown, never the best: they carry no interval
+    assert "20.0 ms" in md and "**20.0 ms**" not in md
+    page = br._html_body(blocks)
+    assert (
+        '<td class="plain-time" title="agm+sieve, mean of 2 seeds">20.0 ms</td>' in page
+    )
+    # the summed estimates name the benchmarks of their terms
+    assert 'title="best; ' in page
+    assert "k × (group.add/binary.127/mode=throughput)" in page
+    assert "m × (group.encode/binary.127/mode=batch,n=1024; group.decode/" in page
+    assert "d × (not measured)" not in page
+
+
+def test_decision_states_the_share_of_addition(decided):
+    md = br.to_markdown(br.decision_blocks(decided))
+    share = (
+        br.ROUND_N * br.mapping_degree(br.ROUND_M) * decided["add"] / decided["round"]
+    )
+    assert f"{100 * share.min():.0f} to {100 * share.max():.0f}%" in md
+
+
+def test_decision_without_batched_rows_is_empty():
+    p = pd.DataFrame({"hashing": ["one at a time"], "family": ["gf2_127"]})
+    assert br.decision(p, pd.DataFrame(), {}, br.selection(Path("/nonexistent"))).empty
+
+
+def test_dominance_needs_evidence_on_every_axis(decided):
+    d = decided.copy()
+    # Overlapping decode intervals prevent a dominance claim.
+    d.loc["edwards127", "decode lo"] = 1.0
+    assert br.dominators(d)["edwards127"] == []
+    # unless both read one measurement
+    d.loc["edwards127", "decode bench"] = d.loc["gf2_127", "decode bench"]
+    assert br.dominators(d)["edwards127"] == ["gf2_127"]
 
 
 @pytest.mark.parametrize(
@@ -1043,6 +1767,7 @@ RUN_META = {
     "commit": "ebe05c50203bacba65853a298692e4e5a1c4537a",
     "dirty": False,
     "profile": "full",
+    "group_fixtures": DECISION_FIXTURES,
 }
 CURVEGEN = (
     "family,method,seed,find_s,verify_s\n"
@@ -1052,9 +1777,19 @@ CURVEGEN = (
 
 
 def write_run(run: Path) -> Path:
+    """A bench-run directory: the fixture rows, EXTRA, the decision
+    table's families, meta.json and curvegen.csv."""
     root = write_tree(ROWS, run / "criterion")
     for g, f, p, n in EXTRA:
         write_bench(root, g, f, p, 90.0 * n, 100.0 * n, 110.0 * n, {"Elements": n})
+    n = 1024
+    groups = ["group.add", "h2c", "group.prepare", "group.encode", "group.decode"]
+    for fam, costs in DECISION_COSTS.items():
+        for g, v in zip(groups, costs):
+            if v is not None:
+                mode = "mode=throughput" if g == "group.add" else f"mode=batch,n={n}"
+                b = (0.9 * v * n, v * n, 1.1 * v * n)
+                write_bench(root, g, f"{fam}/{mode}", None, *b, {"Elements": n})
     (run / "meta.json").write_text(json.dumps(RUN_META))
     (run / "curvegen.csv").write_text(CURVEGEN)
     return run
@@ -1142,11 +1877,163 @@ def test_export_refuses_what_its_report_would_lack(tmp_path):
     assert not any((tmp_path / n).exists() for n in "abcd")
 
 
+def test_compact_form_renders_the_same_report(run, tmp_path):
+    dest = tmp_path / "results" / "fixture-run"
+    br.export(run, dest)
+    a, b = tmp_path / "from-criterion", tmp_path / "from-compact"
+    ta = br.report(run, a, formats=("svg",))
+    tb = br.report(dest, b, formats=("svg",))
+    assert ta.elements.isna().any() and len(ta) == len(tb)
+    names = sorted(p.name for p in a.iterdir())
+    assert names == sorted(p.name for p in b.iterdir())
+    assert {"decision.csv", "insert.svg", "meta.json"} <= set(names)
+    for name in names:
+        assert (a / name).read_bytes() == (b / name).read_bytes(), name
+    md = (b / "report.md").read_text()
+    assert "## Families compared" in md and "fixture-run · Apple M4" in md
+
+
 def test_compact_form_holds_one_statistic(run, tmp_path):
     dest = tmp_path / "fixture-run"
     br.export(run, dest)
     with pytest.raises(SystemExit, match="typical estimate only"):
         br.report(dest, tmp_path / "out", stat="median")
+
+
+@pytest.mark.parametrize(
+    "family,map_name,group_name,recipe,needs_prepare",
+    [
+        ("gf2_127", "pornin map x1", "binary.127", "Pornin x1: hash to addend", False),
+        ("gf2_127", "pornin map x2", "binary.127", "Pornin x2: hash to addend", False),
+        (
+            "edwards127",
+            "elligator2 x1",
+            "edwards.127",
+            "Elligator 2 x1: hash + prepare",
+            True,
+        ),
+        ("weier127", "sswu x1", "weier.127", "SSWU x1: hash + prepare", True),
+    ],
+)
+def test_comparison_recipe_respects_output_representation(
+    tmp_path, family, map_name, group_name, recipe, needs_prepare
+):
+    root = tmp_path / "criterion"
+    for group, function, value in [
+        ("hash_to_curve", f"{family}/{map_name}", 20),
+        ("group.add", f"{group_name}/mode=throughput", 3),
+    ]:
+        write_bench(
+            root,
+            group,
+            function,
+            None,
+            value * 0.9,
+            value,
+            value * 1.1,
+            {"Elements": 1},
+        )
+    raw, _ = br.load(root)
+    before = br.pipeline_cost(br.tidy(raw))
+    if needs_prepare:
+        assert before.empty
+    else:
+        assert before.iloc[0].recipe == recipe
+    write_bench(
+        root,
+        "group.prepare",
+        f"{group_name}/mode=indep",
+        None,
+        6,
+        7,
+        8,
+        {"Elements": 1},
+    )
+    raw, _ = br.load(root)
+    result = br.pipeline_cost(br.tidy(raw))
+    assert len(result) == 1
+    r = result.iloc[0]
+    assert r.recipe == recipe
+    assert r["m=20"] == pytest.approx(
+        20 + (7 if needs_prepare else 0) + br.mapping_degree(20) * 3
+    )
+    assert (pd.notna(r.prepare_ns)) == needs_prepare
+    assert map_name in r["hash bench"]
+
+
+def test_comparison_maps_do_not_borrow_another_models_addition(tmp_path):
+    root = tmp_path / "criterion"
+    for group, function in [
+        ("hash_to_curve", "gf2_127/pornin map x1"),
+        ("group.add", "binary-u.127/mode=throughput"),
+        ("group.prepare", "binary-u.127/mode=indep"),
+    ]:
+        write_bench(root, group, function, None, 9, 10, 11, {"Elements": 1})
+    raw, _ = br.load(root)
+    assert br.pipeline_cost(br.tidy(raw)).empty
+
+
+@pytest.mark.parametrize(
+    "family,suffix,group_name",
+    [
+        ("gf2_127-u", "(u, v)", "binary-u.127"),
+        ("gf2_109-lambda", "(x, λ)", "binary-lambda.109"),
+    ],
+)
+def test_pornin_direct_addend_contract_keeps_its_model(
+    tmp_path, family, suffix, group_name
+):
+    root = tmp_path / "criterion"
+    for mode, ending in [("per-element", ""), ("batch", ", batched")]:
+        write_bench(
+            root,
+            "hash_to_curve",
+            f"{family}/pornin map x1 to {suffix}{ending}",
+            None,
+            19,
+            20,
+            21,
+            {"Elements": 1},
+        )
+    write_bench(
+        root,
+        "group.add",
+        f"{group_name}/mode=throughput",
+        None,
+        2,
+        3,
+        4,
+        {"Elements": 1},
+    )
+    raw, _ = br.load(root)
+    cost = br.pipeline_cost(br.tidy(raw))
+    assert len(cost) == 2
+    assert set(cost.family) == {family}
+    assert set(cost.recipe) == {"Pornin x1: hash to addend"}
+    assert cost.prepare_ns.isna().all()
+    assert all(suffix in bench for bench in cost["hash bench"])
+
+
+def test_insert_grid_preserves_each_map_recipe(rendered):
+    _, t = rendered
+    p = br.pipeline_cost(t)
+    grid = br.insert_grid(p, br.DEFAULT_LOADS, "one at a time")
+    rows = [r for r in grid.rows() if r.label == "gf2_127"]
+    assert len(rows) == 3
+    assert len({r.tips["hash_ns"] for r in rows}) == 3
+    mapped = [r for r in rows if "pornin map" in r.tips["hash_ns"]]
+    assert len(mapped) == 2
+    assert all(r.values["prepare_ns"] == "in the hash" for r in mapped)
+    assert all("already an addend" in r.note for r in mapped)
+
+
+def test_insert_plot_accepts_only_a_direct_addend_recipe(rendered, tmp_path):
+    _, t = rendered
+    p = br.pipeline_cost(t)
+    p = p[(p.family == "gf2_127") & (p.recipe == "Pornin x1: hash to addend")]
+    figure = br.plot_insert(p, br.DEFAULT_LOADS, tmp_path, ("svg",))
+    assert (tmp_path / "insert.svg").is_file()
+    assert "lowest compatible batched recipe" in figure.alt
 
 
 def test_interval_boxes_preserve_bounds_and_an_estimate_outside_them():
@@ -1167,3 +2054,154 @@ def test_interval_boxes_preserve_bounds_and_an_estimate_outside_them():
     assert ax.collections[1].get_segments()[0][:, 0].tolist() == [25, 25]
     assert not ax.lines  # no dot obscures the bounds
     plt.close(fig)
+
+
+def test_riblt_plan_follows_the_modeled_insertion(tmp_path):
+    root = tmp_path / "criterion"
+    per = {"Elements": 1024}
+
+    def bench(group, function, ns):
+        write_bench(root, group, function, None, ns * 1014, ns * 1024, ns * 1034, per)
+
+    for fam, h, prep, add in [
+        ("binary-u.127", 80, 10, 10),
+        ("binary.109", 75, 10, 12),
+        ("weier.127", 1000, 100, 30),
+    ]:
+        bench("h2c", f"{fam}/mode=batch,n=1024", h)
+        bench("group.prepare", f"{fam}/mode=batch,n=1024", prep)
+        bench("group.add", f"{fam}/mode=throughput", add)
+    bench("hash_to_curve", "gf2_127-u/pornin map x1 to (u, v), batched", 56)
+    listed = [
+        f"riblt.encode/{fam}/m=1350,n=3500,h2c={h}"
+        for fam, hs in [
+            ("binary-u.127", ["ti", "pornin-addend"]),
+            ("binary.109", ["ti", "pornin"]),
+            ("weier.127", ["ti", "sswu"]),
+            ("edwards.127", ["ti", "elligator2"]),
+        ]
+        for h in hs
+    ] + ["riblt.encode/xor-siphash.64/m=1350,n=3500"]
+
+    def plan():
+        return br.riblt_plan(br.tidy(br.load(root)[0]), listed)
+
+    def ids(fam, h, proj, ns):
+        bench("h2c.id", f"{fam}/proj={proj},h2c={h},mode=batch,n=1024", ns)
+
+    # the projection is chosen under the planned construction, never none,
+    # and only for the families timed beyond a spot check
+    ids("binary-u.127", "pornin-addend", "none", 10)
+    ids("binary-u.127", "pornin-addend", "fp130", 50)
+    ids("binary-u.127", "pornin-addend", "gf2_127", 40)
+    ids("binary-u.127", "ti", "fp127", 1)
+    ids("weier.127", "ti", "fp130", 1)
+
+    # Pornin to (u, v) needs no prepare: 56 + 13.57 * 10 against 80 + 10 +
+    # 13.57 * 10; binary.109 is within the leaders' margin, weier.127 far
+    # behind. Unmeasured constructions do not compete, and edwards.127, with
+    # no model, is left to its spot check. Without a timed mapping digest
+    # there are no ID-keyed rows.
+    assert plan() == {
+        "binary-u.127": ("pornin-addend", "full", None, None),
+        "binary.109": ("ti", "buffer", None, None),
+        "weier.127": ("ti", "spot", None, None),
+    }
+    # the mapping's field is the cheapest digest of an ID, whatever the
+    # checksum's
+    bench("riblt.mapping", "projection-gf2_127/digest of id", 30)
+    bench("riblt.mapping", "projection-fp127/digest of id", 20)
+    bench("riblt.mapping", "salted-sha256/digest of id", 10)
+    assert plan()["binary-u.127"] == ("pornin-addend", "full", "gf2_127", "fp127")
+    # a faster measurement changes the plan; no default does
+    bench("hash_to_curve", "gf2_109/pornin map x1, batched", 20)
+    assert plan()["binary.109"] == ("pornin", "full", None, None)
+
+
+def test_group_plan_leads_and_contrasts_by_the_modeled_insertion(tmp_path):
+    root = tmp_path / "criterion"
+    per = {"Elements": 1024}
+
+    def bench(group, function, ns):
+        write_bench(root, group, function, None, ns * 1014, ns * 1024, ns * 1034, per)
+
+    def cost(fam, h, add):
+        bench("h2c", f"{fam}/mode=batch,n=1024", h)
+        bench("group.prepare", f"{fam}/mode=batch,n=1024", 10)
+        bench("group.add", f"{fam}/mode=throughput", add)
+
+    cost("binary-u.127", 80, 10)
+    cost("binary.109", 75, 12)
+    cost("weier.127", 1000, 30)
+    cost("edwards.127", 2000, 30)
+    listed = [
+        f"{g}/{fam}/mode=throughput"
+        for g in ("group.add", "group.sub")
+        for fam in ("binary-u.127", "binary.109", "weier.127", "edwards.127")
+    ]
+
+    def plan():
+        return br.group_plan(br.tidy(br.load(root)[0]), listed)
+
+    # the binary families lead; the cheaper odd-characteristic curve contrasts
+    assert plan() == {
+        "binary-u.127": "lead",
+        "binary.109": "lead",
+        "weier.127": "contrast",
+    }
+    # an odd-characteristic leader needs no contrast
+    cost("edwards.127", 70, 10)
+    assert plan() == {
+        "binary-u.127": "lead",
+        "binary.109": "lead",
+        "edwards.127": "lead",
+    }
+    # families the suite does not offer are not planned
+    assert "binary.109" not in br.group_plan(
+        br.tidy(br.load(root)[0]), [i for i in listed if "binary.109" not in i]
+    )
+
+
+def test_lifetimes_set_each_term_beside_its_counterpart(tmp_path):
+    root = tmp_path / "criterion"
+
+    def bench(group, function, parameter, ns):
+        write_bench(root, group, function, parameter, ns, ns, ns, {"Elements": 1})
+
+    fam, h, field = "binary.127", "pornin", "fp130"
+    bench("riblt.encode", fam, "m=1350,n=3500,h2c=pornin", 900)
+    bench(
+        "riblt.encode", fam, "m=1350,n=3500,h2c=pornin,proj=fp130,mapproj=gf2_127", 600
+    )
+    bench("riblt.mapping", "sha256", "id", 100)
+    bench("riblt.mapping", "salted-sha256", "keys", 200)
+    bench("riblt.mapping", "projection-fp130", "keys", 300)
+    bench("riblt.mapping", "projection-gf2_127", "keys", 250)
+    bench("riblt.mapping", "salted-sha256", "digest of id", 110)
+    bench("riblt.mapping", "projection-fp130", "digest of id", 40)
+    bench("riblt.mapping", "projection-gf2_127", "digest of id", 20)
+    bench("h2c.id", fam, f"proj=none,h2c={h},mode=batch,n=1024", 150)
+    bench("h2c.id", fam, f"proj={field},h2c={h},mode=batch,n=1024", 60)
+    bench("group.add", fam, "mode=throughput", 5)
+    life = br.lifetimes(br.tidy(br.load(root)[0]))
+    assert len(life) == 1
+    title, table = life[0]
+    assert fam in title and h in title
+    rows = {term: (a, b) for _, term, a, b in table.itertuples(index=False)}
+
+    def times(*ns):
+        return tuple(map(br.fmt_time, ns))
+
+    assert rows["ID, the item's SHA-256"] == times(100, 100)
+    assert rows["checksum keys"] == times(200, 300)
+    assert rows["mapping keys"] == times(200, 250)
+    assert rows["hash to the addend"] == times(150, 60)
+    assert rows["mapping seed"] == times(110, 20)
+    assert rows["add"] == times(5, 5)
+    assert rows["accept the curve"] == ("not timed", "not timed")
+    measured = next(r for r in rows if r.startswith("insertion per item"))
+    assert rows[measured] == times(900, 600)
+    blocks = br.lifetime_blocks(life)
+    assert ("h2", "Costs by lifetime") in blocks
+    # without a projected encoding there is no table
+    assert br.lifetimes(br.tidy(br.load(root)[0]), m=150) == []
