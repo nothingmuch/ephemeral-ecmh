@@ -20,6 +20,19 @@ digest	gf2_127/batch
 digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
 digest	xor-sha256
+field	fp127/add
+field	fp127/batch invert (product tree)
+field	fp127/invert
+field	fp127/mul latency (dependent chain)
+field	fp127/mul throughput (8 chains)
+field	fp127/neg
+field	fp127/pack
+field	fp127/pow_p34 (x^(2^125-1))
+field	fp127/sqrt (x^(2^125))
+field	fp127/sqrt_ratio
+field	fp127/square latency (dependent chain)
+field	fp127/square throughput (8 chains)
+field	fp127/unpack
 field	gf2_127/batch invert (product tree)
 field	gf2_127/halftrace
 field	gf2_127/halftrace (byte tables)

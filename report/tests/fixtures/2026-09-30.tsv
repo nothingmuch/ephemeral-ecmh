@@ -8,11 +8,17 @@
 group	function	parameter	lower_ns	point_ns	upper_ns	elements	summary_ns
 field	gf2/mul latency (dependent chain)		237.75	239.62	241.84	64	3.74
 field	gf2/mul throughput (8 chains)		62.473	62.601	62.732	64	0.98
+field	fp/mul latency (dependent chain)		250.37	251.11	251.87	64	3.92
+field	fp/mul throughput (8 chains)		116.86	117.02	117.22	64	1.83
 field	gf2/invert		336510	337520	338530	1024	329.61
 field	gf2/sqrt		1296.8	1299.4	1304.1	1024	1.27
 field	gf2/halftrace		31053	31175	31364	1024	30.44
 field	gf2/trace		341.84	342.84	343.91	1024	0.33
 field	gf2/batch invert (product tree)		3743.7	3745.6	3747.6	1024	3.66
+field	fp/invert		537350	538280	539240	1024	525.68
+field	fp/sqrt (x^(2^125))		492580	493630	494690	1024	482.07
+field	fp/pow_p34 (x^(2^125-1))		524300	525810	527330	1024	513.48
+field	fp/batch invert (product tree)		5958.3	6032.1	6163.1	1024	5.89
 on_curve	gf2/x: Tr(b/x) = 0 (1 I)		339370	340130	341060	1024	332.16
 on_curve	gf2/x: Tr(b/x) = 0, batched inversion		4657.2	4666.3	4680.4	1024	4.56
 on_curve	secp256k1/x: parse compressed (sqrt)		2.3309e+06	2.3331e+06	2.3352e+06	1024	2278.37
@@ -51,6 +57,9 @@ curvegen/verify_full	gf2/30 rejections	0	1.2715e+06	1.2723e+06	1.273e+06		1.272e
 curvegen/verify_full	gf2/114 rejections	1	1.5995e+06	1.6061e+06	1.6136e+06		1.606e+06
 curvegen/verify_full	gf2/54 rejections	2	1.3522e+06	1.3542e+06	1.3564e+06		1.354e+06
 curvegen/verify_full	gf2/14 rejections	3	1.1684e+06	1.1697e+06	1.1723e+06		1.17e+06
+field	fp/add		866.048	870.4	874.752	1024	0.85
+field	fp/sub		1029.07	1034.24	1039.41	1024	1.01
+field	fp/neg		682.65	686.08	689.51	1024	0.67
 add	gf2/extended -= affine, 1 accumulator		23587.1	23705.6	23824.1	1024	23.15
 add	gf2/extended -= affine, 8 accumulators		19216.1	19312.6	19409.2	1024	18.86
 add	ristretto255/-=, 1 accumulator		69100.4	69447.7	69794.9	1024	67.82

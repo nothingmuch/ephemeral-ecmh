@@ -48,6 +48,7 @@ TOP = 3
 REPRESENTATIVES = (
     "gf2_109",
     "gf2_127",
+    "gf2_122-gls",
     "ristretto255",
     "secp256k1",
 )

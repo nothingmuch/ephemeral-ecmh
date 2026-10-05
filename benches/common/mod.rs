@@ -9,6 +9,7 @@ pub mod families;
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput};
 use ephemeral_ecmh::curvegen::select::Certificate;
+use ephemeral_ecmh::field::Packed;
 use ephemeral_ecmh::hash::Salted;
 use std::hint::black_box;
 use std::time::Duration;
@@ -79,4 +80,12 @@ pub fn each<T, R>(g: &mut BenchmarkGroup<WallTime>, name: &str, xs: &[T], f: imp
 pub fn whole<T, R>(g: &mut BenchmarkGroup<WallTime>, name: &str, xs: &[T], f: impl Fn(&[T]) -> R) {
     g.throughput(Throughput::Elements(xs.len() as u64));
     g.bench_function(name, |bn| bn.iter(|| f(black_box(xs))));
+}
+
+/// An odd field's codec conversions, as encode and decode call them:
+/// `pack` of each element, and `unpack` of each packing.
+pub fn packing<F: Packed>(g: &mut BenchmarkGroup<WallTime>, name: &str, xs: &[F]) {
+    each(g, &format!("{name}/pack"), xs, |&x| x.pack());
+    let ps: Vec<u128> = xs.iter().map(|&x| x.pack()).collect();
+    each(g, &format!("{name}/unpack"), &ps, |&v| F::unpack(v));
 }

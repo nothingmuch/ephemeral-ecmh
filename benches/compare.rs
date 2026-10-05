@@ -11,14 +11,15 @@
 //! references with the specific APIs measured below.
 
 mod common;
-use common::{each, whole};
+use common::{each, packing, whole};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use ephemeral_ecmh::curve::h2c::map1;
 use ephemeral_ecmh::curve::{binary, binary127};
 use ephemeral_ecmh::ecmh::digest_batch;
-use ephemeral_ecmh::field::gf2_127::{self, Gf, from_u128};
+use ephemeral_ecmh::field::fp127::Fp;
+use ephemeral_ecmh::field::gf2_127::{self, Gf, MASK127, from_u128};
 use ephemeral_ecmh::hash::{Salted, halves};
 use secp256k1::PublicKey;
 use secp256k1::ellswift::ElligatorSwift;
@@ -63,7 +64,11 @@ impl Setup {
     fn gf2_127_xs(&self) -> Vec<Gf> {
         self.cands.iter().map(|&c| from_u128(c | 1)).collect()
     }
+    fn fp127_xs(&self) -> Vec<Fp> {
+        self.cands.iter().map(|&c| Fp::new(c & MASK127)).collect()
+    }
 }
+
 /// Try-and-increment through libsecp256k1's compressed-point parser.
 /// The fixed 0x02 prefix selects one y-coordinate sign, so the output
 /// covers one representative of each sign pair.
@@ -91,7 +96,7 @@ fn secp_ellswift(h: &Salted, m: &[u8]) -> PublicKey {
 fn field(c: &mut Criterion) {
     let s = setup();
     let mut g = c.benchmark_group("field");
-    let gx = s.gf2_127_xs();
+    let (gx, fx) = (s.gf2_127_xs(), s.fp127_xs());
     // Latency: one chain of dependent products. Throughput: ACCS chains.
     macro_rules! mul_chains {
         ($name:expr, $v:expr, $w:expr) => {
@@ -114,6 +119,7 @@ fn field(c: &mut Criterion) {
         };
     }
     mul_chains!("gf2_127", gx[0], gx[1]);
+    mul_chains!("fp127", fx[0], fx[1]);
     // squarings chain in a sqrt or an inversion's addition chain
     g.bench_function("gf2_127/square latency (dependent chain)", |bn| {
         bn.iter(|| (0..64).fold(black_box(gx[0]), |acc, _| acc.square()))
@@ -129,6 +135,27 @@ fn field(c: &mut Criterion) {
             acc
         })
     });
+    g.bench_function("fp127/square latency (dependent chain)", |bn| {
+        bn.iter(|| (0..64).fold(black_box(fx[0]), |acc, _| acc.square()))
+    });
+    g.bench_function("fp127/square throughput (8 chains)", |bn| {
+        bn.iter(|| {
+            let mut acc = black_box([fx[0]; ACCS]);
+            for _ in 0..64 / ACCS {
+                for a in acc.iter_mut() {
+                    *a = a.square();
+                }
+            }
+            acc
+        })
+    });
+    let fy: Vec<(Fp, Fp)> = fx
+        .iter()
+        .zip(fx.iter().rev())
+        .map(|(&a, &b)| (a, b))
+        .collect();
+    each(&mut g, "fp127/add", &fy, |&(a, b)| a + b);
+    each(&mut g, "fp127/neg", &fx, |&a| -a);
     each(&mut g, "gf2_127/invert", &gx, |v| v.invert());
     each(&mut g, "gf2_127/sqrt", &gx, |v| v.sqrt());
     each(&mut g, "gf2_127/halftrace", &gx, |v| v.halftrace());
@@ -143,6 +170,18 @@ fn field(c: &mut Criterion) {
         gf2_127::to_u128(v)
     });
     whole(&mut g, "gf2_127/batch invert (product tree)", &gx, |v| {
+        let mut w = v.to_vec();
+        ephemeral_ecmh::field::batch::invert(&mut w);
+        w
+    });
+    each(&mut g, "fp127/invert", &fx, |v| v.invert());
+    each(&mut g, "fp127/sqrt (x^(2^125))", &fx, |v| v.sqrt());
+    each(&mut g, "fp127/sqrt_ratio", &fy, |&(n, d)| {
+        Fp::sqrt_ratio(n, d)
+    });
+    packing(&mut g, "fp127", &fx);
+    each(&mut g, "fp127/pow_p34 (x^(2^125-1))", &fx, |v| v.pow_p34());
+    whole(&mut g, "fp127/batch invert (product tree)", &fx, |v| {
         let mut w = v.to_vec();
         ephemeral_ecmh::field::batch::invert(&mut w);
         w

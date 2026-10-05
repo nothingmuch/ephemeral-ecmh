@@ -116,11 +116,13 @@ def test_current_suite_is_fully_classified(table):
             "field/gf2/mul latency (dependent chain)",
             ("field", "gf2_127", "mul", "latency"),
         ),
+        ("field/fp/mul throughput (8 chains)", ("field", "fp127", "mul", "throughput")),
         (
             "field/gf2/batch invert (product tree)",
             ("field", "gf2_127", "batch invert", "batch"),
         ),
         ("field/gf2/halftrace", ("field", "gf2_127", "halftrace", "per-element")),
+        ("field/fp/add", ("field", "fp127", "add", "per-element")),
         (
             "add/gf2/extended += affine, 1 accumulator",
             ("group ops", "gf2_127", "add", "latency"),
@@ -192,6 +194,7 @@ def test_current_suite_is_fully_classified(table):
             "field/gf2_127/mul latency (dependent chain)",
             ("field", "gf2_127", "mul", "latency"),
         ),
+        ("field/fp127/sqrt", ("field", "fp127", "sqrt", "per-element")),
         (
             "h2c_parts/gf2_127 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2_127 t&i", "batch"),
@@ -230,6 +233,7 @@ def test_classify(full_id, want):
     "old, new",
     [
         ("gf2/mul latency (dependent chain)", "gf2_127/mul latency (dependent chain)"),
+        ("fp/sqrt (x^(2^125))", "fp127/sqrt (x^(2^125))"),
         ("gf2 pornin/2. invert m1 m2 m3", "gf2_127 pornin/2. invert m1 m2 m3"),
     ],
 )

@@ -74,6 +74,7 @@ FAMILIES = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
+    "fp127": ("fp127", 127),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -95,6 +96,7 @@ SPELLINGS = {
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
+    "fp": "fp127",
 }
 # (regex on the group, spelling, family): spellings some groups use for
 # another family: Ristretto's input digest is a step of its hash.
@@ -125,6 +127,7 @@ def curve(family: str) -> str:
 # vision deficiencies; the baseline is grey.
 COLORS = {
     "gf2_127": "#4e79a7",
+    "fp127": "#b6992d",
     "xor": "#79706e",
     "ristretto255": "#b07aa1",
     "secp256k1": "#9d7660",
@@ -132,6 +135,7 @@ COLORS = {
 }
 LIGHT = {
     "gf2_127": "#a0cbe8",
+    "fp127": "#f1ce63",
     "xor": "#bab0ac",
     "ristretto255": "#d4a6c8",
     "secp256k1": "#d7b5a6",
@@ -141,6 +145,7 @@ LIGHT = {
 FAMILY_ORDER = [
     "xor",
     "gf2_127",
+    "fp127",
     "ristretto255",
     "secp256k1",
     OTHER,
@@ -268,6 +273,7 @@ ALSO = {
 # curves with
 FIELDS = {
     "gf2_127": "gf2_127",
+    "fp127": "fp127",
 }
 CURVES = [
     "xor",
@@ -314,7 +320,10 @@ CURVE_GROUPS = [
         ],
     ),
 ]
-FIELD_GROUPS = [("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")])]
+FIELD_GROUPS = [
+    ("binary", [("gf2_127", "F_2[z]/(z^127 + z^63 + 1)")]),
+    ("prime", [("fp127", "p = 2^127 − 1")]),
+]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {
     "gf2_127": "gf2_127",
