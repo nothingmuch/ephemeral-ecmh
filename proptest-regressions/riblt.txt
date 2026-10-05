@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc aa8e20f70eb5889ba743617d94b5fb2630679c456c6d36836b175ebf710851e4 # shrinks to c = Curve { big_b: GFb127(uint64x2_t(12855679138632551, 0)), b: GFb127(uint64x2_t(497126130803944283, 115746197)), beta: GFb127(uint64x2_t(2110005987421655069, 32195566110779)) }, salt = [30, 13, 202, 88, 69, 148, 76, 79, 27, 106, 92, 0, 51, 78, 125, 213, 243, 152, 73, 203, 133, 231, 211, 240, 67, 40, 103, 1, 234, 130, 48, 195], common = 27, da = 16, db = 16, extra = 18
+cc 4b675adc6e58a5592488b6d9e956fd5897369eecd5380777de92a2f08b0be9af # shrinks to c = Curve { b: Fp(2720018706606511706) }, salt = [195, 172, 136, 115, 149, 45, 165, 58, 177, 134, 174, 248, 26, 249, 100, 15, 84, 63, 177, 221, 18, 158, 36, 126, 133, 0, 231, 124, 71, 83, 16, 56], common = 15, da = 11, db = 17, extra = 27
+cc 1a176b83f656cccacf478007bc0cb673c0be5b52c6149723e8da5bd94ca26d45 # shrinks to c = Curve { d: Fp(5118081220131512261998304730410682549), a2: Fp(2559040610065756130999152365205341275), a4: Fp(136975939304767661636813123174148764901), bm: Fp(128745146627730842313915199357007255482) }, salt = [49, 28, 64, 197, 246, 138, 66, 74, 152, 6, 224, 160, 4, 70, 222, 52, 157, 181, 40, 154, 28, 253, 45, 145, 165, 144, 194, 236, 13, 147, 224, 184], common = 6, da = 16, db = 19, extra = 13

@@ -19,6 +19,8 @@ crrl = { version = "0.9.0", default-features = false, features = [
 ] }
 p3-field = "0.8"
 p3-goldilocks = "0.8"
+# the RIBLT mapping's generator (src/riblt.rs): xoshiro256++
+rand_xoshiro = "0.7.0"
 sha2 = "0.11"
 
 [dev-dependencies]
