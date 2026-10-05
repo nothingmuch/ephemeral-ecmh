@@ -42,6 +42,19 @@ the same distinctions.
 
 ### Point counting and curve generation
 
+- `ansi-x9-62-1998`, `rfc5639`, `baigneres-et-al-2015`,
+  `lenstra-wesolowski-2017`. Curves derived from public randomness. X9.62's
+  verifiably random curves and Brainpool's verifiably pseudo-random ones hash a
+  published seed, which `bernstein-et-al-2015` shows still leaves the seed's
+  author a choice. The Million Dollar Curve takes its seed from several national
+  lotteries and turns it into parameters by a deterministic filter, for one
+  curve meant to replace P-256 and Curve25519. Lenstra and Wesolowski's trx
+  derives a stream of curves from the output of their beacon, unicorn: the first
+  acceptable candidate in a fixed enumeration, with data to show that the
+  earlier candidates fail, which is the shape of this repository's certificate.
+  Both provide curves for general use at the 128-bit level, where trx takes
+  hours per curve; here a new beacon value selects a smaller curve for each
+  namespace.
 - `bonneau-clark-goldfeder-2015`. Bitcoin block hashes as a beacon: a lower
   bound on each block's min-entropy, and the cost to a miner of biasing the
   output by withholding blocks, which is the manipulation this study leaves to
