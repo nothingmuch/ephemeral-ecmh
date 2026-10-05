@@ -150,6 +150,17 @@ the same distinctions.
   logarithms the $k$-sum bound is not the attack cost for these checksums; with
   them, the checksum is AdHash modulo $r$ and the algorithm applies ([Known
   weaknesses](ecc_security.md#known-weaknesses)).
+- `meyer-2022`. Range-based set reconciliation with fingerprints combined in a
+  monoid. Section V-B surveys fingerprint groups against an adversary who
+  chooses items, and cites additive hashes of 2688 to 4160 bits for 128-bit
+  security against Wagner's algorithm and its successors
+  (`mihajloska-gligoroski-samardjiska-2015`).
+- `mihajloska-gligoroski-samardjiska-2015`. Incremental hash functions over
+  SHAKE outputs combined by word-wise addition modulo $2^{64}$, with output
+  lengths chosen against Wagner's algorithm: 2688 bits for 128-bit security when
+  a relation has at most $2^{25}$ terms, 4160 bits without a bound. The security
+  chapter compares these sizes with a checksum whose discrete logarithms are
+  known.
 - `phan-wagner-2006`. Collisions in randomize-then-combine hashes of
   pair-chained message blocks: repeated blocks, coinciding padding and cyclic
   chaining give distinct messages with equal hashes, in several cases with
