@@ -32,6 +32,14 @@ name = "compare"
 harness = false
 
 [[bench]]
+name = "agm"
+harness = false
+
+[[bench]]
+name = "sieve"
+harness = false
+
+[[bench]]
 name = "group"
 harness = false
 

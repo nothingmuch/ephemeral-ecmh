@@ -47,6 +47,10 @@ digest	gf2/streaming		956050	958360	960630	1024	935.89
 digest	ristretto255/streaming		4.9888e+06	5.0012e+06	5.0219e+06	1024	4884
 digest	secp256k1/try-and-increment + combine_keys		4.7665e+06	4.7709e+06	4.7754e+06	1024	4659.18
 digest	secp256k1/ellswift + combine_keys		5.3055e+06	5.3445e+06	5.4089e+06	1024	5219.21
+curvegen/verify_full	gf2/30 rejections	0	1.2715e+06	1.2723e+06	1.273e+06		1.272e+06
+curvegen/verify_full	gf2/114 rejections	1	1.5995e+06	1.6061e+06	1.6136e+06		1.606e+06
+curvegen/verify_full	gf2/54 rejections	2	1.3522e+06	1.3542e+06	1.3564e+06		1.354e+06
+curvegen/verify_full	gf2/14 rejections	3	1.1684e+06	1.1697e+06	1.1723e+06		1.17e+06
 add	gf2/extended -= affine, 1 accumulator		23587.1	23705.6	23824.1	1024	23.15
 add	gf2/extended -= affine, 8 accumulators		19216.1	19312.6	19409.2	1024	18.86
 add	ristretto255/-=, 1 accumulator		69100.4	69447.7	69794.9	1024	67.82

@@ -46,7 +46,7 @@
 # Nothing builds while anything is timed, and the suites run serially:
 # don't build or bench anything else on the machine meanwhile.
 
-default_suites=(compare group)
+default_suites=(compare group agm sieve)
 profile=quick
 suites=()
 while (($#)); do

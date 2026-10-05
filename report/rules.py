@@ -16,6 +16,7 @@ LAYERS = [
     (r"^(negate|add|group\.\w+)$", "group ops"),
     (r"^(hash_to_curve|h2c|h2c_parts|on_curve)$", "hash to curve"),
     (r"^digest$", "digest"),
+    (r"^(curvegen/\w+|agm|zq|sieve/\w+)$", "curve generation"),
 ]
 
 # (Regex on function/parameter, the operation the map is timed as.) The
@@ -102,7 +103,7 @@ CONTEXT_SPELLINGS = [
 ]
 # groups whose functions name no family: agm and zq only count binary
 # curves; riblt.mapping's functions name index generators
-GROUP_FAMILIES = {}
+GROUP_FAMILIES = {"agm": "gf2_127", "zq": "gf2_127", "riblt.mapping": "mapping"}
 
 
 def curve(family: str) -> str:
@@ -186,9 +187,15 @@ OPERATIONS = [
     (r"^h2c_parts", r"^(?P<algo>[^/]+)/", "steps: {algo}"),
     (r"^on_curve", r"", "x on curve"),
     (r"^digest", r"", "digest"),
+    (r"^curvegen/verify_accept", r"", "accept certificate"),
+    (r"^curvegen/verify_full", r"", "verify certificate"),
+    (r"^curvegen/find", r"agm", "find (Rust: AGM + sieve)"),
+    (r"^curvegen/certify", r"agm", "certify (Rust: AGM + sieve + order witnesses)"),
     (r"^agm", r"order", "point count (Rust AGM)"),
     (r"^agm", r"", "AGM steps"),
     (r"^zq", r"", "Z_q ring op"),
+    (r"^sieve/l", r"", "sieve, one l"),
+    (r"^sieve/candidate", r"", "sieve, per candidate"),
 ]
 
 # (regex on "function/parameter", mode); the fallback is per-element when

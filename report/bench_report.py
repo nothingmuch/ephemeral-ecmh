@@ -244,6 +244,42 @@ def check_ids(lines) -> list[str]:
 # the costs dominance compares; the regimes' estimates are sums of them
 
 
+def selection_runs(root: Path) -> pd.DataFrame:
+    """curvegen.csv's rows, one per family, method and seed, under the
+    canonical family names; empty without curvegen.csv."""
+    found = beside(root, "curvegen.csv")
+    if found is None:
+        return pd.DataFrame(columns=["family", "method", "seed", "find_s", "verify_s"])
+    c = pd.read_csv(found)
+    c["family"] = c.family.map(lambda name: rules.SPELLINGS.get(name, name))
+    return c
+
+
+def fastest_method(runs: pd.DataFrame) -> pd.DataFrame:
+    """Of runs, those of each family's method that finds fastest on average."""
+    if runs.empty:
+        return runs
+    mean = runs.groupby(["family", "method"]).find_s.mean()
+    best = set(mean.groupby(level="family").idxmin())
+    return runs[[k in best for k in zip(runs.family, runs.method)]]
+
+
+def selection(root: Path) -> pd.DataFrame:
+    """Mean wall-clock seconds to find a curve and to verify its
+    certificate, per curve, over curvegen.csv's seeds, by the method that
+    finds fastest; empty without curvegen.csv."""
+    return (
+        fastest_method(selection_runs(root))
+        .groupby(["family", "method"])
+        .agg(
+            seeds=("seed", "count"),
+            find_s=("find_s", "mean"),
+            verify_s=("verify_s", "mean"),
+        )
+        .reset_index()
+    )
+
+
 def elementary(t: pd.DataFrame) -> pd.DataFrame:
     """One row per (elementary operation, field or curve): the cheapest
     bench that rules.ELEMENTARY selects."""

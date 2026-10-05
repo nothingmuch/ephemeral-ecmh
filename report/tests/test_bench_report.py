@@ -20,6 +20,7 @@ LAYERS = [
     "hash to curve",
     "comparison maps",
     "digest",
+    "curve generation",
 ]
 
 # the workload, and the smaller-field variants the rules must name
@@ -66,6 +67,18 @@ def test_per_element_values_match_the_summary(table):
         want = float(r["summary_ns"])
         # the summary is rounded to 2 decimals (ns) or 4 digits (ms)
         assert abs(got[full] - want) <= max(0.006, 5e-4 * want), full
+
+
+def test_slope_else_mean_and_never_base(table):
+    x = table.set_index("full_id")
+    add = x.loc["add/gf2/batch affine (tree sum)"]
+    assert add.stat == "slope"
+    r = next(r for r in ROWS if r["function"] == "gf2/batch affine (tree sum)")
+    assert add.estimate_ns == pytest.approx(float(r["point_ns"]))
+    assert add.ci_lo_ns < add.estimate_ns < add.ci_hi_ns
+    cert = x.loc["curvegen/verify_full/gf2/30 rejections/0"]
+    assert (cert.stat, cert.unit, cert["mode"]) == ("mean", "ns/iter", "total")
+    assert cert.value_ns == cert.estimate_ns
 
 
 def test_stat_choice(tree):
@@ -160,6 +173,11 @@ def test_current_suite_is_fully_classified(table):
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
         # GF(2^122): qsolve sits with the halftraces
         # a batch to affine, not a sum
+        (
+            "agm/order",
+            ("curve generation", "gf2_127", "point count (Rust AGM)", "per-element"),
+        ),
+        ("zq/sigma", ("curve generation", "gf2_127", "Z_q ring op", "per-element")),
         # benches/group.rs: layered ids, the family spelled <name>.<bits>
         (
             "group.add/binary.127/mode=throughput",
@@ -222,7 +240,14 @@ def test_both_spellings_name_one_family(old, new):
 
 @pytest.mark.parametrize(
     "group, function, parameter, operation",
-    [],
+    [
+        (
+            "curvegen/find",
+            "gf2_127 agm+sieve/index 30",
+            "0",
+            "find (Rust: AGM + sieve)",
+        ),
+    ],
 )
 def test_curvegen_names_each_family(group, function, parameter, operation):
     f = rules.classify(group, function, parameter, False)
@@ -332,6 +357,13 @@ def test_curve_columns_read_back_as_their_family():
     # the elementary section's column names read back as their family
     for curve in rules.CURVES:
         assert rules.family(curve)[0] == curve, curve
+
+
+def test_classify_total_without_throughput():
+    assert (
+        rules.classify("curvegen/verify_full", "gf2/30 rejections", "0", False).mode
+        == "total"
+    )
 
 
 IDS = Path(__file__).parent / "fixtures" / "ids-2026-10-03.tsv"
@@ -604,6 +636,11 @@ RUN_META = {
     "dirty": False,
     "profile": "full",
 }
+CURVEGEN = (
+    "family,method,seed,find_s,verify_s\n"
+    "gf2_127,agm+sieve,0,0.01,0.001\n"
+    "gf2_127,pari,0,0.1,0.001\n"
+)
 
 
 def write_run(run: Path) -> Path:
@@ -611,6 +648,7 @@ def write_run(run: Path) -> Path:
     for g, f, p, n in EXTRA:
         write_bench(root, g, f, p, 90.0 * n, 100.0 * n, 110.0 * n, {"Elements": n})
     (run / "meta.json").write_text(json.dumps(RUN_META))
+    (run / "curvegen.csv").write_text(CURVEGEN)
     return run
 
 
@@ -624,6 +662,7 @@ def test_export_keeps_the_raw_estimates(run, tmp_path):
     br.main(["--export", str(run), str(dest)])
     assert sorted(p.name for p in dest.iterdir()) == [
         "benchmarks.csv",
+        "curvegen.csv",
         "meta.json",
     ]
     df, _ = br.load(run / "criterion")
@@ -638,6 +677,7 @@ def test_export_keeps_the_raw_estimates(run, tmp_path):
     assert json.loads((dest / "meta.json").read_text()) == {
         k: v for k, v in RUN_META.items() if k != "host"
     }
+    assert (dest / "curvegen.csv").read_text() == CURVEGEN
     with pytest.raises(SystemExit, match="exists"):
         br.export(run, dest)
 

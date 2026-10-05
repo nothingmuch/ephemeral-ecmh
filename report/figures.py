@@ -467,6 +467,8 @@ def plot_layer(
         return _hash_sweep(d, stem, formats, footer)
     if layer == rules.EXPERIMENTAL and sweep:
         return _maps(t, stem, formats, footer)
+    if layer == "curve generation":
+        return _seeds(d, stem, formats, footer)
     return _layer_bars(d, layer, stem, formats, footer)
 
 
@@ -734,6 +736,45 @@ def _maps(t: pd.DataFrame, stem: Path, formats, footer):
         "scale beside try-and-increment on the same curves and on the three "
         "curves where it is fastest: a row per curve and method, one at a time "
         "and batched as a dark and a light bar of the family's colour."
+    )
+    return save(fig, stem, formats, alt, footer)
+
+
+def _seeds(d: pd.DataFrame, stem: Path, formats, footer):
+    ops = list(dict.fromkeys(d.operation))
+    log = spans(d.assign(value_lo_ns=d.value_ns, value_hi_ns=d.value_ns))
+    ncol = 2
+    grid = [ops[i : i + ncol] for i in range(0, len(ops), ncol)]
+    heights = [
+        0.8 + 0.28 * max(d[d.operation == o].family.nunique() for o in row)
+        for row in grid
+    ]
+    fig = plt.figure(figsize=(FIG_W, sum(heights) + 0.6), layout="constrained")
+    axes = fig.subplots(len(grid), ncol, height_ratios=heights, squeeze=False)
+    for r, row in enumerate(grid):
+        for c in range(ncol):
+            ax = axes[r][c]
+            if c >= len(row):
+                ax.set_visible(False)
+                continue
+            o = d[d.operation == row[c]]
+            fams = list(dict.fromkeys(o.family))
+            y = [-fams.index(f) for f in o.family]
+            ax.scatter(o.value_ns, y, s=14, color=[color(b) for b in o.base], zorder=3)
+            axis(ax, log)
+            ax.set_yticks([-i for i in range(len(fams))], fams)
+            ax.set_ylim(-len(fams) + 0.4, 0.6)
+            ax.tick_params(axis="y", length=0)
+            ax.set_title(wrap_label(row[c], 40), loc="left", color=TEXT)
+    fig.suptitle(
+        "Curve generation, total time per seed",
+        x=0,
+        ha="left",
+        fontsize=HEAD,
+        color=TEXT,
+    )
+    alt = "Curve generation: a dot per seed for each family, a panel per stage" + (
+        ", on log scales." if log else "."
     )
     return save(fig, stem, formats, alt, footer)
 
