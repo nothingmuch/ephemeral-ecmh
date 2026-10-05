@@ -6,6 +6,7 @@
       pkgs,
       hasCargo,
       commonArgs,
+      pariEnv,
       toolchains,
       ...
     }:
@@ -97,7 +98,7 @@
                 ;
             }
             // {
-              inherit (config.checks) treefmt site;
+              inherit (config.checks) treefmt bench-report site;
             }
           );
         };

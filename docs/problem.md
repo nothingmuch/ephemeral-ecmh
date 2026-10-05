@@ -234,6 +234,8 @@ withhold or delay a value it has observed, are questions for the protocol that
 uses the checksum; they are not addressed here. Whether the checksum covers sets
 or multisets changes the bounds on relation finding of [Setting and reference
 work factor](#setting-and-reference-work-factor) but not the constructions
-compared. How the RIBLT performs when a peer reconciles with
+compared. Targets without carry-less multiplication, WebAssembly among them, are
+represented only by the portable build described in [Measurement
+methodology](methodology.md). How the RIBLT performs when a peer reconciles with
 several others, and how far a third party can delay decoding with items whose
 schedules agree, are questions for the sketch rather than for its checksum.

@@ -2,6 +2,7 @@
   perSystem =
     {
       pkgs,
+      pariEnv,
       ccEnv,
       toolchains,
       ...
@@ -20,7 +21,7 @@
           pkgs.cargo-nextest
           pkgs.stdenv.cc
         ];
-        runtimeEnv = ccEnv;
+        runtimeEnv = pariEnv // ccEnv;
         text = ''exec cargo mutants --profile ci "$@"'';
       };
     in

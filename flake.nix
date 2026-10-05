@@ -28,10 +28,13 @@
       imports = [
         ./nix/toolchain.nix
         ./nix/python.nix
+        ./nix/report.nix
         ./nix/mutants.nix
+        ./nix/sage.nix
         ./nix/package.nix
         ./nix/site.nix
         ./nix/checks.nix
+        ./nix/devshell.nix
         ./nix/treefmt.nix
         ./nix/validate-commits.nix
       ];
