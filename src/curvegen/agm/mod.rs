@@ -1,6 +1,6 @@
 //! Point counting on E_B : y^2 + xy = x^3 + x^2 + B over GF(2^m),
 //! without PARI. The counter is generic over the field's polynomial
-//! basis (`Modulus`); `binary127` has a = 1, the model counted here.
+//! basis (`Modulus`); `binary127` and `binary109` have a = 1, the model counted here.
 
 //!
 //! Satoh–Skjernaa–Taguchi lifting on the AGM modular equation (Gaudry's
@@ -37,11 +37,11 @@
 
 mod zq;
 
-pub use zq::{CAP, Frobenius, Gf127, Modulus, Zq};
+pub use zq::{CAP, Frobenius, Gf109, Gf127, Modulus, Zq};
 
-use crate::curve::{binary, binary127};
+use crate::curve::{binary, binary109, binary127};
 use crate::curvegen::criteria::Count;
-use crate::field::gf2_127;
+use crate::field::{gf2_109, gf2_127};
 use crate::hash::Salted;
 use std::sync::OnceLock;
 
@@ -53,6 +53,8 @@ const MASK66: u128 = (1 << 66) - 1;
 
 /// floor(2 sqrt(2^127)), as in select.rs.
 const HASSE: u128 = 26087635650665564424;
+/// floor(2 sqrt(2^109)), as in select109.rs.
+const HASSE109: u128 = 50952413380206180;
 const TAG_CHECK: &[u8] = b"ephemeral-ecmh/agm/check";
 
 const fn inv_odd(a: u64) -> u64 {
@@ -220,9 +222,23 @@ impl Counter<Gf127> {
     }
 }
 
+impl Counter<Gf109> {
+    /// #E_B over GF(2^109), as `Counter<Gf127>::order`: m is odd too.
+    pub fn order(&self, c: &binary109::Curve) -> u128 {
+        let t = self.trace(gf2_109::to_u128(c.big_b));
+        checked(c, twist_order(109, t, HASSE109))
+    }
+}
+
 /// The GF(2^127) counter, built on first use (~750 multiplications).
 pub fn counter() -> &'static Counter<Gf127> {
     static C: OnceLock<Counter<Gf127>> = OnceLock::new();
+    C.get_or_init(Counter::new)
+}
+
+/// The GF(2^109) counter, built on first use.
+pub fn counter109() -> &'static Counter<Gf109> {
+    static C: OnceLock<Counter<Gf109>> = OnceLock::new();
     C.get_or_init(Counter::new)
 }
 
@@ -232,6 +248,11 @@ pub struct Agm;
 impl Count<binary127::Curve> for Agm {
     fn order(&mut self, c: &binary127::Curve) -> u128 {
         counter().order(c)
+    }
+}
+impl Count<binary109::Curve> for Agm {
+    fn order(&mut self, c: &binary109::Curve) -> u128 {
+        counter109().order(c)
     }
 }
 
@@ -289,6 +310,17 @@ mod tests {
             for p in ps {
                 prop_assert!(is_zero(c.mul(&c.from_affine(&p), n).x));
                 prop_assert!(is_zero(c.mul(&c.from_affine(&p), n / 2).x));
+            }
+        }
+
+        #[test]
+        fn order109_kills_points((c, ps) in binary109::tests::curve_and_points(2)) {
+            let n = counter109().order(&c);
+            prop_assert_eq!(n % 4, 2);
+            prop_assert!(n.abs_diff(1 << 109 | 1) <= HASSE109);
+            for p in ps {
+                let o = |k| c.mul(&c.from_affine(&p), k).is_identity();
+                prop_assert!(o(n) && o(n / 2));
             }
         }
     }

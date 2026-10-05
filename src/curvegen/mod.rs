@@ -19,6 +19,7 @@ pub mod pari;
 pub mod poly;
 pub mod prove;
 pub mod select;
+pub mod select109;
 pub mod sieve;
 
 pub use number::embedding_degree_ok;

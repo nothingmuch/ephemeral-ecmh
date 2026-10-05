@@ -6,19 +6,22 @@
 
 #[path = "common/kats.rs"]
 mod kats;
+#[path = "common/kats109.rs"]
+mod kats109;
 #[path = "common/orders.rs"]
 mod orders;
 
-use ephemeral_ecmh::curvegen::criteria::{self, Count};
+use ephemeral_ecmh::curvegen::agm::Agm;
+use ephemeral_ecmh::curvegen::criteria::{self, Count, Criteria};
 use std::collections::HashMap;
 
-use ephemeral_ecmh::curve::{binary127, edwards127, weier127};
+use ephemeral_ecmh::curve::{binary109, binary127, edwards127, weier127};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve, SmallL,
-    Weier127,
+    self, Binary109, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve,
+    SmallL, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
-use ephemeral_ecmh::curvegen::sieve;
+use ephemeral_ecmh::curvegen::{select109, sieve};
 use ephemeral_ecmh::field::gf2_127::to_u128;
 use kats::CertKat;
 use orders::Orders;
@@ -324,4 +327,54 @@ fn rust_alone_certifies_the_binary127_kat_curves() {
         assert_eq!((cert.index, cert.r), (k.index, k.r));
         select::verify_gf2_127(&k.seed, &cert).unwrap();
     }
+}
+
+/// Rust alone certifies binary109's KAT curves: AGM counts, no `Factor`.
+/// Sage's labels are the smallest prime factors; the prover's entries agree
+/// to the byte below its trial bound and are the full order above it,
+/// which the even marker takes. An order witness never rejects a candidate
+/// of order 2r, r prime, and rejects a composite under its order alone.
+#[test]
+fn rust_alone_certifies_the_binary109_kat_curves() {
+    const TRIAL: u128 = 1 << 10;
+    let rejects = select::rejects::<{ binary109::ENCODED_LEN }, select109::Binary109>;
+    for k in kats109::GF2_109_CERTS {
+        let (cert, _) = prove::prove::<Binary109>(&k.seed, &mut Agm, &mut NoFactor, &mut NoSieve);
+        assert_eq!((cert.index, cert.r), (k.index, k.r));
+        let cert = prove::certificate109(cert);
+        for (&(l, w), &(sage, p)) in cert.rejections.iter().zip(k.rejections) {
+            if sage < TRIAL {
+                assert_eq!((l, &w[..]), (sage, &p.to_le_bytes()[..w.len()]));
+            } else {
+                assert!(l & 1 == 0 && Binary109::R.hasse_contains(l), "{l}");
+            }
+        }
+        select109::verify(&k.seed, &cert).unwrap();
+        let f = criteria::find::<Binary109>(&k.seed, &mut Agm, &mut NoSieve);
+        assert_eq!((f.index, f.r), (k.index, k.r));
+    }
+    // the cheapest KAT: the accepted curve and the first order-labelled entry
+    let k = kats109::GF2_109_CERTS
+        .iter()
+        .min_by_key(|k| k.index)
+        .unwrap();
+    let (cert, valid) = prove::prove::<Binary109>(&k.seed, &mut Agm, &mut NoFactor, &mut NoSieve);
+    let h = ephemeral_ecmh::hash::Salted::new(b"test", &k.seed);
+    let p = valid.hash_to_curve(&h, b"p".as_slice()).encode();
+    for n in [2 * k.r, 2 * k.r - 2, 2 * k.r + 2, 2 * k.r + 4] {
+        assert!(!rejects(&valid, n, p), "{n}");
+    }
+    let (j, &(n, _)) = cert
+        .rejections
+        .iter()
+        .enumerate()
+        .find(|(_, e)| e.0 & 1 == 0)
+        .expect("an order-labelled entry");
+    let c = select109::candidate(&k.seed, j as u32).unwrap();
+    let p = c.hash_to_curve(&h, b"p".as_slice()).encode();
+    assert!(rejects(&c, n, p));
+    for m in [n - 2, n + 2, n / 2, 2 * n] {
+        assert!(!rejects(&c, m, p), "{m}");
+    }
+    assert!(!rejects(&c, n, [0; binary109::ENCODED_LEN]));
 }

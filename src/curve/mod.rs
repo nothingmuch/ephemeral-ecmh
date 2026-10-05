@@ -6,6 +6,7 @@
 //! documented primality assumptions.
 
 pub mod binary;
+pub mod binary109;
 pub mod binary127;
 pub mod edwards;
 pub mod edwards127;

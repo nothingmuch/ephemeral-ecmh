@@ -23,12 +23,14 @@
 //! Structural exclusions follow the family's certificate-entry convention.
 
 use super::agm::Agm;
-use super::criteria::{Count, Filter, Found, OrderError, find};
+use super::criteria::{Count, Criteria, Filter, Found, OrderError, find};
 use crate::curve::{binary127, edwards127, weier127};
 use crate::curvegen::select::{self, Certificate, Policy, affine_mul, is_prime};
 use crate::hash::Salted;
 
+mod gf2;
 pub use crate::curvegen::select::{Binary127, Edwards127, Weier127};
+pub use gf2::{Binary109, certificate109};
 
 pub const TAG_WITNESS: &[u8] = b"ephemeral-ecmh/prove/witness";
 
@@ -393,7 +395,7 @@ pub fn prove_weier127(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curvegen::criteria::{AdmissibleR, Criteria};
+    use crate::curvegen::criteria::AdmissibleR;
     use crate::field::fp127::Fp;
     use proptest::prelude::*;
 

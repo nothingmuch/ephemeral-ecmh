@@ -4,6 +4,9 @@
 # run's directory, machine and source revision were not recorded.
 add	edwards127/+= montgomery affine, 8 accumulators
 add	edwards127/batch montgomery affine (tree sum)
+add	gf2_109/batch affine (tree sum)
+add	gf2_109/extended += affine, 8 accumulators
+add	gf2_109/normalize, batched
 add	gf2_127/batch affine (tree sum)
 add	gf2_127/extended += affine, 8 accumulators
 add	ristretto255/+=, 1 accumulator
@@ -21,12 +24,15 @@ curvegen/count	gf2_127
 curvegen/count	weier127
 curvegen/find	gf2_127 agm+sieve/index 30
 curvegen/verify_accept	edwards127
+curvegen/verify_accept	gf2_109
 curvegen/verify_accept	gf2_127
 curvegen/verify_accept	weier127
 curvegen/verify_full	edwards127/3 rejections
+curvegen/verify_full	gf2_109/3 rejections
 curvegen/verify_full	gf2_127/3 rejections
 curvegen/verify_full	weier127/3 rejections
 digest	edwards127/batch
+digest	gf2_109/batch
 digest	gf2_127/batch
 digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
@@ -68,12 +74,20 @@ field	gf2_127/sqrt
 field	gf2_127/square latency (dependent chain)
 field	gf2_127/square throughput (8 chains)
 field	gf2_127/trace
+group.add	binary-lambda.109/mode=latency
+group.add	binary-lambda.109/mode=throughput
 group.add	binary-lambda.127/mode=latency
 group.add	binary-lambda.127/mode=throughput
+group.add	binary-u.109/mode=latency
+group.add	binary-u.109/mode=throughput
 group.add	binary-u.127/mode=latency
 group.add	binary-u.127/mode=throughput
+group.add	binary-w.109/mode=latency
+group.add	binary-w.109/mode=throughput
 group.add	binary-w.127/mode=latency
 group.add	binary-w.127/mode=throughput
+group.add	binary.109/mode=latency
+group.add	binary.109/mode=throughput
 group.add	binary.127/mode=latency
 group.add	binary.127/mode=throughput
 group.add	edwards.127/mode=latency
@@ -82,12 +96,20 @@ group.add	weier-jacobian.127/mode=latency
 group.add	weier-jacobian.127/mode=throughput
 group.add	weier.127/mode=latency
 group.add	weier.127/mode=throughput
+group.decode	binary-lambda.109/mode=batch,n=1024
+group.decode	binary-lambda.109/mode=indep
 group.decode	binary-lambda.127/mode=batch,n=1024
 group.decode	binary-lambda.127/mode=indep
+group.decode	binary-u.109/mode=batch,n=1024
+group.decode	binary-u.109/mode=indep
 group.decode	binary-u.127/mode=batch,n=1024
 group.decode	binary-u.127/mode=indep
+group.decode	binary-w.109/mode=batch,n=1024
+group.decode	binary-w.109/mode=indep
 group.decode	binary-w.127/mode=batch,n=1024
 group.decode	binary-w.127/mode=indep
+group.decode	binary.109/mode=batch,n=1024
+group.decode	binary.109/mode=indep
 group.decode	binary.127/mode=batch,n=1024
 group.decode	binary.127/mode=indep
 group.decode	edwards.127/mode=batch,n=1024
@@ -96,12 +118,20 @@ group.decode	weier-jacobian.127/mode=batch,n=1024
 group.decode	weier-jacobian.127/mode=indep
 group.decode	weier.127/mode=batch,n=1024
 group.decode	weier.127/mode=indep
+group.encode	binary-lambda.109/mode=batch,n=1024
+group.encode	binary-lambda.109/mode=indep
 group.encode	binary-lambda.127/mode=batch,n=1024
 group.encode	binary-lambda.127/mode=indep
+group.encode	binary-u.109/mode=batch,n=1024
+group.encode	binary-u.109/mode=indep
 group.encode	binary-u.127/mode=batch,n=1024
 group.encode	binary-u.127/mode=indep
+group.encode	binary-w.109/mode=batch,n=1024
+group.encode	binary-w.109/mode=indep
 group.encode	binary-w.127/mode=batch,n=1024
 group.encode	binary-w.127/mode=indep
+group.encode	binary.109/mode=batch,n=1024
+group.encode	binary.109/mode=indep
 group.encode	binary.127/mode=batch,n=1024
 group.encode	binary.127/mode=indep
 group.encode	edwards.127/mode=batch,n=1024
@@ -110,33 +140,53 @@ group.encode	weier-jacobian.127/mode=batch,n=1024
 group.encode	weier-jacobian.127/mode=indep
 group.encode	weier.127/mode=batch,n=1024
 group.encode	weier.127/mode=indep
+group.equals	binary-lambda.109
 group.equals	binary-lambda.127
+group.equals	binary-u.109
 group.equals	binary-u.127
+group.equals	binary-w.109
 group.equals	binary-w.127
+group.equals	binary.109
 group.equals	binary.127
 group.equals	edwards.127
 group.equals	weier-jacobian.127
 group.equals	weier.127
+group.is_identity	binary-lambda.109
 group.is_identity	binary-lambda.127
+group.is_identity	binary-u.109
 group.is_identity	binary-u.127
+group.is_identity	binary-w.109
 group.is_identity	binary-w.127
+group.is_identity	binary.109
 group.is_identity	binary.127
 group.is_identity	edwards.127
 group.is_identity	weier-jacobian.127
 group.is_identity	weier.127
+group.neg	binary-lambda.109
 group.neg	binary-lambda.127
+group.neg	binary-u.109
 group.neg	binary-u.127
+group.neg	binary-w.109
 group.neg	binary-w.127
+group.neg	binary.109
 group.neg	binary.127
 group.neg	edwards.127
 group.neg	weier-jacobian.127
 group.neg	weier.127
+group.prepare	binary-lambda.109/mode=batch,n=1024
+group.prepare	binary-lambda.109/mode=indep
 group.prepare	binary-lambda.127/mode=batch,n=1024
 group.prepare	binary-lambda.127/mode=indep
+group.prepare	binary-u.109/mode=batch,n=1024
+group.prepare	binary-u.109/mode=indep
 group.prepare	binary-u.127/mode=batch,n=1024
 group.prepare	binary-u.127/mode=indep
+group.prepare	binary-w.109/mode=batch,n=1024
+group.prepare	binary-w.109/mode=indep
 group.prepare	binary-w.127/mode=batch,n=1024
 group.prepare	binary-w.127/mode=indep
+group.prepare	binary.109/mode=batch,n=1024
+group.prepare	binary.109/mode=indep
 group.prepare	binary.127/mode=batch,n=1024
 group.prepare	binary.127/mode=indep
 group.prepare	edwards.127/mode=batch,n=1024
@@ -145,12 +195,20 @@ group.prepare	weier-jacobian.127/mode=batch,n=1024
 group.prepare	weier-jacobian.127/mode=indep
 group.prepare	weier.127/mode=batch,n=1024
 group.prepare	weier.127/mode=indep
+group.sub	binary-lambda.109/mode=latency
+group.sub	binary-lambda.109/mode=throughput
 group.sub	binary-lambda.127/mode=latency
 group.sub	binary-lambda.127/mode=throughput
+group.sub	binary-u.109/mode=latency
+group.sub	binary-u.109/mode=throughput
 group.sub	binary-u.127/mode=latency
 group.sub	binary-u.127/mode=throughput
+group.sub	binary-w.109/mode=latency
+group.sub	binary-w.109/mode=throughput
 group.sub	binary-w.127/mode=latency
 group.sub	binary-w.127/mode=throughput
+group.sub	binary.109/mode=latency
+group.sub	binary.109/mode=throughput
 group.sub	binary.127/mode=latency
 group.sub	binary.127/mode=throughput
 group.sub	edwards.127/mode=latency
@@ -159,12 +217,20 @@ group.sub	weier-jacobian.127/mode=latency
 group.sub	weier-jacobian.127/mode=throughput
 group.sub	weier.127/mode=latency
 group.sub	weier.127/mode=throughput
+h2c	binary-lambda.109/mode=batch,n=1024
+h2c	binary-lambda.109/mode=indep
 h2c	binary-lambda.127/mode=batch,n=1024
 h2c	binary-lambda.127/mode=indep
+h2c	binary-u.109/mode=batch,n=1024
+h2c	binary-u.109/mode=indep
 h2c	binary-u.127/mode=batch,n=1024
 h2c	binary-u.127/mode=indep
+h2c	binary-w.109/mode=batch,n=1024
+h2c	binary-w.109/mode=indep
 h2c	binary-w.127/mode=batch,n=1024
 h2c	binary-w.127/mode=indep
+h2c	binary.109/mode=batch,n=1024
+h2c	binary.109/mode=indep
 h2c	binary.127/mode=batch,n=1024
 h2c	binary.127/mode=indep
 h2c	edwards.127/mode=batch,n=1024
@@ -177,6 +243,12 @@ h2c_parts	digest/sha512 (ristretto input)
 h2c_parts	ristretto255/from_uniform_bytes (2 maps + add)
 hash_to_curve	edwards127/edwards-native try-and-increment
 hash_to_curve	edwards127/elligator2 x1
+hash_to_curve	gf2_109-lambda/try-and-increment to (x, λ)
+hash_to_curve	gf2_109-lambda/try-and-increment to (x, λ), batched
+hash_to_curve	gf2_109-w/pornin map x1 to (x, λ)
+hash_to_curve	gf2_109-w/pornin map x1 to (x, λ), batched
+hash_to_curve	gf2_109/pornin map x1
+hash_to_curve	gf2_109/pornin map x1, batched
 hash_to_curve	gf2_127/pornin map x1
 hash_to_curve	gf2_127/pornin map x1, batched
 hash_to_curve	gf2_127/pornin map x2
@@ -186,6 +258,7 @@ hash_to_curve	secp256k1/try-and-increment (parse)
 hash_to_curve	sha256 (XOR baseline)
 hash_to_curve	weier127/sswu x1
 negate	edwards127/extended (-X, -T)
+negate	gf2_109/affine (y += x)
 negate	gf2_127/affine (y += x)
 negate	ristretto255/-P
 negate	secp256k1/PublicKey::negate

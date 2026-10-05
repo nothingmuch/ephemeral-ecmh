@@ -19,9 +19,13 @@ fn registry_retains_the_recorded_group_inventory() {
     // A literal rather than a file under report/tests/fixtures, which the
     // crate source of the checks leaves out (nix/package.nix).
     let recorded = [
+        "binary-lambda.109",
         "binary-lambda.127",
+        "binary-u.109",
         "binary-u.127",
+        "binary-w.109",
         "binary-w.127",
+        "binary.109",
         "binary.127",
         "edwards.127",
         "weier-jacobian.127",

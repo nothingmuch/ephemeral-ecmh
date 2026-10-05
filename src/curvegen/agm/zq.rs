@@ -29,6 +29,15 @@ impl Modulus for Gf127 {
     const LOW: &'static [usize] = &[63, 0];
 }
 
+/// crate::field::gf2_109: GF(2^109) = F_2\[z\]/(z^109 + z^5 + z^4 + z^2 + 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gf109;
+
+impl Modulus for Gf109 {
+    const M: usize = 109;
+    const LOW: &'static [usize] = &[5, 4, 2, 0];
+}
+
 /// Multiplications, squarings and Frobenius matrix products on this
 /// thread, so tests can pin the cost of a count.
 #[cfg(test)]

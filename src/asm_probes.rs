@@ -149,6 +149,15 @@ pub mod group {
         binary127_w,
         crate::curve::binary::wcodec::Curve<crate::curve::binary127::M127>
     );
+    family!(binary109, crate::curve::binary109::Curve);
+    family!(
+        binary109_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary109::M109>
+    );
+    family!(
+        binary109_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary109::M109>
+    );
     family!(edwards127, crate::curve::edwards127::Curve);
     family!(weier127, crate::curve::weier127::OddCurve);
     family!(
@@ -158,5 +167,9 @@ pub mod group {
     family!(
         binary127_u,
         crate::curve::binary::unscaled::Curve<crate::curve::binary127::M127>
+    );
+    family!(
+        binary109_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary109::M109>
     );
 }

@@ -31,6 +31,7 @@ quantity from the $r$ recorded by that run's group suite:
 | Family | Group order | $\log_2$ of rho cost |
 |---|---|---|
 | Binary, $\mathrm{GF}(2^{127})$ | $2r$, $r$ near $2^{126}$ | 62.8 |
+| Binary, $\mathrm{GF}(2^{109})$ | $2r$, $r$ near $2^{108}$ | 53.8 |
 | Weierstrass, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $r$ | 63.3 |
 | Edwards, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $4r$ | 62.3 |
 

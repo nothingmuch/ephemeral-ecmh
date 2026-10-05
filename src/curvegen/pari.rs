@@ -34,10 +34,10 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 
-use crate::curve::{binary127, edwards127, weier127};
+use crate::curve::{binary109, binary127, edwards127, weier127};
 use crate::curvegen::prove::Factor;
 use crate::field::fp127::P;
-use crate::field::gf2_127;
+use crate::field::{gf2_109, gf2_127};
 
 type Gen = *mut c_long;
 
@@ -86,6 +86,8 @@ struct State {
     p: Gen,
     /// generator of F_2[t]/(t^127 + t^63 + 1)
     g: Gen,
+    /// generator of F_2[t]/(t^109 + t^5 + t^4 + t^2 + 1)
+    g109: Gen,
 }
 
 type Job = Box<dyn FnOnce(&State) + Send>;
@@ -139,6 +141,7 @@ fn start() -> mpsc::Sender<Job> {
                 State {
                     p: gclone(int(P)),
                     g: binary_generator(1 << 127 | 1 << 63 | 1),
+                    g109: binary_generator(1 << 109 | 1 << 5 | 1 << 4 | 1 << 2 | 1),
                 }
             };
             for job in rx {
@@ -214,6 +217,13 @@ impl Count<binary127::Curve> for Pari {
     }
 }
 
+impl Count<binary109::Curve> for Pari {
+    fn order(&mut self, c: &binary109::Curve) -> u128 {
+        let big_b = gf2_109::to_u128(c.big_b);
+        run(move |s| to_int(unsafe { ellcard(binary_ell(s.g109, big_b), std::ptr::null_mut()) }))
+    }
+}
+
 impl Count<edwards127::Curve> for Pari {
     fn order(&mut self, c: &edwards127::Curve) -> u128 {
         let c = *c;
@@ -252,7 +262,9 @@ mod tests {
     use super::*;
     use crate::curve::weier;
 
-    unsafe extern "C" {}
+    unsafe extern "C" {
+        fn gequal(x: Gen, y: Gen) -> std::ffi::c_int;
+    }
 
     /// Pairs of field elements as bits under `mask`, from a fixed xorshift
     /// stream, with the all-ones element first: products that reduce.
@@ -267,6 +279,21 @@ mod tests {
         let mut v = vec![(mask, mask)];
         v.extend((0..16).map(|_| (next(), next())));
         v
+    }
+
+    /// `binary_ell`'s map of GF(2^109) bits into PARI's field multiplies
+    /// as `gf2_109` does: the same modulus, the same bit order.
+    #[test]
+    fn gf2_109_embeds() {
+        let f = |v| gf2_109::from_u128(v);
+        for (a, b) in samples(gf2_109::MASK109) {
+            let ab = gf2_109::to_u128(f(a) * f(b));
+            let same = run(move |s| unsafe {
+                let x = |v| Fq_to_FF(bits_poly(v), s.g109);
+                gequal(gmul(x(a), x(b)), x(ab)) != 0
+            });
+            assert!(same, "{a:#x} * {b:#x}");
+        }
     }
 
     /// x^3 - 3x + b has a root, a point of order 2, exactly when #E is

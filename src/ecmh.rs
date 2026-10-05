@@ -296,12 +296,37 @@ mod tests {
         }
 
         #[test]
+        fn binary109_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary109_lambda_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(lambda::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary109_lambda_matches_binary109(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_same_digests(c, lambda::Curve(c), salt, xs, signs)?;
+        }
+
+        #[test]
         fn binary127_w_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(crate::curve::binary::wcodec::Curve::new(c), salt, xs, ys, perm)?;
         }
 
         #[test]
+        fn binary109_w_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::wcodec::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
         fn binary127_unscaled_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary109_unscaled_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
         }
     }

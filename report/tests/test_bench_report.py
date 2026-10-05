@@ -25,6 +25,7 @@ LAYERS = [
 
 # the workload, and the smaller-field variants the rules must name
 EXTRA = [
+    ("add", "gf2_109/extended += affine, 8 accumulators", None, 1024),
     ("group.add", "binary-lambda.127/mode=throughput", None, 1024),
     ("group.add", "binary-w.127/mode=throughput", None, 1024),
     # one family's pipeline, through the group traits
@@ -169,10 +170,18 @@ def test_current_suite_is_fully_classified(table):
                 "per-element",
             ),
         ),
+        (
+            "hash_to_curve/gf2_109/pornin map x1",
+            ("comparison maps", "gf2_109", "one map", "per-element"),
+        ),
         # the map straight to an addend: a comparison map that is also a prepare
         (
             "hash_to_curve/gf2_127-u/pornin map x1 to (u, v), batched",
             ("comparison maps", "gf2_127-u", "one map to addend", "batch"),
+        ),
+        (
+            "hash_to_curve/gf2_109-lambda/pornin map x1 to (x, λ)",
+            ("comparison maps", "gf2_109-lambda", "one map to addend", "per-element"),
         ),
         (
             "hash_to_curve/edwards127/elligator2 x1",
@@ -204,6 +213,10 @@ def test_current_suite_is_fully_classified(table):
         ),
         ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
+        (
+            "add/gf2_109/extended += affine, 8 accumulators",
+            ("group ops", "gf2_109", "add", "throughput"),
+        ),
         # GF(2^122): qsolve sits with the halftraces
         ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
         (
@@ -222,12 +235,20 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "gf2_127", "add", "throughput"),
         ),
         (
+            "group.prepare/binary.109/mode=batch,n=1024",
+            ("group ops", "gf2_109", "prepare", "batch"),
+        ),
+        (
             "group.is_identity/weier.127",
             ("group ops", "weier127", "is identity", "per-element"),
         ),
         (
             "group.encode/edwards.127/mode=indep",
             ("group ops", "edwards127", "encode", "per-element"),
+        ),
+        (
+            "group.decode/binary.109/mode=indep",
+            ("group ops", "gf2_109", "decode", "per-element"),
         ),
         (
             "h2c/binary.127/mode=batch,n=1024",
@@ -272,6 +293,18 @@ def test_current_suite_is_fully_classified(table):
             ("field", "gf2_127", "normalize", "per-element"),
         ),
         # binary109's λ and w families, and the λ one's hash to its addend
+        (
+            "group.add/binary-lambda.109/mode=throughput",
+            ("group ops", "gf2_109-lambda", "add", "throughput"),
+        ),
+        (
+            "group.decode/binary-w.109/mode=batch,n=64",
+            ("group ops", "gf2_109-w", "decode", "batch"),
+        ),
+        (
+            "hash_to_curve/gf2_109-lambda/try-and-increment to (x, λ)",
+            ("hash to curve", "gf2_109-lambda", "hash to addend", "per-element"),
+        ),
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
     ],
@@ -319,6 +352,7 @@ def test_curvegen_names_each_family(group, function, parameter, operation):
     "spelling, curve, field, bits",
     [
         ("binary-u.127", "gf2_127-u", "gf2_127", 127),
+        ("binary-u.109", "gf2_109-u", "gf2_109", 109),
     ],
 )
 @pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])

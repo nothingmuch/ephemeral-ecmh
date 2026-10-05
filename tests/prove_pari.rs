@@ -3,16 +3,19 @@
 
 #[path = "common/kats.rs"]
 mod kats;
+#[path = "common/kats109.rs"]
+mod kats109;
 #[path = "common/orders.rs"]
 mod orders;
 use ephemeral_ecmh::curve::{binary127, edwards127, weier127};
+use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Edwards127, Factor, Family, NoSieve, Sieve, SmallL, Verdict, Weier127,
+    self, Binary109, Edwards127, Factor, Family, NoSieve, Sieve, SmallL, Verdict, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
-use ephemeral_ecmh::curvegen::sieve;
+use ephemeral_ecmh::curvegen::{select109, sieve};
 use ephemeral_ecmh::field::fp127::Fp;
 use ephemeral_ecmh::field::gf2_127::from_u128;
 use ephemeral_ecmh::hash::Salted;
@@ -47,6 +50,105 @@ fn counts_match_sage() {
     }
     for &(b, n) in &orders::WEIER127.orders[..SAMPLE] {
         assert_eq!(Pari.order(&weier127::Curve::new(Fp::new(b)).unwrap()), n);
+    }
+}
+
+/// Every candidate up to a Sage certificate's index, counted: the
+/// accepted one has #E = 2r, and each rejected one an order its label
+/// accounts for (an odd l dividing #E, or #E itself), with #E/2 not prime.
+/// Label 0 marks an index that is no candidate.
+fn check_binary_kat<C>(
+    seed: &[u8; 32],
+    index: u32,
+    r: u128,
+    rejections: &[(u128, u128)],
+    candidate: fn(&[u8; 32], u32) -> Option<C>,
+) where
+    Pari: Count<C>,
+{
+    for j in 0..=index {
+        let Some(c) = candidate(seed, j) else {
+            assert_eq!(rejections[j as usize].0, 0, "j {j}");
+            continue;
+        };
+        let n = Pari.order(&c);
+        if j == index {
+            assert_eq!(n, 2 * r);
+            continue;
+        }
+        let l = rejections[j as usize].0;
+        assert!(!select::is_prime(n / 2), "j {j}");
+        assert!(if l % 2 == 1 { n % l == 0 } else { n == l }, "j {j}");
+    }
+}
+
+/// binary109 with PARI's factors, and counts by PARI (on the cheapest
+/// KAT) or the AGM (on all): sage/kat109.sage's certificates to the byte,
+/// which the verifier takes.
+#[test]
+fn gf2_109_kats() {
+    let check = |k: &kats109::CertKat, cert: Certificate| {
+        assert_eq!((cert.index, cert.r), (k.index, k.r));
+        let cert = prove::certificate109(cert);
+        let kat: Vec<_> = k
+            .rejections
+            .iter()
+            .map(|&(l, p)| (l, p.to_le_bytes()[..14].try_into().unwrap()))
+            .collect();
+        assert_eq!(cert.rejections, kat);
+        select109::verify(&k.seed, &cert).unwrap();
+    };
+    let k = kats109::GF2_109_CERTS
+        .iter()
+        .min_by_key(|k| k.index)
+        .unwrap();
+    check(
+        k,
+        prove::prove::<Binary109>(&k.seed, &mut Pari, &mut Pari, &mut NoSieve).0,
+    );
+    let f = criteria::find::<Binary109>(&k.seed, &mut Pari, &mut NoSieve);
+    assert_eq!((f.index, f.r), (k.index, k.r));
+    for k in kats109::GF2_109_CERTS {
+        check(
+            k,
+            prove::prove::<Binary109>(&k.seed, &mut Agm, &mut Pari, &mut NoSieve).0,
+        );
+    }
+}
+
+/// A certificate is a function of the seed: proving twice, and counting
+/// by the AGM or by PARI under the same factor backend, give the same
+/// index, r, labels and encoded witnesses.
+fn same_certificates<F: Family>(seed: &[u8; 32], factor: &mut impl Factor)
+where
+    Agm: Count<F::Curve>,
+    Pari: Count<F::Curve>,
+{
+    let parts = |c: Certificate| (c.index, c.r, c.rejections);
+    let agm = parts(prove::prove::<F>(seed, &mut Agm, factor, &mut NoSieve).0);
+    let again = parts(prove::prove::<F>(seed, &mut Agm, factor, &mut NoSieve).0);
+    let pari = parts(prove::prove::<F>(seed, &mut Pari, factor, &mut NoSieve).0);
+    assert!(!agm.2.is_empty(), "no witnesses to compare");
+    assert_eq!(again, agm);
+    assert_eq!(pari, agm);
+}
+
+/// On each family's cheapest KAT seed with a rejection.
+#[test]
+fn gf2_certificates_are_deterministic_and_counter_independent() {
+    let k = kats109::GF2_109_CERTS
+        .iter()
+        .filter(|k| k.index > 0)
+        .min_by_key(|k| k.index)
+        .unwrap();
+    same_certificates::<Binary109>(&k.seed, &mut Pari);
+}
+
+#[test]
+fn counts_match_gf2_109_kats() {
+    for k in kats109::GF2_109_CERTS {
+        let c = select109::candidate;
+        check_binary_kat(&k.seed, k.index, k.r, k.rejections, c);
     }
 }
 
