@@ -301,6 +301,11 @@ mod tests {
         }
 
         #[test]
+        fn twisted128_ecmh(c in crate::curve::twisted128::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
         fn binary109_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(c, salt, xs, ys, perm)?;
         }

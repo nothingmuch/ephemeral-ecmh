@@ -37,6 +37,7 @@ fn registry_retains_the_recorded_group_inventory() {
         "binary.127",
         "edwards.107",
         "edwards.127",
+        "twisted.128",
         "weier-jacobian.107",
         "weier-jacobian.127",
         "weier.107",

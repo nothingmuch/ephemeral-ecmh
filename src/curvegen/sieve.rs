@@ -15,8 +15,9 @@
 
 //!
 //! The binary, prime-field Edwards and Weierstrass sieves return encoded
-//! small-order witnesses. The model-specific first tests are 8 | #E for
-//! Edwards and 2 | #E for Weierstrass.
+//! small-order witnesses. Twisted Edwards witnesses belong to the
+//! quotient G = E/⟨T⟩. The Edwards models first test 8 | #E, and the
+//! Weierstrass model tests 2 | #E.
 
 //!
 //! # Cost model
@@ -92,11 +93,11 @@
 //! for computing x^(2^127).
 
 use crate::curve::encoding::Signed;
-use crate::curve::{binary127, edwards, weier};
+use crate::curve::{binary127, edwards, twisted, weier};
 use crate::curvegen::poly::{Field, Poly, field_roots, find_root};
 use crate::curvegen::select;
-use crate::field::OddField;
 use crate::field::gf2_127::{Gf, to_u128};
+use crate::field::{OddField, Packed};
 use std::collections::BTreeMap;
 
 /// b-invariants (b2, b4, b6, b8) of a Weierstrass model: its division
@@ -118,6 +119,22 @@ impl<F: Field + Signed<Bytes = [u8; 16]>> Signed16 for F {}
 pub fn edwards_invariants<F: Signed16>(c: &edwards::Curve<F>) -> BInvariants<F> {
     let two = F::small(2);
     [two * two * c.a2, two * c.a4, F::ZERO, -c.a4.square()]
+}
+
+/// The Montgomery model y^2 = x^3 + a2 x^2 + a4 x of the a = -1 curve,
+/// a2 = (d - 1)/2 and a4 = (d + 1)^2/16, as `pari` counts it.
+fn twisted_montgomery<F: Field + Packed>(c: &twisted::Curve<F>) -> (F, F) {
+    let half = F::small(2).inv();
+    (
+        (c.d - F::ONE) * half,
+        ((c.d + F::ONE) * half.square()).square(),
+    )
+}
+
+pub fn twisted_invariants<F: Field + Packed>(c: &twisted::Curve<F>) -> BInvariants<F> {
+    let (a2, a4) = twisted_montgomery(c);
+    let two = F::small(2);
+    [two * two * a2, two * a4, F::ZERO, -a4.square()]
 }
 
 /// y^2 = x^3 - 3x + b.
@@ -248,6 +265,42 @@ pub fn edwards_order8<F: Signed16>(c: &edwards::Curve<F>) -> Option<[u8; 16]> {
     order8_x(F::ONE, c.d).find_map(|x| c.decode(F::to_bytes(x.pack())).map(|p| p.encode()))
 }
 
+/// The point of E over Montgomery x, if its y is in F and not 0: u = x/y
+/// and v = (Bx - 1)/(Bx + 1), B = 4/(a - d) (Bernstein, Birkner, Joye,
+/// Lange and Peters, Twisted Edwards Curves, Theorem 3.2, with x and y
+/// scaled by 1/B), for a = -1. Bx = -1 is a point at infinity, which is
+/// not rational: -d is a non-square.
+fn twisted_point<F: Field + Packed>(c: &twisted::Curve<F>, x: F) -> Option<twisted::Affine<F>> {
+    let (a2, a4) = twisted_montgomery(c);
+    let y = (x * (x * (x + a2) + a4)).sqrt()?;
+    let bx = -F::small(4) * (F::ONE + c.d).inv() * x;
+    if y.is_zero() || (bx + F::ONE).is_zero() {
+        return None;
+    }
+    Some(twisted::Affine {
+        u: x * y.inv(),
+        v: (bx - F::ONE) * (bx + F::ONE).inv(),
+    })
+}
+
+/// `edwards_order8` for the a = -1 families. In G = E/⟨T⟩ a point of
+/// order 8 has order 4, which is what their verifiers check for label 8.
+pub fn twisted_order8<F: Field + Packed>(c: &twisted::Curve<F>) -> Option<[u8; 16]> {
+    order8_x(-F::ONE, c.d).find_map(|x| twisted_point(c, x).map(|p| p.encode()))
+}
+
+/// `edwards_torsion` for the a = -1 families, on the Montgomery model
+/// that `pari` counts, with points encoded in G = E/⟨T⟩. For odd l, E\[l\]
+/// maps onto G\[l\], so the rejection is the same.
+pub fn twisted_torsion<F: Field + Packed>(c: &twisted::Curve<F>, l: u32) -> Option<[u8; 16]> {
+    if l == 8 {
+        return twisted_order8(c);
+    }
+    assert!(l >= 3 && l % 2 == 1);
+    let psi = division_polynomial(&twisted_invariants(c), l as usize);
+    torsion(&psi, |x| twisted_point(c, x).map(|p| p.encode()))
+}
+
 /// `gf2_127_torsion` for the Weierstrass families; l = 2 or odd. The
 /// rational 2-torsion points are (x, 0) for the roots x in F of
 /// x^3 - 3x + b.
@@ -308,6 +361,13 @@ pub fn edwards<F: Signed16>(c: &edwards::Curve<F>, l_max: u32) -> Option<Rejecti
 /// `Family::quick_reject` has applied it already.
 pub fn edwards_odd<F: Signed16>(c: &edwards::Curve<F>, l_max: u32) -> Option<Rejection> {
     odd_primes(l_max).find_map(|l| Some((l as u128, edwards_torsion(c, l)?)))
+}
+
+/// `edwards` for the a = -1 families.
+pub fn twisted<F: Field + Packed>(c: &twisted::Curve<F>, l_max: u32) -> Option<Rejection> {
+    core::iter::once(8)
+        .chain(odd_primes(l_max))
+        .find_map(|l| Some((l as u128, twisted_torsion(c, l)?)))
 }
 
 /// `gf2_127` for the Weierstrass families, after 2.

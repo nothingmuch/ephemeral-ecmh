@@ -15,6 +15,7 @@
 //! | model                     | fields                          | T&I | Elligator 2 | SSWU | Pornin |
 //! |---------------------------|---------------------------------|-----|-------------|------|--------|
 //! | Edwards, a = 1            | F_p (127, 107)                  | yes | yes         | (1)  | (3)    |
+//! | twisted Edwards, a = -1   | F_p (128)                       | yes | yes         | (1)  | (3)    |
 //! | short Weierstrass, a = -3 | F_p (127, 107)                  | yes | (2)         | yes  | (3)    |
 //! | binary, a = 1 or a = u    | GF(2^127), GF(2^109), GF(2^122) | yes | (4)         | (4)  | yes    |
 //!

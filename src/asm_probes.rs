@@ -188,6 +188,7 @@ pub mod group {
     );
     family!(edwards127, crate::curve::edwards127::Curve);
     family!(edwards107, crate::curve::edwards107::Curve);
+    family!(twisted128, crate::curve::twisted128::Curve);
     family!(weier127, crate::curve::weier127::OddCurve);
     family!(
         weier127_jacobian,

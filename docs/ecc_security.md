@@ -36,6 +36,7 @@ quantity from the $r$ recorded by that run's group suite:
 | Binary, $\mathrm{GF}(2^{109})$ | $2r$, $r$ near $2^{108}$ | 53.8 |
 | Weierstrass, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $r$ | 63.3 |
 | Edwards, $\mathbb{F}_p$, $p = 2^{127} - 1$ | $4r$ | 62.3 |
+| Twisted Edwards, $mathbb{F}_p$, $p = 2^{128} - 275$ | $4r$ | 62.8 |
 | Weierstrass, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $r$ | 53.3 |
 | Edwards, $\mathbb{F}_p$, $p = 2^{107} - 1$ | $4r$ | 52.3 |
 

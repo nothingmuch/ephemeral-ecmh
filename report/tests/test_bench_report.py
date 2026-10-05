@@ -284,6 +284,10 @@ def test_current_suite_is_fully_classified(table):
             ("group ops", "edwards107", "subtract", "latency"),
         ),
         (
+            "group.add/edwards.128/mode=throughput",
+            ("group ops", "twisted128", "add", "throughput"),
+        ),
+        (
             "group.prepare/binary.109/mode=batch,n=1024",
             ("group ops", "gf2_109", "prepare", "batch"),
         ),
@@ -884,6 +888,25 @@ def test_addend_equality_splits_matches_from_mismatches(tmp_path):
 
 
 # per-element ns: add, hash, prepare, encode, decode (None: not measured)
+
+
+@pytest.mark.parametrize(
+    "spelling", ["edwards128", "edwards.128", "twisted128", "twisted.128"]
+)
+def test_twisted128_historical_names(spelling):
+    f = rules.classify("group.add", f"{spelling}/mode=throughput", None, True)
+    assert f.family == "twisted128"
+    assert f.base == "edwards127"
+    assert f.bits == 128
+
+
+def test_historical_selection_name_is_canonical(tmp_path):
+    (tmp_path / "curvegen.csv").write_text(
+        "family,method,seed,find_s,verify_s\nedwards128,pari,0,0.1,0.001\n"
+    )
+    row = br.selection(tmp_path).iloc[0]
+    assert row.family == "twisted128"
+    assert row.find_s == 0.1
 
 
 def test_curve_selection_shows_every_method_and_the_fastest_drawn(tmp_path):

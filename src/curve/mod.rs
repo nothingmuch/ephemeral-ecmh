@@ -7,6 +7,9 @@
 //!   `binary::lambda`.
 //! - `edwards127`, `edwards107`: complete Edwards curves over F_p, for
 //!   p = 2^127 - 1 and 2^107 - 1, sharing the laws of `edwards`.
+//! - `twisted128`: complete a = -1 twisted Edwards curves over F_p,
+//!   p = 2^128 - 275, encoding the quotient by their 2-torsion point,
+//!   sharing the laws of `twisted`.
 //! - `weier127`, `weier107`: short Weierstrass curves over the same two
 //!   prime fields, sharing the laws of `weier`. Their selectors require
 //!   prime order.
@@ -24,6 +27,8 @@ pub mod edwards107;
 pub mod edwards127;
 pub mod encoding;
 pub mod h2c;
+pub mod twisted;
+pub mod twisted128;
 pub mod weier;
 pub mod weier107;
 pub mod weier127;

@@ -33,6 +33,7 @@ curvegen/count	weier127
 curvegen/find	gf2_127 agm+sieve/index 30
 curvegen/verify_accept	edwards107
 curvegen/verify_accept	edwards127
+curvegen/verify_accept	edwards128
 curvegen/verify_accept	gf2_109
 curvegen/verify_accept	gf2_122
 curvegen/verify_accept	gf2_122-gls
@@ -41,6 +42,7 @@ curvegen/verify_accept	weier107
 curvegen/verify_accept	weier127
 curvegen/verify_full	edwards107/3 rejections
 curvegen/verify_full	edwards127/3 rejections
+curvegen/verify_full	edwards128/3 rejections
 curvegen/verify_full	gf2_109/3 rejections
 curvegen/verify_full	gf2_122-gls/3 rejections
 curvegen/verify_full	gf2_122/3 rejections
@@ -171,6 +173,8 @@ group.add	edwards.107/mode=latency
 group.add	edwards.107/mode=throughput
 group.add	edwards.127/mode=latency
 group.add	edwards.127/mode=throughput
+group.add	edwards.128/mode=latency
+group.add	edwards.128/mode=throughput
 group.add	weier-jacobian.107/mode=latency
 group.add	weier-jacobian.107/mode=throughput
 group.add	weier-jacobian.127/mode=latency
@@ -215,6 +219,8 @@ group.decode	edwards.107/mode=batch,n=1024
 group.decode	edwards.107/mode=indep
 group.decode	edwards.127/mode=batch,n=1024
 group.decode	edwards.127/mode=indep
+group.decode	edwards.128/mode=batch,n=1024
+group.decode	edwards.128/mode=indep
 group.decode	weier-jacobian.107/mode=batch,n=1024
 group.decode	weier-jacobian.107/mode=indep
 group.decode	weier-jacobian.127/mode=batch,n=1024
@@ -259,6 +265,8 @@ group.encode	edwards.107/mode=batch,n=1024
 group.encode	edwards.107/mode=indep
 group.encode	edwards.127/mode=batch,n=1024
 group.encode	edwards.127/mode=indep
+group.encode	edwards.128/mode=batch,n=1024
+group.encode	edwards.128/mode=indep
 group.encode	weier-jacobian.107/mode=batch,n=1024
 group.encode	weier-jacobian.107/mode=indep
 group.encode	weier-jacobian.127/mode=batch,n=1024
@@ -285,6 +293,7 @@ group.equals	binary.122-gls
 group.equals	binary.127
 group.equals	edwards.107
 group.equals	edwards.127
+group.equals	edwards.128
 group.equals	weier-jacobian.107
 group.equals	weier-jacobian.127
 group.equals	weier.107
@@ -307,6 +316,7 @@ group.is_identity	binary.122-gls
 group.is_identity	binary.127
 group.is_identity	edwards.107
 group.is_identity	edwards.127
+group.is_identity	edwards.128
 group.is_identity	weier-jacobian.107
 group.is_identity	weier-jacobian.127
 group.is_identity	weier.107
@@ -329,6 +339,7 @@ group.neg	binary.122-gls
 group.neg	binary.127
 group.neg	edwards.107
 group.neg	edwards.127
+group.neg	edwards.128
 group.neg	weier-jacobian.107
 group.neg	weier-jacobian.127
 group.neg	weier.107
@@ -369,6 +380,8 @@ group.prepare	edwards.107/mode=batch,n=1024
 group.prepare	edwards.107/mode=indep
 group.prepare	edwards.127/mode=batch,n=1024
 group.prepare	edwards.127/mode=indep
+group.prepare	edwards.128/mode=batch,n=1024
+group.prepare	edwards.128/mode=indep
 group.prepare	weier-jacobian.107/mode=batch,n=1024
 group.prepare	weier-jacobian.107/mode=indep
 group.prepare	weier-jacobian.127/mode=batch,n=1024
@@ -413,6 +426,8 @@ group.sub	edwards.107/mode=latency
 group.sub	edwards.107/mode=throughput
 group.sub	edwards.127/mode=latency
 group.sub	edwards.127/mode=throughput
+group.sub	edwards.128/mode=latency
+group.sub	edwards.128/mode=throughput
 group.sub	weier-jacobian.107/mode=latency
 group.sub	weier-jacobian.107/mode=throughput
 group.sub	weier-jacobian.127/mode=latency
@@ -457,6 +472,8 @@ h2c	edwards.107/mode=batch,n=1024
 h2c	edwards.107/mode=indep
 h2c	edwards.127/mode=batch,n=1024
 h2c	edwards.127/mode=indep
+h2c	edwards.128/mode=batch,n=1024
+h2c	edwards.128/mode=indep
 h2c	weier-jacobian.107/mode=batch,n=1024
 h2c	weier-jacobian.107/mode=indep
 h2c	weier-jacobian.127/mode=batch,n=1024

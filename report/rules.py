@@ -79,6 +79,7 @@ FAMILIES = {
     "fp128": ("fp127", 128),
     "edwards127": ("edwards127", 127),
     "edwards107": ("edwards127", 107),
+    "twisted128": ("edwards127", 128),
     "weier127": ("weier127", 127),
     "weier127-jacobian": ("weier127", 127),
     "weier107": ("weier127", 107),
@@ -107,6 +108,11 @@ SPELLINGS = {
     "weier.127": "weier127",
     "weier-jacobian.107": "weier107-jacobian",
     "weier-jacobian.127": "weier127-jacobian",
+    "twisted.128": "twisted128",
+    # the a = -1 quotient before it was twisted128; the 2026-10-03 fixture
+    # keeps edwards.128
+    "edwards.128": "twisted128",
+    "edwards128": "twisted128",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
@@ -331,6 +337,7 @@ CURVES = [
     "gf2_122-gls-u",
     "edwards127",
     "edwards107",
+    "twisted128",
     "weier127",
     "weier127-jacobian",
     "weier107",
@@ -410,6 +417,15 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "F_p, p = 2^128 − 275, 16 bytes",
+        [
+            (
+                "twisted128",
+                "a = −1 twisted Edwards modulo 2-torsion, extended += cached",
+            ),
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -448,6 +464,7 @@ FIELD_OF = {
     "edwards127": "fp127",
     "weier127": "fp127",
     "edwards107": "fp107",
+    "twisted128": "fp128",
     "weier107": "fp107",
     "weier127-jacobian": "fp127",
     "weier107-jacobian": "fp107",

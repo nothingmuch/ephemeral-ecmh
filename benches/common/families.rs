@@ -5,7 +5,7 @@
 //! remain the caller's choice. Only metadata consumed by the suites lives here.
 
 use ephemeral_ecmh::curve::{self, binary, weier};
-use ephemeral_ecmh::curvegen::{select, select107, select109, select122};
+use ephemeral_ecmh::curvegen::{select, select107, select109, select122, select128};
 use ephemeral_ecmh::field::OddField;
 use ephemeral_ecmh::group::{Decode, HashToCurve, Negate};
 
@@ -17,6 +17,8 @@ pub(crate) mod kats107;
 pub(crate) mod kats109;
 #[path = "../../tests/common/kats122.rs"]
 pub(crate) mod kats122;
+#[path = "../../tests/common/kats128.rs"]
+pub(crate) mod kats128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Representation {
@@ -180,6 +182,8 @@ registry! {
         ("binary", "127", 2, 2), binary;
     edwards127: curve::edwards127::Curve, kats::FP127_CERTS, select::verify_fp127,
         ("edwards", "127", 4, 2), single;
+    twisted128: curve::twisted128::Curve, kats128::FP128_CERTS, select128::verify_fp128,
+        ("twisted", "128", 4, 2), single;
     weier127: curve::weier127::OddCurve, kats::WEIER127_CERTS, odd(select::verify_weier127),
         ("weier", "127", 1, 2), weier;
     binary109: curve::binary109::Curve, kats109::GF2_109_CERTS, select109::verify,
