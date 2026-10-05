@@ -7,6 +7,10 @@ license = "MIT"
 publish = false
 
 [dependencies]
+crrl = { version = "0.9.0", default-features = false, features = [
+  "std",
+  "gfb254",
+] }
 sha2 = "0.11"
 
 [dev-dependencies]

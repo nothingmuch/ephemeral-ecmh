@@ -1,3 +1,4 @@
+import io
 import json
 import math
 import re
@@ -13,6 +14,7 @@ from criterion_fixture import read_rows, write_bench, write_tree
 FIXTURE = Path(__file__).parent / "fixtures" / "2026-09-30.tsv"
 ROWS = read_rows(FIXTURE)
 LAYERS = [
+    "field",
     "group ops",
     "hash to curve",
     "digest",
@@ -87,6 +89,15 @@ def test_current_suite_is_fully_classified(table):
 @pytest.mark.parametrize(
     "full_id, want",
     [
+        (
+            "field/gf2/mul latency (dependent chain)",
+            ("field", "gf2_127", "mul", "latency"),
+        ),
+        (
+            "field/gf2/batch invert (product tree)",
+            ("field", "gf2_127", "batch invert", "batch"),
+        ),
+        ("field/gf2/halftrace", ("field", "gf2_127", "halftrace", "per-element")),
         ("add/xor-sha256/xor 32B", ("group ops", "xor", "add", "per-element")),
         (
             "add/secp256k1/combine_keys (jacobian += affine)",
@@ -115,6 +126,10 @@ def test_current_suite_is_fully_classified(table):
         # a batch to affine, not a sum
         # benches/group.rs: layered ids, the family spelled <name>.<bits>
         # Identifiers with an explicit 127-bit field width.
+        (
+            "field/gf2_127/mul latency (dependent chain)",
+            ("field", "gf2_127", "mul", "latency"),
+        ),
         # binary127::lambda: gf2_127's curves, λ-projective accumulators
         # riblt.peel's parameters say whether it peels in batches
         # the two XOR baselines are told apart by their hash
@@ -122,6 +137,10 @@ def test_current_suite_is_fully_classified(table):
         # the F_{p^2} prototypes, and the codecs of the odd fields
         # the Weierstrass curves' Jacobian families
         # Plonky3's fields
+        (
+            "field/gf2_127/normalize (to_u128)",
+            ("field", "gf2_127", "normalize", "per-element"),
+        ),
         # binary109's λ and w families, and the λ one's hash to its addend
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
@@ -168,6 +187,27 @@ def test_every_spelling_names_a_listed_family():
     )
 
 
+def test_explicit_square_throughput_is_present_in_elementary_table(tmp_path):
+    root = tmp_path / "criterion"
+    write_bench(
+        root,
+        "field",
+        "gf2_127/square throughput (8 chains)",
+        None,
+        64.0,
+        128.0,
+        192.0,
+        {"Elements": 64},
+    )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    e = br.elementary(table)
+    row = e[(e.facet == "field square") & (e.variant == "throughput")]
+    assert len(row) == 1
+    assert row.iloc[0].value_ns == pytest.approx(2.0)
+
+
 def test_every_base_has_a_dark_and_a_light_shade():
     assert rules.COLORS.keys() == rules.LIGHT.keys()
     assert (
@@ -188,6 +228,23 @@ IDS = Path(__file__).parent / "fixtures" / "ids-2026-10-03.tsv"
 def ids() -> list[list[str]]:
     lines = IDS.read_text().splitlines()
     return [line.split("\t") for line in lines if not line.startswith("#")]
+
+
+def test_listed_ids_are_checked_before_a_run(monkeypatch):
+    # criterion --list joins group and function with '/', as the groups do
+    listed = ["/".join(row) for row in ids()]
+    assert br.check_ids(listed) == []
+    odd = ["mystery/gf2/thing", "field/fq/mul", "field/gf2_127/frobnicate"]
+    assert br.check_ids(["", *listed[:3], *odd]) == odd
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n".join(listed[:3] + odd[:1])))
+    with pytest.raises(SystemExit, match="1 benchmark ids match no rule") as err:
+        br.main(["--check-ids"])
+    assert "mystery/gf2/thing" in str(err.value)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n".join(listed)))
+    assert br.main(["--check-ids"]) is None
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    with pytest.raises(SystemExit, match="no benchmark ids"):
+        br.main(["--check-ids"])
 
 
 def test_svg_is_deterministic(rendered, tmp_path):

@@ -6,6 +6,13 @@
 # writes criterion's output tree from these rows. The run's directory, machine
 # and source revision were not recorded.
 group	function	parameter	lower_ns	point_ns	upper_ns	elements	summary_ns
+field	gf2/mul latency (dependent chain)		237.75	239.62	241.84	64	3.74
+field	gf2/mul throughput (8 chains)		62.473	62.601	62.732	64	0.98
+field	gf2/invert		336510	337520	338530	1024	329.61
+field	gf2/sqrt		1296.8	1299.4	1304.1	1024	1.27
+field	gf2/halftrace		31053	31175	31364	1024	30.44
+field	gf2/trace		341.84	342.84	343.91	1024	0.33
+field	gf2/batch invert (product tree)		3743.7	3745.6	3747.6	1024	3.66
 on_curve	secp256k1/x: parse compressed (sqrt)		2.3309e+06	2.3331e+06	2.3352e+06	1024	2278.37
 on_curve	ristretto255/decompress (valid, inv sqrt)		2.4198e+06	2.4216e+06	2.4235e+06	1024	2364.9
 hash_to_curve	sha256 (XOR baseline)		23643	23665	23690	1024	23.11

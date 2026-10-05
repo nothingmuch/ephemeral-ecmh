@@ -10,6 +10,18 @@ add	xor-sha256/xor 32B
 digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
 digest	xor-sha256
+field	gf2_127/batch invert (product tree)
+field	gf2_127/halftrace
+field	gf2_127/halftrace (byte tables)
+field	gf2_127/halftrace (nibble tables)
+field	gf2_127/invert
+field	gf2_127/mul latency (dependent chain)
+field	gf2_127/mul throughput (8 chains)
+field	gf2_127/normalize (to_u128)
+field	gf2_127/sqrt
+field	gf2_127/square latency (dependent chain)
+field	gf2_127/square throughput (8 chains)
+field	gf2_127/trace
 h2c_parts	digest/sha512 (ristretto input)
 h2c_parts	ristretto255/from_uniform_bytes (2 maps + add)
 hash_to_curve	ristretto255/hash_from_bytes<Sha512>
