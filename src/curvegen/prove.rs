@@ -22,9 +22,10 @@
 //! so it counts in full unless the family or sieve already supplies one.
 //! Structural exclusions follow the family's certificate-entry convention.
 
-use super::criteria::{Filter, OrderError};
+use super::agm::Agm;
+use super::criteria::{Count, Filter, Found, OrderError, find};
 use crate::curve::binary127;
-use crate::curvegen::select::{self, Policy, is_prime};
+use crate::curvegen::select::{self, Certificate, Policy, is_prime};
 use crate::hash::Salted;
 
 pub use crate::curvegen::select::Binary127;
@@ -240,9 +241,93 @@ impl Family for Binary127 {
     }
 }
 
+/// The first order-admissible candidate and its certificate, if this
+/// format can witness the preceding rejections and its acceptance point
+/// passes. Failure panics rather than silently choosing a later candidate;
+/// direct selection can succeed even when certification cannot.
+pub fn prove<F: Family>(
+    seed: &[u8; 32],
+    count: &mut impl Count<F::Curve>,
+    factor: &mut impl Factor,
+    sieve: &mut impl Sieve<F::Curve>,
+) -> (Certificate, F::Curve) {
+    let h = Salted::new(TAG_WITNESS, seed);
+    let mut rejections = Vec::new();
+    for j in 0..=u32::MAX {
+        let Some(c) = F::candidate(seed, j) else {
+            if F::ENTRY_PER_INDEX {
+                rejections.push((0, [0; 16]));
+            }
+            continue;
+        };
+        if let Some(w) = F::quick_reject(&c).or_else(|| sieve.reject(&c)) {
+            rejections.push(w);
+            continue;
+        }
+        let n = count.order(&c);
+        let l = match F::verdict(n) {
+            Verdict::Accept(r) => {
+                F::accept(seed, j, r).expect("accepted candidate fails verification");
+                let cert = Certificate {
+                    index: j,
+                    r,
+                    rejections,
+                };
+                return (cert, c);
+            }
+            Verdict::Inadmissible(reason) => {
+                panic!("order rejected ({reason:?}): this seed has no certificate");
+            }
+            Verdict::Reject(l) => l,
+            Verdict::Composite(m) => match factor.smallest_prime_factor(m) {
+                Some(l) => l,
+                None => {
+                    let p = F::order_witness(&c, &h, j, n)
+                        .expect("this family rejects composites only by a factor");
+                    rejections.push((n, p));
+                    continue;
+                }
+            },
+        };
+        rejections.push((l, F::witness(&c, &h, j, n, l)));
+    }
+    unreachable!("2^32 candidates rejected")
+}
+
+/// The binary family's curve for a seed, in Rust alone: the sieve at its
+/// default bound, then AGM counts.
+pub fn find_gf2_127(seed: &[u8; 32]) -> Found<binary127::Curve> {
+    find::<Binary127>(
+        seed,
+        &mut Agm,
+        &mut SmallL(crate::curvegen::sieve::GF2_127_L_MAX),
+    )
+}
+
+/// `find_gf2_127` with its certificate, in Rust alone: a composite r with no
+/// small factor is rejected by its order, not factored.
+pub fn certify_gf2_127(seed: &[u8; 32]) -> (Certificate, binary127::Curve) {
+    prove::<Binary127>(
+        seed,
+        &mut Agm,
+        &mut NoFactor,
+        &mut SmallL(crate::curvegen::sieve::GF2_127_L_MAX),
+    )
+}
+
+pub fn prove_gf2_127(
+    seed: &[u8; 32],
+    count: &mut impl Count<binary127::Curve>,
+    factor: &mut impl Factor,
+    sieve: &mut impl Sieve<binary127::Curve>,
+) -> (Certificate, binary127::Curve) {
+    prove::<Binary127>(seed, count, factor, sieve)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::curvegen::criteria::{AdmissibleR, Criteria};
     use proptest::prelude::*;
 
     /// Z/a x Z/b, the non-cyclic case included.
@@ -323,6 +408,115 @@ mod tests {
             assert_eq!(target * p % m, 0);
             assert_ne!(target / base * p % m, 0);
         }
+    }
+
+    /// The prime r = 2^20 + 7, whose window is about q = r + 5. The order of
+    /// 5 mod r is r - 1 (5^((r - 1) / d) != 1 for d = 2, 29, 101, 179, the
+    /// prime factors of r - 1 = 2 * 29 * 101 * 179), above 2^20, so q passes
+    /// the embedding-degree test, and r != q.
+    const TOY_R: u128 = (1 << 20) + 7;
+
+    /// Z/r as a curve of order `TOY_R`: a point is its residue, candidate
+    /// j is the integer j, and the hashed point is 1 under a zero seed and
+    /// O otherwise, so acceptance fails under any other seed.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct ModR(u32);
+
+    impl select::Arithmetic<16> for ModR {
+        type Affine = u32;
+        type Point = u32;
+        fn decode(&self, enc: [u8; 16]) -> Option<u32> {
+            Some((u128::from(enc[0]) % TOY_R) as u32)
+        }
+        fn hash(&self, salt: &Salted, _: &[u8]) -> u32 {
+            let zero = Salted::new(select::TAG_CERT_POINT, &[0; 32]);
+            u32::from(salt.digest(&[], 0) == zero.digest(&[], 0))
+        }
+        fn lift(&self, p: &u32) -> Option<u32> {
+            (*p != 0).then_some(*p)
+        }
+        fn mul(&self, p: &u32, k: u128) -> u32 {
+            (u128::from(*p) * k % TOY_R) as u32
+        }
+        fn is_identity(&self, p: &u32) -> bool {
+            *p == 0
+        }
+    }
+
+    struct SkippingFamily;
+
+    impl Criteria for SkippingFamily {
+        type Curve = ModR;
+        const TAG: &'static [u8] = b"test";
+        const R: AdmissibleR = AdmissibleR::new(TOY_R + 5, 6, 1);
+        fn candidate(_: &[u8; 32], j: u32) -> Option<ModR> {
+            (j != 0 && j != 2).then_some(ModR(j))
+        }
+    }
+
+    impl Policy<16> for SkippingFamily {
+        const CLEAR: u128 = 1;
+        const ENTRY_PER_INDEX: bool = false;
+        fn marker(_: &ModR, _: &u32, _: u128) -> Option<bool> {
+            None
+        }
+    }
+
+    impl Family for SkippingFamily {
+        fn verdict(n: u128) -> Verdict {
+            if n == TOY_R {
+                Verdict::Accept(TOY_R)
+            } else {
+                Verdict::Reject(3)
+            }
+        }
+        fn witness(c: &ModR, _: &Salted, _: u32, _: u128, _: u128) -> [u8; 16] {
+            [c.0 as u8; 16]
+        }
+    }
+
+    struct SkippingCount(Vec<u32>);
+    impl Count<ModR> for SkippingCount {
+        fn order(&mut self, c: &ModR) -> u128 {
+            self.0.push(c.0);
+            if c.0 == 4 { TOY_R } else { 9 }
+        }
+    }
+
+    #[test]
+    fn find_and_prove_share_structural_skip_accounting() {
+        let seed = [0; 32];
+        let mut counted = SkippingCount(vec![]);
+        let found = find::<SkippingFamily>(&seed, &mut counted, &mut NoSieve);
+        assert_eq!((found.index, found.r, found.curve), (4, TOY_R, ModR(4)));
+        assert_eq!(counted.0, [1, 3, 4]);
+        let mut counted = SkippingCount(vec![]);
+        let (cert, curve) =
+            prove::<SkippingFamily>(&seed, &mut counted, &mut NoFactor, &mut NoSieve);
+        assert_eq!((cert.index, cert.r, curve), (4, TOY_R, ModR(4)));
+        assert_eq!(counted.0, [1, 3, 4]);
+        assert_eq!(cert.rejections, [(3, [1; 16]), (3, [3; 16])]);
+    }
+
+    #[test]
+    fn find_accepts_an_order_even_when_the_certificate_point_fails() {
+        let found = find::<SkippingFamily>(&[1; 32], &mut SkippingCount(vec![]), &mut NoSieve);
+        assert_eq!((found.index, found.r), (4, TOY_R));
+        assert_eq!(
+            SkippingFamily::accept(&[1; 32], 4, TOY_R),
+            Err(select::Error::OrderCheck)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "accepted candidate fails verification")]
+    fn prove_rejects_an_unverifiable_acceptance() {
+        prove::<SkippingFamily>(
+            &[1; 32],
+            &mut SkippingCount(vec![]),
+            &mut NoFactor,
+            &mut NoSieve,
+        );
     }
 
     #[test]

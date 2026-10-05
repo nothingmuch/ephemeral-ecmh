@@ -5,6 +5,7 @@
 //! probable-prime test; it does not supply a primality certificate.
 //!
 //! - `criteria`: candidate/order contracts and direct selection from point counts.
+//! - `prove`: constructs selection certificates using point counts.
 //! - `sieve`: rejects candidates by small torsion, before counting points.
 //! - `agm`: counts points on binary curves (canonical lift, with `agm::zq`).
 //! - `poly`: the polynomial arithmetic the sieve's division polynomials use.
