@@ -69,6 +69,13 @@ def test_per_element_values_match_the_summary(table):
         assert abs(got[full] - want) <= max(0.006, 5e-4 * want), full
 
 
+def test_ids_survive_filename_mangling(table):
+    # directories are criterion's filename-safe names; ids come from the json
+    assert "on_curve/gf2/x: Tr(b/x) = 0 (1 I)" in set(table.full_id)
+    row = table[table.full_id == "curvegen/verify_full/weier/256 rejections/3"].iloc[0]
+    assert (row.function, row.parameter) == ("weier/256 rejections", "3")
+
+
 def test_slope_else_mean_and_never_base(table):
     x = table.set_index("full_id")
     add = x.loc["add/gf2/batch affine (tree sum)"]
@@ -131,6 +138,10 @@ def test_current_suite_is_fully_classified(table):
             "add/edwards/-= cached, 8 accumulators",
             ("group ops", "edwards127", "subtract", "throughput"),
         ),
+        (
+            "add/weier/batch affine (tree sum)",
+            ("group ops", "weier127", "batch sum", "batch"),
+        ),
         ("add/xor-sha256/xor 32B", ("group ops", "xor", "add", "per-element")),
         (
             "add/secp256k1/combine_keys (jacobian += affine)",
@@ -168,6 +179,10 @@ def test_current_suite_is_fully_classified(table):
             ("comparison maps", "edwards127", "one map", "per-element"),
         ),
         (
+            "hash_to_curve/weier127/sswu x1",
+            ("comparison maps", "weier127", "one map", "per-element"),
+        ),
+        (
             "hash_to_curve/secp256k1/ellswift decode",
             ("hash to curve", "secp256k1", "hash to curve", "per-element"),
         ),
@@ -190,6 +205,7 @@ def test_current_suite_is_fully_classified(table):
         ("digest/gf2/batch", ("digest", "gf2_127", "digest", "batch")),
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
         # GF(2^122): qsolve sits with the halftraces
+        ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
         # a batch to affine, not a sum
         (
             "agm/order",
@@ -200,6 +216,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "group.add/binary.127/mode=throughput",
             ("group ops", "gf2_127", "add", "throughput"),
+        ),
+        (
+            "group.is_identity/weier.127",
+            ("group ops", "weier127", "is identity", "per-element"),
         ),
         (
             "group.encode/edwards.127/mode=indep",
@@ -219,6 +239,7 @@ def test_current_suite_is_fully_classified(table):
             "add/edwards127/+= cached, 8 accumulators",
             ("group ops", "edwards127", "add", "throughput"),
         ),
+        ("digest/weier127/streaming", ("digest", "weier127", "digest", "streaming")),
         (
             "h2c_parts/gf2_127 t&i/1. invert x, batched",
             ("hash to curve", "gf2_127", "steps: gf2_127 t&i", "batch"),
@@ -237,6 +258,10 @@ def test_current_suite_is_fully_classified(table):
         # binary122: GLS constants, λ accumulators, and both
         # the F_{p^2} prototypes, and the codecs of the odd fields
         # the Weierstrass curves' Jacobian families
+        (
+            "group.add/weier-jacobian.127/mode=throughput",
+            ("group ops", "weier127-jacobian", "add", "throughput"),
+        ),
         # Plonky3's fields
         (
             "field/gf2_127/normalize (to_u128)",
@@ -259,6 +284,7 @@ def test_classify(full_id, want):
         ("gf2/mul latency (dependent chain)", "gf2_127/mul latency (dependent chain)"),
         ("fp/sqrt (x^(2^125))", "fp127/sqrt (x^(2^125))"),
         ("edwards/+= cached, 1 accumulator", "edwards127/+= cached, 1 accumulator"),
+        ("weier/x: Jacobi", "weier127/x: Jacobi"),
         ("gf2 pornin/2. invert m1 m2 m3", "gf2_127 pornin/2. invert m1 m2 m3"),
     ],
 )

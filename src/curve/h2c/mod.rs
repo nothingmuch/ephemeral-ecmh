@@ -15,6 +15,7 @@
 //! | model                     | fields                          | T&I | Elligator 2 | SSWU | Pornin |
 //! |---------------------------|---------------------------------|-----|-------------|------|--------|
 //! | Edwards, a = 1            | F_p (127)                       | yes | yes         | (1)  | (3)    |
+//! | short Weierstrass, a = -3 | F_p (127)                       | yes | (2)         | yes  | (3)    |
 //! | binary, a = 1             | GF(2^127)                       | yes | (4)         | (4)  | yes    |
 //!
 //! 1. SSWU applies to y^2 = x^3 + Ax + B with AB != 0. These curves have a
@@ -22,14 +23,16 @@
 //!    applies directly; RFC 9380 (§6.7.1) uses it for such curves. SSWU
 //!    would need a rational map to a Weierstrass model on top of the same
 //!    exponentiation.
+//! 2. Elligator 2 needs a point of order 2. The Weierstrass families have
+//!    prime order.
 //! 3. Pornin's map is a characteristic-2 construction.
 //! 4. RFC 9380's Elligator 2 and SSWU are odd-characteristic maps. The
 //!    characteristic-2 counterpart of their Shallue–van de Woestijne
 //!    ancestor is binary Elligator squared (Aranha et al., SAC 2014);
 //!    Pornin's map is the deterministic map evaluated here.
 //!
-//! Elligator 2 is `Elligator2` over the `Montgomery` trait; Pornin's map is
-//! `curve::binary`'s `Map`, with
+//! Elligator 2 is `Elligator2` over the `Montgomery` trait; SSWU is
+//! `curve::weier::Sswu`; Pornin's map is `curve::binary`'s `Map`, with
 //! per-modulus constants (`binary::Pornin`). A single map is not uniform;
 //! the group hashes use try-and-increment.
 

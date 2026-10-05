@@ -76,6 +76,8 @@ FAMILIES = {
     },
     "fp127": ("fp127", 127),
     "edwards127": ("edwards127", 127),
+    "weier127": ("weier127", 127),
+    "weier127-jacobian": ("weier127", 127),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -95,11 +97,14 @@ SPELLINGS = {
         for acc in ACCUMULATORS
     },
     "edwards.127": "edwards127",
+    "weier.127": "weier127",
+    "weier-jacobian.127": "weier127-jacobian",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
     "fp": "fp127",
     "edwards": "edwards127",
+    "weier": "weier127",
 }
 # (regex on the group, spelling, family): spellings some groups use for
 # another family: Ristretto's input digest is a step of its hash.
@@ -130,6 +135,7 @@ def curve(family: str) -> str:
 # vision deficiencies; the baseline is grey.
 COLORS = {
     "gf2_127": "#4e79a7",
+    "weier127": "#f28e2b",
     "edwards127": "#59a14f",
     "fp127": "#b6992d",
     "xor": "#79706e",
@@ -139,6 +145,7 @@ COLORS = {
 }
 LIGHT = {
     "gf2_127": "#a0cbe8",
+    "weier127": "#ffbe7d",
     "edwards127": "#8cd17d",
     "fp127": "#f1ce63",
     "xor": "#bab0ac",
@@ -152,6 +159,7 @@ FAMILY_ORDER = [
     "gf2_127",
     "fp127",
     "edwards127",
+    "weier127",
     "ristretto255",
     "secp256k1",
     OTHER,
@@ -288,6 +296,8 @@ CURVES = [
     "gf2_127-w",
     "gf2_127-u",
     "edwards127",
+    "weier127",
+    "weier127-jacobian",
     "ristretto255",
     "secp256k1",
 ]
@@ -323,6 +333,8 @@ CURVE_GROUPS = [
         "F_p, p = 2^127 − 1, 16 bytes",
         [
             ("edwards127", "a = 1 Edwards, extended += cached"),
+            ("weier127", "short Weierstrass, projective += affine"),
+            ("weier127-jacobian", "short Weierstrass, Jacobian += affine"),
         ],
     ),
     (
@@ -344,6 +356,8 @@ FIELD_OF = {
     "gf2_127-w": "gf2_127",
     "gf2_127-u": "gf2_127",
     "edwards127": "fp127",
+    "weier127": "fp127",
+    "weier127-jacobian": "fp127",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

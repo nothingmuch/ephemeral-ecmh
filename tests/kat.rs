@@ -3,7 +3,9 @@
 mod common;
 
 use common::kats::{self, CertKat};
-use ephemeral_ecmh::curvegen::select::{Certificate, verify_fp127, verify_gf2_127};
+use ephemeral_ecmh::curvegen::select::{
+    Certificate, verify_fp127, verify_gf2_127, verify_weier127,
+};
 use ephemeral_ecmh::group::{Accumulate, Encode, HashToCurve, SumBatch};
 use ephemeral_ecmh::hash::Salted;
 use proptest::prelude::*;
@@ -49,6 +51,17 @@ fn gf2_127_certificates_and_vectors() {
 fn edwards127_certificates_and_vectors() {
     for k in kats::FP127_CERTS {
         check_vectors(verify_fp127(&k.seed, &cert(k)).unwrap(), k);
+    }
+}
+
+#[test]
+fn weier127_certificates_and_vectors() {
+    for k in kats::WEIER127_CERTS {
+        let c = verify_weier127(&k.seed, &cert(k)).unwrap();
+        check_vectors(
+            ephemeral_ecmh::curve::weier127::OddCurve::new(c).expect("fixture curve of even order"),
+            k,
+        );
     }
 }
 
@@ -126,6 +139,12 @@ proptest! {
     fn tampered_edwards127_certificates_fail(i in 0..kats::FP127_CERTS.len(), t in tamper()) {
         let (seed, c) = apply(&kats::FP127_CERTS[i], &t);
         prop_assert!(verify_fp127(&seed, &c).is_err());
+    }
+
+    #[test]
+    fn tampered_weier127_certificates_fail(i in 0..kats::WEIER127_CERTS.len(), t in tamper()) {
+        let (seed, c) = apply(&kats::WEIER127_CERTS[i], &t);
+        prop_assert!(verify_weier127(&seed, &c).is_err());
     }
 }
 

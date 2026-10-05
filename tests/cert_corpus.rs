@@ -169,6 +169,13 @@ fn malformed_certificates_keep_their_outcomes() {
         cert16,
         select::verify_fp127
     );
+    family!(
+        "weier127",
+        P127,
+        kats::WEIER127_CERTS,
+        cert16,
+        select::verify_weier127
+    );
 
     let got = format!("{HEADER}{}\n", out.join("\n"));
     let want = include_str!("fixtures/cert_corpus.txt");

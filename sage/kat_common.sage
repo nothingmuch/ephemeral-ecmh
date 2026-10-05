@@ -241,3 +241,21 @@ def edwards_prove(codec, tag, seed):
                 P = point_of_order(n, l, lambda i: codec.hash(E, seed, witness_msg(j, i), TAG_WITNESS))
                 rejections.append((l, codec.encode(P)))
         j += 1
+
+
+def weier_prove(codec, tag, seed):
+    """y^2 = x^3 - 3x + b of pseudoprime order, not p. A candidate of even
+    order is rejected under label 2, else by the smallest prime factor of #E."""
+    F, p, rejections, j = codec.F, codec.p, [], 0
+    while True:
+        b = F(digest_half(tag, seed, j) & codec.mask)
+        if b not in (0, 2, -2):
+            E = EllipticCurve(F, [-3, b])
+            n = E.order()
+            if n.is_pseudoprime() and n != p:
+                assert mov_ok(p, n)
+                return E, j, n, rejections
+            l = 2 if n % 2 == 0 else small_factor(n)
+            P = point_of_order(n, l, lambda i: codec.hash(E, seed, witness_msg(j, i), TAG_WITNESS))
+            rejections.append((l, codec.encode(P)))
+        j += 1

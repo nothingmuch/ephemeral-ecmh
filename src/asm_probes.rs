@@ -145,6 +145,11 @@ pub mod group {
         crate::curve::binary::wcodec::Curve<crate::curve::binary127::M127>
     );
     family!(edwards127, crate::curve::edwards127::Curve);
+    family!(weier127, crate::curve::weier127::OddCurve);
+    family!(
+        weier127_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp127::Fp>
+    );
     family!(
         binary127_u,
         crate::curve::binary::unscaled::Curve<crate::curve::binary127::M127>

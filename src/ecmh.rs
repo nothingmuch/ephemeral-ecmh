@@ -58,6 +58,7 @@ mod tests {
     use crate::curve::binary::lambda;
     use crate::curve::binary127;
     use crate::curve::edwards127;
+    use crate::curve::weier127;
     use crate::group::{Accumulate, Decode};
     use proptest::prelude::*;
 
@@ -216,6 +217,48 @@ mod tests {
         Ok(())
     }
 
+    /// `check_lambda_matches_binary127` for any two accumulators over the
+    /// same curve, points and encodings (a Weierstrass family's projective
+    /// and Jacobian accumulators): digests, and signed running sums of
+    /// prepared addends, agree.
+    fn check_same_digests<G, H>(
+        g: G,
+        h: H,
+        salt: [u8; 32],
+        xs: Items,
+        signs: Vec<bool>,
+    ) -> Result<(), TestCaseError>
+    where
+        G: HashToCurve + Negate + SumBatch + Encode,
+        H: Group<Affine = G::Affine>
+            + HashToCurve
+            + Negate
+            + SumBatch
+            + Encode<Encoding = G::Encoding>,
+    {
+        prop_assert_eq!(streaming(g, &salt, &xs), streaming(h, &salt, &xs));
+        prop_assert_eq!(batch(g, &salt, &xs), batch(h, &salt, &xs));
+        let s = Salted::new(TAG_ITEM, &salt);
+        let pts: Vec<_> = xs.iter().map(|x| g.hash(&s, x)).collect();
+        let (ga, ha) = (g.prepare_batch(&pts), h.prepare_batch(&pts));
+        let (mut gp, mut hp) = (g.identity(), h.identity());
+        // Revisit items in reverse order with either sign to exercise doubling
+        // and cancellation to O as well as additions of distinct points.
+        let order = (0..xs.len()).chain((0..xs.len()).rev());
+        for (i, &sub) in order.zip(signs.iter().cycle()) {
+            let (a, b) = if sub {
+                (g.neg_addend(&ga[i]), h.neg_addend(&ha[i]))
+            } else {
+                (ga[i], ha[i])
+            };
+            gp = g.add(&gp, &a);
+            hp = h.add(&hp, &b);
+            prop_assert_eq!(g.encode(&g.to_affine(&gp)), h.encode(&h.to_affine(&hp)));
+            prop_assert_eq!(g.is_identity(&gp), h.is_identity(&hp));
+        }
+        Ok(())
+    }
+
     proptest! {
         #[test]
         fn binary127_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
@@ -235,6 +278,21 @@ mod tests {
         #[test]
         fn edwards127_ecmh(c in edwards127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier127_ecmh(c in weier127::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier127_jacobian_ecmh(c in weier127::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::weier::jacobian::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn weier127_jacobian_matches_weier127(c in weier127::tests::odd_curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_same_digests(c, crate::curve::weier::jacobian::Curve(c), salt, xs, signs)?;
         }
 
         #[test]

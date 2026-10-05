@@ -73,7 +73,7 @@ pub use super::number::{EMBEDDING_MIN, embedding_degree_ok, is_prime};
 
 use crate::curve::binary::{self, Model};
 use crate::curve::encoding::Signed;
-use crate::curve::{binary127, edwards, edwards127};
+use crate::curve::{binary127, edwards, edwards127, weier, weier127};
 use crate::field::OddField;
 use crate::field::fp127::{Fp, P};
 use crate::field::gf2_127::{MASK127, from_u128};
@@ -81,6 +81,7 @@ use crate::hash::{Salted, halves};
 
 pub const TAG_GF2_127: &[u8] = b"ephemeral-ecmh/curve/gf2";
 pub const TAG_FP127: &[u8] = b"ephemeral-ecmh/curve/fp127";
+pub const TAG_WEIER127: &[u8] = b"ephemeral-ecmh/curve/weier127";
 pub const TAG_CERT_POINT: &[u8] = b"ephemeral-ecmh/cert-point";
 
 /// floor(2 sqrt q), the same for q = 2^127 and p = 2^127 - 1.
@@ -248,6 +249,11 @@ pub(crate) fn eight_torsion<const N: usize, C: Arithmetic<N>>(
     })
 }
 
+/// The Weierstrass marker: l = 2 with y = 0. The decoded P is nonidentity.
+pub(crate) fn two_torsion<F: OddField>(p: &weier::Affine<F>, l: u128) -> Option<bool> {
+    (l == 2).then(|| p.y.is_zero())
+}
+
 impl<const N: usize, M: Model<Bytes = [u8; N]>> Arithmetic<N> for binary::Curve<M> {
     type Affine = binary::Affine<M>;
     type Point = binary::Point<M>;
@@ -288,6 +294,52 @@ impl<const N: usize, F: OddField + Signed<Bytes = [u8; N]>> Arithmetic<N> for ed
     fn is_identity(&self, p: &Self::Point) -> bool {
         p.is_identity()
     }
+}
+
+/// Weierstrass verification arithmetic: the complete projective formulas
+/// (Renes–Costello–Batina), at every encoding width. The formulas are
+/// complete on a subgroup of odd order; on an exceptional pair (one whose
+/// difference has order 2, as O and a 2-torsion point) they give
+/// (0 : 0 : 0), which is absorbing and which the strict `is_identity`
+/// refuses. A ladder's result is thus the exact point or (0 : 0 : 0), and
+/// a verdict of identity is reached only when every intermediate lies in
+/// a subgroup of odd order and the exact result is O. The verifier asks
+/// for the identity of lP with l odd and of rQ with r odd, and
+/// for the nonidentity of Q: each is decided as the chord law decides it
+/// (`tests::projective_verdicts_match_the_chord_law`).
+impl<const N: usize, F: OddField + Signed<Bytes = [u8; N]>> Arithmetic<N> for weier::Curve<F> {
+    type Affine = weier::Affine<F>;
+    type Point = weier::Point<F>;
+
+    fn decode(&self, enc: [u8; N]) -> Option<Self::Affine> {
+        weier::Curve::decode(self, enc)
+    }
+    fn hash(&self, salt: &Salted, msg: &[u8]) -> Self::Affine {
+        self.hash_to_curve(salt, msg)
+    }
+    fn lift(&self, p: &Self::Affine) -> Option<Self::Point> {
+        (!p.is_identity()).then(|| self.from_affine(p))
+    }
+    fn mul(&self, p: &Self::Point, k: u128) -> Self::Point {
+        weier::Curve::mul(self, p, k)
+    }
+    fn is_identity(&self, p: &Self::Point) -> bool {
+        p.is_identity()
+    }
+}
+
+/// Affine double-and-add by the chord law.
+pub(crate) fn affine_mul<F: OddField>(
+    c: &weier::Curve<F>,
+    p: &weier::Affine<F>,
+    k: u128,
+) -> weier::Affine<F> {
+    (0..128 - k.leading_zeros())
+        .rev()
+        .fold(weier::Affine::IDENTITY, |acc, i| {
+            let acc = c.add(&acc, &acc);
+            if k >> i & 1 == 1 { c.add(&acc, p) } else { acc }
+        })
 }
 
 /// y^2 + xy = x^3 + x^2 + B over GF(2^127), #E = 2r.
@@ -338,12 +390,37 @@ impl Policy<16> for Edwards127 {
     }
 }
 
+/// y^2 = x^3 - 3x + b over F_p, p = 2^127 - 1, #E = r.
+pub struct Weier127;
+
+impl Criteria for Weier127 {
+    type Curve = weier127::Curve;
+    const TAG: &'static [u8] = TAG_WEIER127;
+    const R: AdmissibleR = AdmissibleR::new(P, HASSE, 1);
+    fn candidate(seed: &[u8; 32], j: u32) -> Option<Self::Curve> {
+        weier127::Curve::new(Fp::new(half(Self::TAG, seed, j) & MASK127))
+    }
+}
+
+impl Policy<16> for Weier127 {
+    const CLEAR: u128 = 1;
+    const ENTRY_PER_INDEX: bool = false;
+
+    fn marker(_: &Self::Curve, p: &weier127::Affine, l: u128) -> Option<bool> {
+        two_torsion(p, l)
+    }
+}
+
 pub fn gf2_127_candidate(seed: &[u8; 32], j: u32) -> Option<binary127::Curve> {
     Binary127::candidate(seed, j)
 }
 
 pub fn fp127_candidate(seed: &[u8; 32], j: u32) -> Option<edwards127::Curve> {
     Edwards127::candidate(seed, j)
+}
+
+pub fn weier127_candidate(seed: &[u8; 32], j: u32) -> Option<weier127::Curve> {
+    Weier127::candidate(seed, j)
 }
 
 pub fn verify_gf2_127(seed: &[u8; 32], cert: &Certificate) -> Result<binary127::Curve, Error> {
@@ -366,10 +443,19 @@ pub fn accept_fp127(seed: &[u8; 32], index: u32, r: u128) -> Result<edwards127::
     accept::<16, Edwards127>(seed, index, r)
 }
 
+pub fn verify_weier127(seed: &[u8; 32], cert: &Certificate) -> Result<weier127::Curve, Error> {
+    verify::<16, Weier127>(seed, cert)
+}
+
+pub fn accept_weier127(seed: &[u8; 32], index: u32, r: u128) -> Result<weier127::Curve, Error> {
+    accept::<16, Weier127>(seed, index, r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::curvegen::number::mul_wide;
+    use crate::curvegen::sieve;
     use proptest::prelude::*;
 
     /// hasse = floor(2 sqrt q): hasse^2 <= 4q < (hasse + 1)^2, in 256 bits.
@@ -385,7 +471,7 @@ mod tests {
 
     #[test]
     fn admissible_r_matches_the_direct_bounds() {
-        for r in [Binary127::R, Edwards127::R] {
+        for r in [Binary127::R, Edwards127::R, Weier127::R] {
             hasse_is_exact(&r);
             assert!(
                 r.hasse_contains(r.cofactor * r.lo) && !r.hasse_contains(r.cofactor * (r.lo - 1))
@@ -399,6 +485,7 @@ mod tests {
         // it cannot be an odd rejection label.
         assert_eq!(Binary127::R.lo, 85070591730234615852799834032609270652 + 1);
         assert_eq!(Edwards127::R.lo, 42535295865117307926399917016304635326);
+        assert_eq!(Weier127::R.lo, P + 1 - HASSE);
     }
 
     proptest! {
@@ -409,6 +496,7 @@ mod tests {
                 let cert = Certificate { index: 0, r, rejections: vec![] };
                 prop_assert!(verify_gf2_127(&seed, &cert).is_err());
                 prop_assert!(verify_fp127(&seed, &cert).is_err());
+                prop_assert!(verify_weier127(&seed, &cert).is_err());
             }
         }
 
@@ -554,5 +642,69 @@ mod tests {
         assert_eq!(at(9), Some(Error::Order(OrderError::RNotPrime)));
         // the other prime in the window is not anomalous
         assert_ne!(at(7), Some(Error::Order(OrderError::Anomalous)));
+    }
+
+    /// On candidates with rational 2-torsion, the projective arithmetic
+    /// decides as the chord law does: lP = O for odd l, and the acceptance
+    /// of Q = `clear` P (nonidentity, rQ = O) for the policies' clearings
+    /// and odd r. Where it gives a point, it is the exact one.
+    #[test]
+    fn projective_verdicts_match_the_chord_law() {
+        fn check<F: OddField + sieve::Signed16>(
+            candidate: impl Fn(u32) -> Option<weier::Curve<F>>,
+            seed: &[u8; 32],
+        ) -> usize {
+            let (c, t) = (0..)
+                .filter_map(candidate)
+                .find_map(|c| sieve::weier_torsion(&c, 2).map(|t| (c, c.decode(t).unwrap())))
+                .expect("a candidate with 2-torsion");
+            assert!(t.y.is_zero() && !t.is_identity());
+            let p = c.hash_to_curve(&Salted::new(b"test", seed), b"p".as_slice());
+            let odd = [
+                1,
+                3,
+                5,
+                7,
+                9,
+                15,
+                17,
+                255,
+                257,
+                (1 << 20) + 1,
+                (1 << 61) - 1,
+            ];
+            let degenerate = |p: &weier::Point<F>| p.x.is_zero() && p.y.is_zero() && p.z.is_zero();
+            let mul =
+                |p: &weier::Point<F>, k: u128| <weier::Curve<F> as Arithmetic<16>>::mul(&c, p, k);
+            let is_identity =
+                |p: &weier::Point<F>| <weier::Curve<F> as Arithmetic<16>>::is_identity(&c, p);
+            let mut degenerates = 0;
+            for base in [p, c.add(&p, &t), t] {
+                let lifted = <weier::Curve<F> as Arithmetic<16>>::lift(&c, &base).unwrap();
+                for l in odd {
+                    let exact = affine_mul(&c, &base, l);
+                    let proj = mul(&lifted, l);
+                    assert_eq!(is_identity(&proj), exact.is_identity(), "{l}");
+                    if degenerate(&proj) {
+                        degenerates += 1;
+                    } else {
+                        assert_eq!(c.to_affine(&proj), exact, "{l}");
+                    }
+                }
+                for clear in [1, 2, 4] {
+                    let (q, exact_q) = (mul(&lifted, clear), affine_mul(&c, &base, clear));
+                    for r in odd {
+                        let accepted = !is_identity(&q) && is_identity(&mul(&q, r));
+                        let exact =
+                            !exact_q.is_identity() && affine_mul(&c, &exact_q, r).is_identity();
+                        assert_eq!(accepted, exact, "{clear} {r}");
+                    }
+                }
+            }
+            degenerates
+        }
+        let seed = &[3; 32];
+        let n = check(|j| Weier127::candidate(seed, j), seed);
+        assert!(n > 0, "no (0 : 0 : 0) was produced");
     }
 }

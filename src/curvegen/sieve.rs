@@ -14,8 +14,9 @@
 //!   q = -1 mod l. This occurs at q = 2^127 and l = 3.
 
 //!
-//! The binary and prime-field Edwards sieves return encoded small-order
-//! witnesses. The Edwards sieve first tests whether 8 divides #E.
+//! The binary, prime-field Edwards and Weierstrass sieves return encoded
+//! small-order witnesses. The model-specific first tests are 8 | #E for
+//! Edwards and 2 | #E for Weierstrass.
 
 //!
 //! # Cost model
@@ -66,7 +67,7 @@
 //! for computing x^(2^127).
 
 use crate::curve::encoding::Signed;
-use crate::curve::{binary127, edwards};
+use crate::curve::{binary127, edwards, weier};
 use crate::curvegen::poly::{Field, Poly, field_roots, find_root};
 use crate::curvegen::select;
 use crate::field::OddField;
@@ -92,6 +93,11 @@ impl<F: Field + Signed<Bytes = [u8; 16]>> Signed16 for F {}
 pub fn edwards_invariants<F: Signed16>(c: &edwards::Curve<F>) -> BInvariants<F> {
     let two = F::small(2);
     [two * two * c.a2, two * c.a4, F::ZERO, -c.a4.square()]
+}
+
+/// y^2 = x^3 - 3x + b.
+pub fn weier_invariants<F: Signed16>(c: &weier::Curve<F>) -> BInvariants<F> {
+    [F::ZERO, -F::small(6), F::small(4) * c.b, -F::small(9)]
 }
 
 /// psi_2^2 = 4x^3 + b2 x^2 + 2 b4 x + b6, a polynomial in x on the curve.
@@ -217,6 +223,21 @@ pub fn edwards_order8<F: Signed16>(c: &edwards::Curve<F>) -> Option<[u8; 16]> {
     order8_x(F::ONE, c.d).find_map(|x| c.decode(F::to_bytes(x.pack())).map(|p| p.encode()))
 }
 
+/// `gf2_127_torsion` for the Weierstrass families; l = 2 or odd. The
+/// rational 2-torsion points are (x, 0) for the roots x in F of
+/// x^3 - 3x + b.
+pub fn weier_torsion<F: Signed16>(c: &weier::Curve<F>, l: u32) -> Option<[u8; 16]> {
+    assert!(l == 2 || (l >= 3 && l % 2 == 1));
+    let m = if l == 2 {
+        Poly::new(vec![c.b, -F::small(3), F::ZERO, F::ONE])
+    } else {
+        division_polynomial(&weier_invariants(c), l as usize)
+    };
+    torsion(&m, |x: F| {
+        c.decode(F::to_bytes(x.pack())).map(|p| p.encode())
+    })
+}
+
 /// A certificate rejection (l, encoded P), as `select` verifies them.
 pub type Rejection = (u128, [u8; 16]);
 
@@ -233,6 +254,7 @@ pub struct Bounds {
 }
 
 pub const EDWARDS127: Bounds = Bounds { find: 5, prove: 13 };
+pub const WEIER127: Bounds = Bounds { find: 5, prove: 13 };
 
 fn odd_primes(l_max: u32) -> impl Iterator<Item = u32> {
     (3..=l_max).step_by(2).filter(|&n| {
@@ -261,6 +283,13 @@ pub fn edwards<F: Signed16>(c: &edwards::Curve<F>, l_max: u32) -> Option<Rejecti
 /// `Family::quick_reject` has applied it already.
 pub fn edwards_odd<F: Signed16>(c: &edwards::Curve<F>, l_max: u32) -> Option<Rejection> {
     odd_primes(l_max).find_map(|l| Some((l as u128, edwards_torsion(c, l)?)))
+}
+
+/// `gf2_127` for the Weierstrass families, after 2.
+pub fn weier<F: Signed16>(c: &weier::Curve<F>, l_max: u32) -> Option<Rejection> {
+    core::iter::once(2)
+        .chain(odd_primes(l_max))
+        .find_map(|l| Some((l as u128, weier_torsion(c, l)?)))
 }
 
 /// Sieves candidates from `start` on, pushing their rejections, and
@@ -297,10 +326,24 @@ pub fn next_fp127(seed: &[u8; 32], start: u32, l_max: u32, rej: &mut Vec<Rejecti
     unreachable!()
 }
 
+/// `next_gf2_127` for the Weierstrass family: singular candidates take no entry.
+pub fn next_weier127(seed: &[u8; 32], start: u32, l_max: u32, rej: &mut Vec<Rejection>) -> u32 {
+    for j in start.. {
+        let Some(c) = select::weier127_candidate(seed, j) else {
+            continue;
+        };
+        match weier(&c, l_max) {
+            Some(r) => rej.push(r),
+            None => return j,
+        }
+    }
+    unreachable!()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::edwards127;
+    use crate::curve::{edwards127, weier127};
     use crate::curvegen::poly::tests::{Counted, Ops, count};
     use crate::field::fp127::Fp;
     use proptest::prelude::*;
@@ -356,6 +399,18 @@ mod tests {
             }
             degrees(&b);
         }
+
+        #[test]
+        fn weier127_multiples((c, ps) in weier127::tests::curve_and_points(1)) {
+            let p = ps[0];
+            let b = weier_invariants(&c);
+            let mut q = p;
+            for n in 2..12 {
+                q = c.add(&q, &p);
+                prop_assert_eq!(x_multiple(&b, p.x, n), q.x, "n = {}", n);
+            }
+            degrees(&b);
+        }
     }
 
     // Witnesses pass `select`'s rejection checks. l = 3 and 5 divide #E
@@ -380,6 +435,31 @@ mod tests {
                 prop_assert!(!p.is_identity());
                 prop_assert!(c.mul(&c.from_affine(&p), l as u128).equals(&o));
             }
+        }
+
+        #[test]
+        fn weier127_witnesses_have_order_l(c in weier127::tests::curve(), l in prop::sample::select(vec![2u32, 3, 5])) {
+            if let Some(enc) = weier_torsion(&c, l) {
+                let p = c.decode(enc).unwrap();
+                prop_assert!(!p.is_identity());
+                if l == 2 {
+                    prop_assert!(p.y.is_zero());
+                } else {
+                    prop_assert!(c.mul(&c.from_affine(&p), l as u128).is_identity());
+                }
+            }
+        }
+
+        /// A curve built with a root x0 of x^3 - 3x + b has a point of
+        /// order 2, which the sieve must find.
+        #[test]
+        fn weier127_finds_a_constructed_2_torsion_point(x0 in crate::field::fp127::tests::fp()) {
+            let three = crate::field::fp127::Fp::small(3);
+            let Some(c) = weier127::Curve::new(three * x0 - x0 * x0.square()) else {
+                return Ok(()); // b = 0, or a singular curve
+            };
+            let p = c.decode(weier_torsion(&c, 2).expect("a root")).unwrap();
+            prop_assert!(p.y.is_zero() && c.is_on_curve(&p));
         }
     }
 
@@ -406,6 +486,21 @@ mod tests {
                 prop_assert!(!c.mul(&p, 4).equals(&o) && c.mul(&p, 8).equals(&o));
             }
         }
+    }
+
+    #[test]
+    fn short_weierstrass_psi3() {
+        // 3x^4 + 6a x^2 + 12b x - a^2 for y^2 = x^3 + ax + b, a = -3
+        let b = Fp::new(12345);
+        let c = weier127::Curve::new(b).unwrap();
+        let want = Poly::new(vec![
+            -Fp::new(9),
+            Fp::new(12) * b,
+            -Fp::new(18),
+            Fp::ZERO,
+            Fp::new(3),
+        ]);
+        assert_eq!(division_polynomial(&weier_invariants(&c), 3), want);
     }
 
     /// Ops to try l on a candidate: build psi_l, then gcd(psi_l, x^q - x).
@@ -436,6 +531,9 @@ mod tests {
         let ed = (0..)
             .find_map(|j| select::fp127_candidate(&seed, j))
             .unwrap();
+        let we = (0..)
+            .find_map(|j| select::weier127_candidate(&seed, j))
+            .unwrap();
         let near = |got: Ops, m: u64, s: u64| {
             got.i == 2 && got.m.abs_diff(m) * 100 <= m && got.s.abs_diff(s) * 100 <= s
         };
@@ -444,6 +542,10 @@ mod tests {
             assert!(
                 near(cost(&edwards_invariants(&ed), l), pm, ps),
                 "Edwards, l = {l}"
+            );
+            assert!(
+                near(cost(&weier_invariants(&we), l), pm, ps),
+                "Weierstrass, l = {l}"
             );
         }
     }
@@ -524,5 +626,7 @@ mod tests {
         let p = (1u128 << 127) - 1;
         let edwards = tuned(p, &FP127_US, 54e3, [3.2e3, 740.0, 1.5e3, 3.2e3]);
         assert_eq!(edwards, EDWARDS127);
+        let weier = tuned(p, &FP127_US, 56e3, [320.0, 860.0, 1.7e3, 1.8e3]);
+        assert_eq!(weier, WEIER127);
     }
 }

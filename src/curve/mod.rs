@@ -11,3 +11,5 @@ pub mod edwards;
 pub mod edwards127;
 pub mod encoding;
 pub mod h2c;
+pub mod weier;
+pub mod weier127;

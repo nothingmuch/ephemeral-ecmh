@@ -74,6 +74,8 @@ def gf2_prove(seed):
 # --- GF(2^127 - 1) ---------------------------------------------------------
 fp = PrimeCodec(GF(2^127 - 1), 127)
 TAG_FP = b"ephemeral-ecmh/curve/fp127"
+TAG_WEIER = b"ephemeral-ecmh/curve/weier127"
+
 # --- emit ------------------------------------------------------------------
 out = sys.stdout
 write_struct(out, "kat.sage", "tests/common/kats.rs")
@@ -92,3 +94,4 @@ def emit(name, prove, hash_, encode):
 
 emit("GF2_127_CERTS", gf2_prove, gf2_hash, gf2_encode)
 emit("FP127_CERTS", lambda seed: edwards_prove(fp, TAG_FP, seed), fp.hash, fp.encode)
+emit("WEIER127_CERTS", lambda seed: weier_prove(fp, TAG_WEIER, seed), fp.hash, fp.encode)

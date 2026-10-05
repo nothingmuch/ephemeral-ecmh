@@ -4,8 +4,9 @@
 //! probable-prime policy. Every fixture is verified in Rust. Workload salts
 //! remain the caller's choice. Only metadata consumed by the suites lives here.
 
-use ephemeral_ecmh::curve::{self, binary};
+use ephemeral_ecmh::curve::{self, binary, weier};
 use ephemeral_ecmh::curvegen::select;
+use ephemeral_ecmh::field::OddField;
 use ephemeral_ecmh::group::{Decode, HashToCurve, Negate};
 
 #[path = "../../tests/common/kats.rs"]
@@ -17,6 +18,7 @@ pub enum Representation {
     Lambda,
     LambdaW,
     UnscaledW,
+    Jacobian,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -41,6 +43,7 @@ impl Family {
             Representation::Lambda => "-lambda",
             Representation::LambdaW => "-w",
             Representation::UnscaledW => "-u",
+            Representation::Jacobian => "-jacobian",
         };
         format!("{}{suffix}.{}", self.curve.id_model, self.curve.id_field)
     }
@@ -89,6 +92,24 @@ macro_rules! variants {
             Representation::UnscaledW,
         ));
     }};
+    (weier, $v:ident, $f:expr) => {{
+        let f = $f;
+        $v.visit(f);
+        $v.visit(f.represented(weier::jacobian::Curve(f.group), Representation::Jacobian));
+    }};
+}
+
+/// Verification returns the raw curve. The group is its odd-order form,
+/// which `OddCurve::new` checks rather than infers from the certificate,
+/// whose order argument is conditional on r's primality. Every Weierstrass
+/// policy has cofactor 1, so for the fixtures #E = r is an odd prime and
+/// the `expect` is a consistency check, not a path.
+fn odd<const N: usize, F: OddField>(
+    verify: fn(&[u8; 32], &select::Certificate<N>) -> Result<weier::Curve<F>, select::Error>,
+) -> impl Fn(&[u8; 32], &select::Certificate<N>) -> Result<weier::OddCurve<F>, select::Error> {
+    move |seed, cert| {
+        verify(seed, cert).map(|c| weier::OddCurve::new(c).expect("fixture curve of even order"))
+    }
 }
 
 // The same declaration creates direct constructors for the comparison suites
@@ -153,4 +174,6 @@ registry! {
         ("binary", "127", 2, 2), binary;
     edwards127: curve::edwards127::Curve, kats::FP127_CERTS, select::verify_fp127,
         ("edwards", "127", 4, 2), single;
+    weier127: curve::weier127::OddCurve, kats::WEIER127_CERTS, odd(select::verify_weier127),
+        ("weier", "127", 1, 2), weier;
 }

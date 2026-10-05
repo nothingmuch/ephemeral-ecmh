@@ -73,6 +73,18 @@ fn edwards127_certificates_from_the_sieve() {
     }
 }
 
+#[test]
+fn weier127_certificates_from_the_sieve() {
+    for k in kats::WEIER127_CERTS {
+        let c = rebuild(
+            k,
+            |j| select::weier127_candidate(&k.seed, j).is_some(),
+            sieve::next_weier127,
+        );
+        select::verify_weier127(&k.seed, &c).unwrap();
+    }
+}
+
 /// The odd l the vector tests check on every candidate.
 const LS: [u32; 5] = [3, 5, 7, 11, 13];
 
@@ -124,6 +136,25 @@ fn edwards127_torsion_agrees_with_sage() {
             // l = 8: of order exactly 8; odd l: P != O
             let below = if l == 8 { 4 } else { 1 };
             c.mul(&p, l as u128).equals(&o) && !c.mul(&p, below).equals(&o)
+        },
+    );
+}
+
+#[test]
+fn weier127_torsion_agrees_with_sage() {
+    agree(
+        sv::WEIER127,
+        |j| select::weier127_candidate(&sv::SEED, j).unwrap(),
+        &[&[2][..], &LS].concat(),
+        sieve::weier_torsion,
+        |c, p, l| {
+            let p = c.decode(p).unwrap();
+            !p.is_identity()
+                && if l == 2 {
+                    p.y.is_zero()
+                } else {
+                    c.mul(&c.from_affine(&p), l as u128).is_identity()
+                }
         },
     );
 }

@@ -24,11 +24,11 @@
 
 use super::agm::Agm;
 use super::criteria::{Count, Filter, Found, OrderError, find};
-use crate::curve::{binary127, edwards127};
-use crate::curvegen::select::{self, Certificate, Policy, is_prime};
+use crate::curve::{binary127, edwards127, weier127};
+use crate::curvegen::select::{self, Certificate, Policy, affine_mul, is_prime};
 use crate::hash::Salted;
 
-pub use crate::curvegen::select::{Binary127, Edwards127};
+pub use crate::curvegen::select::{Binary127, Edwards127, Weier127};
 
 pub const TAG_WITNESS: &[u8] = b"ephemeral-ecmh/prove/witness";
 
@@ -92,6 +92,12 @@ impl Sieve<binary127::Curve> for SmallL {
 impl Sieve<edwards127::Curve> for SmallL {
     fn reject(&mut self, c: &edwards127::Curve) -> Option<Rejection> {
         crate::curvegen::sieve::edwards_odd(c, self.0)
+    }
+}
+
+impl Sieve<weier127::Curve> for SmallL {
+    fn reject(&mut self, c: &weier127::Curve) -> Option<Rejection> {
+        crate::curvegen::sieve::weier(c, self.0)
     }
 }
 
@@ -267,6 +273,22 @@ impl Family for Edwards127 {
     }
 }
 
+impl Family for Weier127 {
+    fn witness(c: &Self::Curve, h: &Salted, j: u32, n: u128, l: u128) -> [u8; 16] {
+        let hash = |i| c.hash_to_curve(h, &msg(j, i));
+        let is_o = weier127::Affine::is_identity;
+        let p = if !n.is_multiple_of(2) {
+            // no 2-torsion, so RCB is complete
+            let mul = |p: &weier127::Affine, k| c.to_affine(&c.mul(&c.from_affine(p), k));
+            torsion_point(n, l, hash, mul, is_o)
+        } else {
+            // the affine chord law is complete on every candidate
+            torsion_point(n, l, hash, |p, k| affine_mul(c, p, k), is_o)
+        };
+        p.encode()
+    }
+}
+
 /// The first order-admissible candidate and its certificate, if this
 /// format can witness the preceding rejections and its acceptance point
 /// passes. Failure panics rather than silently choosing a later candidate;
@@ -357,6 +379,15 @@ pub fn prove_fp127(
     sieve: &mut impl Sieve<edwards127::Curve>,
 ) -> (Certificate, edwards127::Curve) {
     prove::<Edwards127>(seed, count, factor, sieve)
+}
+
+pub fn prove_weier127(
+    seed: &[u8; 32],
+    count: &mut impl Count<weier127::Curve>,
+    factor: &mut impl Factor,
+    sieve: &mut impl Sieve<weier127::Curve>,
+) -> (Certificate, weier127::Curve) {
+    prove::<Weier127>(seed, count, factor, sieve)
 }
 
 #[cfg(test)]

@@ -14,7 +14,7 @@ use criterion::{
     BenchmarkGroup, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
 };
 use ephemeral_ecmh::curvegen::select;
-use ephemeral_ecmh::curvegen::sieve::{self, EDWARDS127, GF2_127_L_MAX};
+use ephemeral_ecmh::curvegen::sieve::{self, EDWARDS127, GF2_127_L_MAX, WEIER127};
 use std::hint::black_box;
 
 #[path = "../tests/common/sieve_vectors.rs"]
@@ -68,6 +68,15 @@ fn torsion(c: &mut Criterion) {
         &[&[8][..], &LS].concat(),
         sieve::edwards_torsion,
     );
+    per_l(
+        &mut g,
+        "weier127",
+        sv::WEIER127,
+        0,
+        |j| select::weier127_candidate(&sv::SEED, j).unwrap(),
+        &[&[2][..], &LS].concat(),
+        sieve::weier_torsion,
+    );
     g.finish();
 }
 
@@ -83,6 +92,10 @@ fn per_candidate(c: &mut Criterion) {
         .iter()
         .map(|&(j, _)| select::fp127_candidate(&sv::SEED, j).unwrap())
         .collect();
+    let we: Vec<_> = sv::WEIER127
+        .iter()
+        .map(|&(j, _)| select::weier127_candidate(&sv::SEED, j).unwrap())
+        .collect();
     g.throughput(Throughput::Elements(gf2.len() as u64));
     g.bench_function(BenchmarkId::new("gf2_127", GF2_127_L_MAX), |b| {
         b.iter(|| {
@@ -96,6 +109,14 @@ fn per_candidate(c: &mut Criterion) {
         b.iter(|| {
             ed.iter()
                 .filter(|c| sieve::edwards(c, EDWARDS127.prove).is_some())
+                .count()
+        })
+    });
+    g.throughput(Throughput::Elements(we.len() as u64));
+    g.bench_function(BenchmarkId::new("weier127", WEIER127.prove), |b| {
+        b.iter(|| {
+            we.iter()
+                .filter(|c| sieve::weier(c, WEIER127.prove).is_some())
                 .count()
         })
     });
