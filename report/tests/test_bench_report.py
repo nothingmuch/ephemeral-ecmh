@@ -206,6 +206,10 @@ def test_current_suite_is_fully_classified(table):
         # smaller fields: gf2_109, edwards107, weier107; 127 is the base
         # GF(2^122): qsolve sits with the halftraces
         ("digest/weier127/batch", ("digest", "weier127", "digest", "batch")),
+        (
+            "field/gf2_109/normalize (to_u128)",
+            ("field", "gf2_109", "normalize", "per-element"),
+        ),
         # a batch to affine, not a sum
         (
             "agm/order",

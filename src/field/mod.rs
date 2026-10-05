@@ -2,11 +2,14 @@
 //!
 //! - `gf2_127`: GF(2^127) = F_2\[z\]/(z^127 + z^63 + 1), crrl's, for
 //!   `binary127`.
+//! - `gf2_109`: GF(2^109) = F_2\[z\]/(z^109 + z^5 + z^4 + z^2 + 1),
+//!   with a PMULL, a PCLMULQDQ and a portable backend, for `binary109`.
 //! - `fp127`: F_p, p = 2^127 - 1, portable, for `edwards127` and `weier127`.
 //! - `batch`: Montgomery's batch inversion, for any of them.
 
 pub mod batch;
 pub mod fp127;
+pub mod gf2_109;
 pub mod gf2_127;
 use core::fmt::Debug;
 use core::ops::{Add, AddAssign, Neg, Sub};
@@ -202,6 +205,7 @@ macro_rules! binary {
 }
 // For odd m the half-trace solves it: H(c)^2 + H(c) = c + Tr(c).
 binary!(gf2_127, gf2_127::MASK127, gf2_127::halftrace8);
+binary!(gf2_109, gf2_109::MASK109, gf2_109::halftrace8);
 /// Half-trace window tables for a binary field of degree M, from
 /// h\[i\] = H(z^i): `T[j][b]` = H(sum of z^(W j + k) over the bits k of b),
 /// for W-bit windows. Entries for bits past z^(M - 1) are never read, since
@@ -327,6 +331,11 @@ mod tests {
         #[test]
         fn solve_gf2_127(v in any::<u128>()) {
             solve::<gf2_127::Gf>(v)?;
+        }
+
+        #[test]
+        fn solve_gf2_109(v in any::<u128>()) {
+            solve::<gf2_109::Gf>(v)?;
         }
     }
 }
