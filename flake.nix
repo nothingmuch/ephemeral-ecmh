@@ -30,6 +30,7 @@
         ./nix/python.nix
         ./nix/report.nix
         ./nix/asm.nix
+        ./nix/riblt-go.nix
         ./nix/mutants.nix
         ./nix/sage.nix
         ./nix/package.nix

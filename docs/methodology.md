@@ -68,6 +68,14 @@ averages every 5 seconds, the interval at which the kernel updates them, into
 own load; the report gives each phase's mean and recovers the threads runnable
 from successive 1-minute averages where the kernel does not report them.
 
+The Go benchmarks of the reference implementations run separately ([Comparison
+with the reference
+implementations](workload.md#comparison-with-the-reference-implementations)):
+
+```sh
+nix run .#riblt-go-bench
+```
+
 A report can be regenerated from an existing run whose benchmark identifiers the
 reporter recognizes; runs recorded under an earlier schema need the reporter of
 their revision:
@@ -150,8 +158,7 @@ name the benchmark each value reads.
 A modeled cost sums separately measured operations, and its interval combines
 their half-widths in quadrature; it has no independently measured coverage, and
 neither has a range over curve-selection seeds, which spans their point
-estimates. The insertion model uses the mean number $k(m)$ of coded symbols an
-item maps to and
+estimates. The insertion model uses $k(m)$ of [Workload](workload.md) and
 compatible representations: a recipe either hashes, prepares the hash's output,
 and adds the prepared addend, or hashes straight to the addend and skips the
 preparation. Pornin's map returns the extended binary addend, and its variants
@@ -215,6 +222,14 @@ or a subset, as above. The run is then exported:
 
 ```sh
 nix run .#bench-report -- --export bench-runs/ID results/ID
+```
+
+The Go benchmarks of the reference implementations, timed on the same machine,
+can accompany the run as `results/ID/riblt-go.txt`, which the reporter does
+not read:
+
+```sh
+nix run .#riblt-go-bench | tee results/ID/riblt-go.txt
 ```
 
 The export is committed on a branch, whose pull request adds only
