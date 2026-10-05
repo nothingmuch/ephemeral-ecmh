@@ -129,6 +129,15 @@ addends by the inverse of $b = B^{1/2}$ when they are decoded removes these,
 leaving seven field multiplications and two squarings ($7M + 2S$) per mixed
 addition.
 
+The curve of a namespace is the first candidate derived from the beacon value
+whose group order is an admissible cofactor times a prime $r$. A participant can
+check that choice without counting points: a certificate gives $r$ and a
+nonidentity point $Q$ with $rQ = O$ for the accepted candidate, and a witness of
+an inadmissible order for each earlier candidate. Its conclusion is conditional
+on the primality of $r$, which is tested to 24 fixed Miller–Rabin bases, not
+proven ([Parameter selection and
+verification](docs/problem.md#parameter-selection-and-verification)).
+
 ## License
 
 [MIT](./LICENSE)
