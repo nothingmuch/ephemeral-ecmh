@@ -83,10 +83,16 @@ FAMILIES = {
     "edwards127": ("edwards127", 127),
     "edwards107": ("edwards127", 107),
     "twisted128": ("edwards127", 128),
+    "edwards61x2": ("edwards127", 122),
+    "twisted61x2": ("edwards127", 122),
+    "twisted64x2": ("edwards127", 128),
+    "twisted-goldilocks2": ("edwards127", 128),
     "weier127": ("weier127", 127),
     "weier127-jacobian": ("weier127", 127),
     "weier107": ("weier127", 107),
     "weier107-jacobian": ("weier127", 107),
+    "weier61x2": ("weier127", 122),
+    "weier61x2-jacobian": ("weier127", 122),
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
@@ -105,17 +111,17 @@ SPELLINGS = {
         for bits, gls in BINARY
         for acc in ACCUMULATORS
     },
-    "edwards.107": "edwards107",
-    "edwards.127": "edwards127",
-    "weier.107": "weier107",
-    "weier.127": "weier127",
-    "weier-jacobian.107": "weier107-jacobian",
-    "weier-jacobian.127": "weier127-jacobian",
+    **{f"edwards.{f}": f"edwards{f}" for f in ("107", "127", "61x2")},
+    **{f"weier.{f}": f"weier{f}" for f in ("107", "127", "61x2")},
+    **{f"weier-jacobian.{f}": f"weier{f}-jacobian" for f in ("107", "127", "61x2")},
     "twisted.128": "twisted128",
     # the a = -1 quotient before it was twisted128; the 2026-10-03 fixture
     # keeps edwards.128
     "edwards.128": "twisted128",
     "edwards128": "twisted128",
+    "twisted.61x2": "twisted61x2",
+    "twisted.64x2": "twisted64x2",
+    "twisted.goldilocks2": "twisted-goldilocks2",
     "xor-sha256": "xor",
     "sha256": "xor",
     "gf2": "gf2_127",
@@ -348,6 +354,12 @@ CURVES = [
     "weier127-jacobian",
     "weier107",
     "weier107-jacobian",
+    "edwards61x2",
+    "weier61x2",
+    "weier61x2-jacobian",
+    "twisted61x2",
+    "twisted64x2",
+    "twisted-goldilocks2",
     "ristretto255",
     "secp256k1",
 ]
@@ -432,6 +444,31 @@ CURVE_GROUPS = [
         ],
     ),
     (
+        "F_{p²}, p = 2^61 − 1, 16 bytes",
+        [
+            ("edwards61x2", "a = 1 Edwards, signed-x codec, extended += cached"),
+            ("weier61x2", "short Weierstrass, signed-x codec, projective += affine"),
+            (
+                "weier61x2-jacobian",
+                "short Weierstrass, signed-x codec, Jacobian += affine",
+            ),
+            ("twisted61x2", "a = −1 Edwards modulo 2-torsion, extended += cached"),
+        ],
+    ),
+    (
+        "F_{p²}, p = 2^64 − 59, 16 bytes",
+        [("twisted64x2", "a = −1 Edwards modulo 2-torsion, extended += cached")],
+    ),
+    (
+        "F_{p²}, p = 2^64 − 2^32 + 1, 16 bytes",
+        [
+            (
+                "twisted-goldilocks2",
+                "a = −1 Edwards modulo 2-torsion, extended += cached",
+            )
+        ],
+    ),
+    (
         "references, 32 and 33 bytes",
         [
             ("ristretto255", "curve25519-dalek"),
@@ -482,6 +519,12 @@ FIELD_OF = {
     "weier107": "fp107",
     "weier127-jacobian": "fp127",
     "weier107-jacobian": "fp107",
+    "edwards61x2": "fp61x2",
+    "weier61x2": "fp61x2",
+    "weier61x2-jacobian": "fp61x2",
+    "twisted61x2": "fp61x2",
+    "twisted64x2": "fp64x2",
+    "twisted-goldilocks2": "goldilocks2",
 } | {c: "gf2_122" for c in CURVES if c.startswith("gf2_122")}
 
 # Marks on rows a table compares with the rest though they don't do the

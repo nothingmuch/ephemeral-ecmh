@@ -5,7 +5,7 @@
 //! remain the caller's choice. Only metadata consumed by the suites lives here.
 
 use ephemeral_ecmh::curve::{self, binary, weier};
-use ephemeral_ecmh::curvegen::{select, select107, select109, select122, select128};
+use ephemeral_ecmh::curvegen::{select, select_fp2, select107, select109, select122, select128};
 use ephemeral_ecmh::field::OddField;
 use ephemeral_ecmh::group::{Decode, HashToCurve, Negate};
 
@@ -19,6 +19,8 @@ pub(crate) mod kats109;
 pub(crate) mod kats122;
 #[path = "../../tests/common/kats128.rs"]
 pub(crate) mod kats128;
+#[path = "../../tests/common/kats_fp2.rs"]
+pub(crate) mod kats_fp2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Representation {
@@ -196,4 +198,14 @@ registry! {
         ("edwards", "107", 4, 2), single;
     weier107: curve::weier107::OddCurve, kats107::WEIER107_CERTS, odd(select107::verify_weier107),
         ("weier", "107", 1, 2), weier;
+    edwards61x2: curve::edwards61x2::Curve, kats_fp2::EDWARDS61X2_CERTS, select_fp2::verify_edwards61x2,
+        ("edwards", "61x2", 4, 2), single;
+    weier61x2: curve::weier61x2::OddCurve, kats_fp2::WEIER61X2_CERTS, odd(select_fp2::verify_weier61x2),
+        ("weier", "61x2", 1, 2), weier;
+    twisted61x2: curve::twisted61x2::Curve, kats_fp2::TWISTED61X2_CERTS, select_fp2::verify_twisted61x2,
+        ("twisted", "61x2", 4, 2), single;
+    twisted64x2: curve::twisted64x2::Curve, kats_fp2::TWISTED64X2_CERTS, select_fp2::verify_twisted64x2,
+        ("twisted", "64x2", 4, 2), single;
+    twisted_goldilocks2: curve::twisted_goldilocks2::Curve, kats_fp2::TWISTED_GOLDILOCKS2_CERTS, select_fp2::verify_twisted_goldilocks2,
+        ("twisted", "goldilocks2", 4, 2), single;
 }

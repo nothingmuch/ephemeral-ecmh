@@ -450,7 +450,14 @@ def test_both_spellings_name_one_family(old, new):
 @pytest.mark.parametrize(
     "group, function, parameter, operation",
     [
+        ("curvegen/count", "edwards61x2", None, "point count (PARI)"),
         ("curvegen/verify_accept", "gf2_122-gls", "3", "accept certificate"),
+        (
+            "curvegen/verify_full",
+            "twisted-goldilocks2/12 rejections",
+            "0",
+            "verify certificate",
+        ),
         (
             "curvegen/find",
             "gf2_127 agm+sieve/index 30",
@@ -464,6 +471,25 @@ def test_curvegen_names_each_family(group, function, parameter, operation):
     f = rules.classify(group, function, parameter, False)
     fam = function.split("/")[0].split(" ")[0]
     assert (f.layer, f.family, f.operation) == ("curve generation", fam, operation)
+
+
+QUADRATIC_CURVES = [
+    ("edwards.61x2", "edwards61x2", "edwards127", "fp61x2", 122),
+    ("weier.61x2", "weier61x2", "weier127", "fp61x2", 122),
+    ("weier-jacobian.61x2", "weier61x2-jacobian", "weier127", "fp61x2", 122),
+    ("twisted.61x2", "twisted61x2", "edwards127", "fp61x2", 122),
+    ("twisted.64x2", "twisted64x2", "edwards127", "fp64x2", 128),
+    ("twisted.goldilocks2", "twisted-goldilocks2", "edwards127", "goldilocks2", 128),
+]
+
+
+@pytest.mark.parametrize("spelling, curve, base, field, bits", QUADRATIC_CURVES)
+@pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
+def test_quadratic_curve_identifiers(spelling, curve, base, field, bits, group):
+    f = rules.classify(group, spelling + "/mode=indep", None, True)
+    assert (f.family, f.base, f.bits) == (curve, base, bits)
+    assert rules.family(curve) == (curve, base, bits)
+    assert rules.FIELD_OF[curve] == field
 
 
 @pytest.mark.parametrize(
@@ -557,6 +583,25 @@ def test_addend_equality_is_present_in_elementary_table(tmp_path):
     rendered = br.to_html([("grid", grid)])
     assert "equals addend" in rendered
     assert "group.equals/binary.127" in rendered
+
+
+def test_quadratic_curve_headings_describe_structure_without_certification():
+    for _, curve, _, _, _ in QUADRATIC_CURVES:
+        assert curve in rules.CURVES
+        rows = [
+            (heading, note)
+            for heading, rows in rules.CURVE_GROUPS
+            for name, note in rows
+            if name == curve
+        ]
+        assert len(rows) == 1
+        assert "certified" not in " ".join(rows[0]).lower()
+    headings = [
+        heading
+        for heading, rows in rules.FIELD_GROUPS
+        if any(name == "fp61x2" for name, _ in rows)
+    ]
+    assert all("no curve yet" not in heading for heading in headings)
 
 
 @pytest.mark.parametrize("name, bits", [("fp61x2", 122), ("fp64x2", 128)])
@@ -685,6 +730,18 @@ def test_rho_is_sqrt_pi_r_over_2a():
     assert br.rho_bits(r, 2) - br.rho_bits(r, 4) == pytest.approx(0.5)
     # docs/ecc_security.md: 59.8 for the GLS family
     assert f"{br.rho_bits(int(GLS122['r']), GLS122['automorphisms']):.1f}" == "59.8"
+
+
+def test_fixtures_do_not_cover_unlisted_families(tmp_path):
+    root = tmp_path / "criterion"
+    for family in ["binary.127", "twisted.61x2"]:
+        write_bench(root, "group.add", family, None, 1, 2, 3, {"Elements": 1})
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    rec = {"r": str(2**126 + 1), "cofactor": 2, "automorphisms": 2}
+    fixed = br.fixtures(table, {"group_fixtures": {"binary.127": rec}})
+    assert fixed == {"binary.127": rec, "twisted.61x2": None}
 
 
 def test_machine(tmp_path):

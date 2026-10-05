@@ -14,11 +14,11 @@ use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary109, Dense122, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve, Sieve,
-    SmallL, Verdict, Weier127,
+    self, Binary109, Dense122, Edwards61x2, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve,
+    Sieve, SmallL, Twisted61x2, Twisted64x2, TwistedGoldilocks2, Verdict, Weier61x2, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
-use ephemeral_ecmh::curvegen::{select109, select122, sieve};
+use ephemeral_ecmh::curvegen::{select_fp2, select109, select122, sieve};
 use ephemeral_ecmh::field::fp127::Fp;
 use ephemeral_ecmh::field::gf2_127::from_u128;
 use ephemeral_ecmh::hash::Salted;
@@ -324,4 +324,33 @@ fn edwards127_sieve() {
 #[test]
 fn weier127_sieve() {
     check_sieve::<Weier127>([12, 11], sieve::WEIER127, select::verify_weier127);
+}
+
+#[test]
+fn edwards61x2_sieve() {
+    let v = select_fp2::verify_edwards61x2;
+    check_sieve::<Edwards61x2>([18, 5], sieve::EDWARDS61X2, v);
+}
+
+#[test]
+fn weier61x2_sieve() {
+    check_sieve::<Weier61x2>([3, 22], sieve::WEIER61X2, select_fp2::verify_weier61x2);
+}
+
+#[test]
+fn twisted61x2_sieve() {
+    let v = select_fp2::verify_twisted61x2;
+    check_sieve::<Twisted61x2>([8, 11], sieve::TWISTED61X2, v);
+}
+
+#[test]
+fn twisted64x2_sieve() {
+    let v = select_fp2::verify_twisted64x2;
+    check_sieve::<Twisted64x2>([23, 15], sieve::TWISTED64X2, v);
+}
+
+#[test]
+fn twisted_goldilocks2_sieve() {
+    let v = select_fp2::verify_twisted_goldilocks2;
+    check_sieve::<TwistedGoldilocks2>([22, 7], sieve::TWISTED_GOLDILOCKS2, v);
 }

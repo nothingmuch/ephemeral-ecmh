@@ -6,19 +6,23 @@
 //! rejection (`select`), so the sieve's witness needs no further work.
 //!
 //! - g = gcd(psi_l, x^q - x) collects the roots in F_q (`poly::field_roots`):
-//!   log2 q squarings mod psi_l, plus products by x for set bits of q.
-//!   Usually g = 1. Otherwise all roots of g are tried: a root on the
-//!   quadratic twist fails to decode. Binary decoding requires
-//!   Tr(x) = 1 and Tr(b/x) = 0; odd-field decoding requires a square
-//!   right-hand side. Frobenius eigenvalues 1 and -1 on E\[l\] require
-//!   q = -1 mod l. This occurs at q = 2^127 and l = 3.
-
+//!   log2 q squarings mod psi_l, which dominate the cost (127 over the
+//!   127-bit fields, 122 and 128 over GF(p^2), which add a product by x
+//!   per set bit of q). Usually g = 1.
+//! - Otherwise split g and decode each root: a root whose y is only on the
+//!   twist fails to decode (binary: Tr(x) = 1 and Tr(b/x) = 0; odd: a
+//!   non-square right-hand side). Over F_p, p = 2^127 - 1, every root of g
+//!   is of one kind, since Frobenius acting on E\[l\] with eigenvalues 1
+//!   and -1 would need q = -1 mod l; over GF(2^127) that happens for
+//!   l = 3, and over GF(p^2) for l = 5 (p = 2^64 - 59) and 13
+//!   (Goldilocks), so all roots are tried.
 //!
-//! The binary, prime-field Edwards and Weierstrass sieves return encoded
-//! small-order witnesses. Twisted Edwards witnesses belong to the
-//! quotient G = E/⟨T⟩. The Edwards models first test 8 | #E, and the
-//! Weierstrass model tests 2 | #E.
-
+//! The families: binary (`gf2_127`), the Edwards and Weierstrass models
+//! over any field that encodes their points in 16 bytes (`edwards`,
+//! `weier`: F_p, p = 2^127 - 1, and GF(p^2), p = 2^61 - 1), and the
+//! a = -1 Edwards curves (`twisted`), whose witnesses are points of their
+//! quotient G = E/⟨T⟩. Each tries its family's own rule first: 8 | #E on
+//! the Edwards side, 2 | #E on the Weierstrass one.
 //!
 //! # Cost model
 //!
@@ -44,14 +48,28 @@
 //! | 19 | 180 |       2.06M |  22k| 2.03 ms |   5.87M |  22k| 15.9 ms |
 //! | 23 | 264 |       4.41M |  32k| 4.34 ms |   12.6M |  32k| 35 ms   |
 //!
+//! Over GF(p^2), timed the same way:
+//!
+//! | l  | p = 2^61 - 1 | 2^64 - 59 | 2^64 - 2^32 + 1 |
+//! |----|--------------|-----------|-----------------|
+//! |  3 | 13 us        | 16 us     | 20 us           |
+//! |  5 | 57 us        | 90 us     | 97 us           |
+//! |  7 | 0.18 ms      | 0.32 ms   | 0.32 ms         |
+//! | 11 | 0.94 ms      | 1.89 ms   | 1.80 ms         |
+//! | 13 | 1.79 ms      | 3.67 ms   | 3.48 ms         |
+//! | 17 | 5.07 ms      | 10.4 ms   | 9.9 ms          |
+//! | 19 | 7.8 ms       | 16.4 ms   | 15.2 ms         |
+//! | 23 | 16.5 ms      | 35 ms     | 32 ms           |
+//!
 //! Trying l, last in the sieve, saves a point count of time T on the fraction
 //! Pr[l | #E] of the candidates that reach it, so it is worthwhile iff
 //! cost(l) < Pr[l | #E] T. With Frobenius a random element of GL_2(F_l) of
 //! determinant q, Pr[l | #E] = l/(l^2 - 1) if q = 1 mod l, else 1/(l - 1),
-//! which sage/sieve.sage checks on sampled candidates. For q = 2^127,
-//! no sieved odd prime divides q - 1; for p = 2^127 - 1, the relevant
-//! primes dividing p - 1 are 3, 7 and 19.
-
+//! which `sage sage/sieve.sage 2000` confirms on 2000 candidates per family
+//! (0.50, 0.26, 0.16, 0.09, 0.08 for l = 3..13 over GF(2^127)). q = 2^127 is 1
+//! mod none of the sieved odd primes l, p = 2^127 - 1 is 1 mod 3, 7 and 19; over GF(p^2), q is 1 mod
+//! 3, 5, 7, 11 and 13 for p = 2^61 - 1, mod 3, 7 and 11 for p = 2^64 - 59, and
+//! mod 3, 5, 7 and 17 for Goldilocks.
 //!
 //! - GF(2^127): `agm` counts points in 0.43 ms, so l = 7 is worthwhile
 //!   (71 us saved against 39, 49 measured) and 11 is not (43 us against
@@ -60,8 +78,7 @@
 //!   0.31 of the candidates to count, against 0.51 for 3. PARI's 3.5 ms
 //!   count would call for 11 (0.35 ms saved against 0.23), which leaves
 //!   0.29.
-//! - F_p: the rule for 8 (Edwards) or 2 (Weierstrass) comes
-
+//! - F_p and GF(p^2): the rule for 8 (Edwards) or 2 (Weierstrass) comes
 //!   first, two square roots or a cubic's roots in 1 to 11 us. Then the T a
 //!   rejection saves depends on the caller, so each family has a bound
 //!   per caller (`Bounds`). `prove` saves PARI's full count; `find` only
@@ -76,6 +93,11 @@
 //!   |---------------------|-------|---------|---------|--------|--------|------|-------|
 //!   | edwards127          | 54 ms | 3.2 ms  | 0.74 ms | 1.5 ms | 3.2 ms |    5 |    13 |
 //!   | weier127            | 56 ms | 0.32 ms | 0.86 ms | 1.7 ms | 1.8 ms |    5 |    13 |
+//!   | edwards61x2         | 45 ms | 3.7 ms  | 0.52 ms | 4.8 ms | 3.6 ms |    7 |    13 |
+//!   | weier61x2           | 47 ms | 2.7 ms  | 0.62 ms | 1.5 ms | -      |    7 |    13 |
+//!   | twisted61x2         | 49 ms | 4.3 ms  | 0.65 ms | 1.4 ms | 4.7 ms |    7 |    13 |
+//!   | twisted64x2         | 63 ms | 3.7 ms  | 0.68 ms | 1.1 ms | 4.7 ms |    5 |    13 |
+//!   | twisted-goldilocks2 | 61 ms | 3.6 ms  | 0.57 ms | 1.4 ms | 5.1 ms |    5 |    13 |
 //!
 //!   For `prove`, 13 is worthwhile (3.5 ms against 4.5) and 17 is not (10 ms
 //!   against 3.5); for `find`, 5 is worthwhile (88 us against 0.19 ms) and 7 is
@@ -85,6 +107,15 @@
 //!   best bound at 11 to 13 for `prove` and 5 for `find`, within 2% of the
 //!   chosen ones.
 //!
+//!   Over GF(p^2) too, 13 is worthwhile for `prove` in every family and 17 in
+//!   none (5.1 ms against 2.8 to 3.1 for p = 2^61 - 1, 10 against 3.6 to 3.9
+//!   for the 64-bit p). For `find`, 7 is worthwhile over p = 2^61 - 1, where it
+//!   takes 0.18 ms against 0.20 to 0.70 saved, and not over the 64-bit p
+//!   (0.32 ms against 0.16 to 0.20). Only 4 to 10 of the 250 candidates have
+//!   smallest factor 7, and the measured sums are flat there: every chosen
+//!   bound is within 4% of the best. In `find`, 8 saves more than any odd l:
+//!   SEA with tors = 2 cannot abort on 8 | #E, and counts in full on a quarter
+//!   to 3 in 10 of those candidates.
 //!
 //! Over F_p, Karatsuba products with Barrett reduction (not implemented in
 //! `poly`) would replace the 3/2 d^2 M of a squaring mod psi_l by about
@@ -333,6 +364,11 @@ pub struct Bounds {
 
 pub const EDWARDS127: Bounds = Bounds { find: 5, prove: 13 };
 pub const WEIER127: Bounds = Bounds { find: 5, prove: 13 };
+pub const EDWARDS61X2: Bounds = Bounds { find: 7, prove: 13 };
+pub const WEIER61X2: Bounds = Bounds { find: 7, prove: 13 };
+pub const TWISTED61X2: Bounds = Bounds { find: 7, prove: 13 };
+pub const TWISTED64X2: Bounds = Bounds { find: 5, prove: 13 };
+pub const TWISTED_GOLDILOCKS2: Bounds = Bounds { find: 5, prove: 13 };
 
 fn odd_primes(l_max: u32) -> impl Iterator<Item = u32> {
     (3..=l_max).step_by(2).filter(|&n| {
@@ -573,6 +609,92 @@ mod tests {
         }
     }
 
+    /// The first n candidates of a quadratic family, from a fixed seed.
+    fn quadratic<C>(candidate: fn(&[u8; 32], u32) -> Option<C>, n: usize) -> Vec<C> {
+        (0..)
+            .filter_map(|j| candidate(&[3; 32], j))
+            .take(n)
+            .collect()
+    }
+
+    /// The map from the Montgomery model commutes with multiplication, up
+    /// to the sign x drops: x(nP) from the division polynomials maps to
+    /// ±nP on the a = -1 curve, in G.
+    fn twisted_multiples<F: Field + Packed>(c: &twisted::Curve<F>) {
+        let b = twisted_invariants(c);
+        let x = (1..)
+            .map(F::small)
+            .find(|&x| twisted_point(c, x).is_some())
+            .unwrap();
+        let p = twisted_point(c, x).unwrap();
+        assert!(c.is_on_curve(&p));
+        for n in 2..8 {
+            let want = c.to_affine(&c.mul(&c.from_affine(&p), n as u128));
+            let got = twisted_point(c, x_multiple(&b, x, n)).unwrap();
+            assert!(c.is_on_curve(&got));
+            assert!(got.equals(&want) || got.equals(&want.neg()), "n = {n}");
+        }
+    }
+
+    /// `twisted_order8` against the roots of f_8 whose points have order
+    /// 8 in E, that is 4 in G.
+    fn twisted_order8_matches<F: Field + Packed>(c: &twisted::Curve<F>) {
+        let order8 = |x: F| {
+            let p = twisted_point(c, x)?;
+            (!c.mul(&c.from_affine(&p), 2).is_identity()).then(|| p.encode())
+        };
+        let want = torsion(&division_polynomial(&twisted_invariants(c), 8), order8);
+        let got = twisted_order8(c);
+        assert_eq!(got.is_some(), want.is_some());
+        if let Some(enc) = got {
+            let q = c.from_affine(&c.decode(enc).unwrap());
+            assert!(!c.mul(&q, 2).is_identity() && c.mul(&q, 4).is_identity());
+        }
+    }
+
+    #[test]
+    fn twisted_montgomery_map() {
+        use crate::curvegen::select_fp2 as s;
+        for c in quadratic(s::twisted61x2_candidate, 8) {
+            twisted_multiples(&c);
+        }
+        for c in quadratic(s::twisted64x2_candidate, 8) {
+            twisted_multiples(&c);
+        }
+        for c in quadratic(s::twisted_goldilocks2_candidate, 8) {
+            twisted_multiples(&c);
+        }
+    }
+
+    #[test]
+    fn quadratic_order8_matches_division_polynomial() {
+        use crate::curve::edwards61x2;
+        use crate::curvegen::select_fp2 as s;
+        for c in quadratic(s::twisted61x2_candidate, 24) {
+            twisted_order8_matches(&c);
+        }
+        for c in quadratic(s::twisted64x2_candidate, 24) {
+            twisted_order8_matches(&c);
+        }
+        for c in quadratic(s::twisted_goldilocks2_candidate, 24) {
+            twisted_order8_matches(&c);
+        }
+        let o = edwards61x2::Point::IDENTITY;
+        for c in quadratic(s::edwards61x2_candidate, 24) {
+            let order8 = |x: crate::field::fp61x2::Fq| {
+                let p = c.decode(<crate::field::fp61x2::Fq as Signed>::to_bytes(x.pack()))?;
+                (!c.mul(&c.from_affine(&p), 4).equals(&o)).then(|| p.encode())
+            };
+            let want = torsion(&division_polynomial(&edwards_invariants(&c), 8), order8);
+            let got = edwards_order8(&c);
+            assert_eq!(got.is_some(), want.is_some());
+            if let Some(enc) = got {
+                let p = c.from_affine(&c.decode(enc).unwrap());
+                assert!(!c.mul(&p, 4).equals(&o) && c.mul(&p, 8).equals(&o));
+            }
+        }
+    }
+
     #[test]
     fn short_weierstrass_psi3() {
         // 3x^4 + 6a x^2 + 12b x - a^2 for y^2 = x^3 + ax + b, a = -3
@@ -659,6 +781,38 @@ mod tests {
         (23, 35000.0),
     ];
 
+    /// `FP127_US` over GF(p^2), p = 2^61 - 1, 2^64 - 59 and Goldilocks.
+    const FP61X2_US: [(u32, f64); 8] = [
+        (3, 13.0),
+        (5, 57.0),
+        (7, 180.0),
+        (11, 940.0),
+        (13, 1790.0),
+        (17, 5070.0),
+        (19, 7800.0),
+        (23, 16500.0),
+    ];
+    const FP64X2_US: [(u32, f64); 8] = [
+        (3, 16.0),
+        (5, 90.0),
+        (7, 320.0),
+        (11, 1890.0),
+        (13, 3670.0),
+        (17, 10400.0),
+        (19, 16400.0),
+        (23, 35000.0),
+    ];
+    const GOLDILOCKS2_US: [(u32, f64); 8] = [
+        (3, 20.0),
+        (5, 97.0),
+        (7, 320.0),
+        (11, 1800.0),
+        (13, 3480.0),
+        (17, 9900.0),
+        (19, 15200.0),
+        (23, 32000.0),
+    ];
+
     /// The largest L such that every odd prime l <= L is worthwhile
     /// against the t(l) a rejection by l saves: cost(l) < Pr[l | #E] t(l).
     fn best(q: u128, costs: impl IntoIterator<Item = (u32, f64)>, t: impl Fn(u32) -> f64) -> u32 {
@@ -713,5 +867,20 @@ mod tests {
         assert_eq!(edwards, EDWARDS127);
         let weier = tuned(p, &FP127_US, 56e3, [320.0, 860.0, 1.7e3, 1.8e3]);
         assert_eq!(weier, WEIER127);
+        // and over GF(p^2); no Weierstrass candidate had smallest factor 11
+        use crate::field::{fp61x2, fp64x2, goldilocks2};
+        let (q61, us61) = (<fp61x2::Fq as Field>::Q, &FP61X2_US);
+        let edwards = tuned(q61, us61, 45e3, [3.7e3, 520.0, 4.8e3, 3.6e3]);
+        assert_eq!(edwards, EDWARDS61X2);
+        let weier = tuned(q61, us61, 47e3, [2.7e3, 620.0, 1.5e3, 0.0]);
+        assert_eq!(weier, WEIER61X2);
+        let twisted = tuned(q61, us61, 49e3, [4.3e3, 650.0, 1.4e3, 4.7e3]);
+        assert_eq!(twisted, TWISTED61X2);
+        let q64 = <fp64x2::Fq as Field>::Q;
+        let twisted = tuned(q64, &FP64X2_US, 63e3, [3.7e3, 680.0, 1.1e3, 4.7e3]);
+        assert_eq!(twisted, TWISTED64X2);
+        let qg = <goldilocks2::Fq as Field>::Q;
+        let twisted = tuned(qg, &GOLDILOCKS2_US, 61e3, [3.6e3, 570.0, 1.4e3, 5.1e3]);
+        assert_eq!(twisted, TWISTED_GOLDILOCKS2);
     }
 }

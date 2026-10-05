@@ -48,11 +48,12 @@ use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, AdmissibleR, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary109, Binary127, Dense122, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve,
-    Rejection, Sieve, SmallL, Verdict, Weier127,
+    self, Binary109, Binary127, Dense122, Edwards61x2, Edwards127, Factor, Family, Gls122,
+    NoFactor, NoSieve, Rejection, Sieve, SmallL, Twisted61x2, Twisted64x2, TwistedGoldilocks2,
+    Verdict, Weier61x2, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error, Policy};
-use ephemeral_ecmh::curvegen::{select109, select122, sieve};
+use ephemeral_ecmh::curvegen::{select_fp2, select109, select122, sieve};
 use ephemeral_ecmh::hash::Salted;
 use std::cell::Cell;
 use std::fs::File;
@@ -339,4 +340,16 @@ fn main() {
     family::<Edwards127, _>(o, "edwards127", "pari+sieve", s, Pari, Pari, b, v);
     let (v, b) = (select::verify_weier127, l(sieve::WEIER127));
     family::<Weier127, _>(o, "weier127", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_edwards61x2, l(sieve::EDWARDS61X2));
+    family::<Edwards61x2, _>(o, "edwards61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_weier61x2, l(sieve::WEIER61X2));
+    family::<Weier61x2, _>(o, "weier61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_twisted61x2, l(sieve::TWISTED61X2));
+    family::<Twisted61x2, _>(o, "twisted61x2", "pari+sieve", s, Pari, Pari, b, v);
+    let (v, b) = (select_fp2::verify_twisted64x2, l(sieve::TWISTED64X2));
+    family::<Twisted64x2, _>(o, "twisted64x2", "pari+sieve", s, Pari, Pari, b, v);
+    let v = select_fp2::verify_twisted_goldilocks2;
+    let b = l(sieve::TWISTED_GOLDILOCKS2);
+    let name = "twisted-goldilocks2";
+    family::<TwistedGoldilocks2, _>(o, name, "pari+sieve", s, Pari, Pari, b, v);
 }

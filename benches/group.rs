@@ -40,7 +40,17 @@
 //! square roots, which a batch does not share, and take the mismatch
 //! equality mode only.
 //!
-//! Registry fixtures verify their certificates before timing; each available family supplies its own group and representations.
+//! Curve fixtures come from known-answer-test certificates; inputs are N
+//! synthetic 36-byte items, the size of outpoints. binary.122 and binary.122-gls
+//! use dense and GF(2^61)-valued constants. binary-lambda variants change accumulator
+//! coordinates; binary-w variants also change the hash and encoding, and
+//! binary-u variants keep binary-w's curves, hashes and encodings under
+//! unscaled accumulators. weier-jacobian variants use Jacobian accumulators
+//! on the same curves. *.61x2, *.64x2 and *.goldilocks2 are over GF(p^2),
+//! p = 2^61 - 1, 2^64 - 59 and 2^64 - 2^32 + 1, with curves from the
+//! `select_fp2` certificates; twisted.* are a = -1 curves with twisted.128's
+//! model and codec.
+
 mod common;
 use common::each;
 

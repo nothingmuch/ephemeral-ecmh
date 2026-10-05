@@ -13,6 +13,10 @@
 //! - `weier127`, `weier107`: short Weierstrass curves over the same two
 //!   prime fields, sharing the laws of `weier`. Their selectors require
 //!   prime order.
+//! - `edwards61x2`, `weier61x2`: both, over GF(p^2), p = 2^61 - 1.
+//! - `twisted61x2`, `twisted64x2`, `twisted_goldilocks2`: `twisted128`'s
+//!   model and codec over the three quadratic fields, where -1 is always
+//!   a square.
 //!
 //! Constructing a curve does not certify its order. Family-specific
 //! `curvegen` verifiers check the stated order policy, subject to their
@@ -25,10 +29,15 @@ pub mod binary127;
 pub mod edwards;
 pub mod edwards107;
 pub mod edwards127;
+pub mod edwards61x2;
 pub mod encoding;
 pub mod h2c;
 pub mod twisted;
 pub mod twisted128;
+pub mod twisted61x2;
+pub mod twisted64x2;
+pub mod twisted_goldilocks2;
 pub mod weier;
 pub mod weier107;
 pub mod weier127;
+pub mod weier61x2;

@@ -168,8 +168,9 @@ item. A failure of soundness for one curve, even a discrete logarithm computed
 in its group, is then a failure of liveness, and a transient one: the next
 beacon value selects a new curve. The short horizon and the limited scope of
 failure motivate a reference work factor between $2^{48}$ and $2^{64}$ group
-operations, with the upper part of the range preferred. This range is an
-application assumption under
+operations, with the upper part of the range preferred; the families compared
+here lie between $2^{52}$ and $2^{63}$ ([Security
+considerations](ecc_security.md)). This range is an application assumption under
 evaluation; salting does not by itself imply it.
 
 Maitin-Shepard et al. [maitin-shepard-et-al-2016, Section 4.1] reduce collision
@@ -287,6 +288,20 @@ which handles curves with complex multiplication by a small discriminant
 separately before falling back to it. A participant in a prime-field namespace
 who does not run PARI or an equivalent system must therefore rely on another
 party's certificate to establish which curve is in use, whereas a binary curve
+can be derived and checked independently by a small, self-contained program. In
+a setting where every participant derives the curve from a public beacon, this
+is an advantage of binary curves, separate from their arithmetic cost.
+
+The cost of selection is paid once per namespace. Each run report's Curve
+selection section gives, per family and seed of `curvegen.csv`, the wall-clock
+time to find a curve from a seed, to find and certify it, and to verify the
+certificate, and how the prover's time divides among the phases of the search.
+The number of candidates before an admissible order is geometric, so the time to
+find varies severalfold between seeds. On an Apple M4 the Rust implementation
+finds a $\mathrm{GF}(2^{127})$ curve in about 20 ms on average, an order of
+magnitude faster than PARI on the same seeds; PARI finds the prime-field and
+$\mathrm{GF}(p^2)$ curves in 0.25 to 2 s on average; and certificates verify in
+under a millisecond on average.
 
 Binary fields add a structural check that prime fields do not need: Weil descent
 through subfields. For the prime extension degrees 127 and 109 the only proper

@@ -34,11 +34,14 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 
-use crate::curve::{binary109, binary122, binary127, edwards127, weier127};
+use crate::curve::{
+    binary109, binary122, binary127, edwards, edwards127, twisted, weier, weier127,
+};
 use crate::curvegen::prove::Factor;
+use crate::field::fp61x2::{self, Fq};
 use crate::field::fp127::P;
 use crate::field::gf2_122::gf2_61::{self, MASK61};
-use crate::field::{gf2_109, gf2_122, gf2_127};
+use crate::field::{OddField, fp64x2, gf2_109, gf2_122, gf2_127, goldilocks2};
 
 type Gen = *mut c_long;
 
@@ -69,6 +72,8 @@ unsafe extern "C" {
     fn shifti(x: Gen, n: c_long) -> Gen;
     fn remi2n(x: Gen, n: c_long) -> Gen;
     fn mkintmod(x: Gen, y: Gen) -> Gen;
+    fn mkvec2(a: Gen, b: Gen) -> Gen;
+    fn mkvec3(a: Gen, b: Gen, c: Gen) -> Gen;
     fn mkvec5(a: Gen, b: Gen, c: Gen, d: Gen, e: Gen) -> Gen;
     fn gmul(x: Gen, y: Gen) -> Gen;
     fn gadd(x: Gen, y: Gen) -> Gen;
@@ -99,6 +104,53 @@ struct State {
     /// pair of roots embeds the tower; which one PARI returns first does
     /// not change a count.
     tower: [Gen; 2],
+    /// generator i of `F_p[i]/(i² + 1)`, p = 2^61 - 1
+    fp61x2: Gen,
+    /// generator i of `F_p[i]/(i² - 2)`, p = 2^64 - 59
+    fp64x2: Gen,
+    /// generator i of `F_p[i]/(i² - 7)`, p = 2^64 - 2^32 + 1
+    goldilocks2: Gen,
+}
+
+/// Exact quadratic bases supported by the PARI bridge. All three fields'
+/// Hasse upper endpoints fit u128, as required by `Count`.
+trait Quadratic: OddField + Send + 'static {
+    const P: u64;
+    /// i², as a canonical base-field coefficient.
+    const NU: u64;
+    fn generator(s: &State) -> Gen;
+    fn coefficients(self) -> (u64, u64);
+}
+
+macro_rules! quadratic {
+    ($m:ident, $nu:expr) => {
+        impl Quadratic for $m::Fq {
+            const P: u64 = $m::P;
+            const NU: u64 = $nu;
+            fn generator(s: &State) -> Gen {
+                s.$m
+            }
+            fn coefficients(self) -> (u64, u64) {
+                (self.a.value(), self.b.value())
+            }
+        }
+    };
+}
+
+quadratic!(fp61x2, fp61x2::P - 1);
+quadratic!(fp64x2, 2);
+
+impl Quadratic for goldilocks2::Fq {
+    const P: u64 = goldilocks2::P;
+    const NU: u64 = 7;
+    fn generator(s: &State) -> Gen {
+        s.goldilocks2
+    }
+    fn coefficients(self) -> (u64, u64) {
+        use p3_field::PrimeField64;
+        let (a, b) = goldilocks2::parts(self);
+        (a.as_canonical_u64(), b.as_canonical_u64())
+    }
 }
 
 type Job = Box<dyn FnOnce(&State) + Send>;
@@ -143,6 +195,15 @@ unsafe fn gel(x: Gen, i: usize) -> Gen {
     unsafe { *x.add(i) as Gen }
 }
 
+/// A cloned generator of `F_p[i]/(i² - NU)`, initialized on the worker.
+fn quadratic_generator<F: Quadratic>() -> Gen {
+    unsafe {
+        let polynomial = gtopoly(mkvec3(gen_1, gen_0, int((F::P - F::NU).into())), 0);
+        let domain = gmul(polynomial, mkintmod(gen_1, int(F::P.into())));
+        gclone(ffgen(domain, -1))
+    }
+}
+
 fn start() -> mpsc::Sender<Job> {
     let (tx, rx) = mpsc::channel::<Job>();
     std::thread::Builder::new()
@@ -165,6 +226,9 @@ fn start() -> mpsc::Sender<Job> {
                     g: binary_generator(1 << 127 | 1 << 63 | 1),
                     g109: binary_generator(1 << 109 | 1 << 5 | 1 << 4 | 1 << 2 | 1),
                     tower: tower_generators(),
+                    fp61x2: quadratic_generator::<fp61x2::Fq>(),
+                    fp64x2: quadratic_generator::<fp64x2::Fq>(),
+                    goldilocks2: quadratic_generator::<goldilocks2::Fq>(),
                 }
             };
             for job in rx {
@@ -253,6 +317,47 @@ fn weier127_ell(s: &State, c: &weier127::Curve) -> Gen {
     fp127_ell(s, 0, P - 3, c.b.value())
 }
 
+/// The canonical coefficients a + b i, in the same basis as Rust.
+fn quadratic_value<F: Quadratic>(s: &State, x: F) -> Gen {
+    unsafe {
+        let (a, b) = x.coefficients();
+        let coefficients = mkvec2(int(b.into()), int(a.into()));
+        Fq_to_FF(gtopoly(coefficients, 0), F::generator(s))
+    }
+}
+
+/// y² = x³ + a2 x² + a4 x + a6, with an explicit extension domain even
+/// when every coefficient lies in the base field.
+fn quadratic_ell<F: Quadratic>(s: &State, a2: F, a4: F, a6: F) -> Gen {
+    unsafe {
+        let a = mkvec5(
+            gen_0,
+            quadratic_value(s, a2),
+            gen_0,
+            quadratic_value(s, a4),
+            quadratic_value(s, a6),
+        );
+        ellinit(a, F::generator(s), DEFAULTPREC)
+    }
+}
+
+fn edwards61x2_ell(s: &State, c: &edwards::Curve<Fq>) -> Gen {
+    quadratic_ell(s, c.a2, c.a4, Fq::ZERO)
+}
+
+fn weier61x2_ell(s: &State, c: &weier::Curve<Fq>) -> Gen {
+    quadratic_ell(s, Fq::ZERO, -(Fq::ONE + Fq::ONE + Fq::ONE), c.b)
+}
+
+/// The a=-1 Edwards model is birational to y²=x³+a2*x²+a4*x,
+/// a2=(d-1)/2 and a4=(d+1)²/16. Count E, not its encoded quotient.
+fn twisted_ell<F: Quadratic>(s: &State, c: &twisted::Curve<F>) -> Gen {
+    let half = (F::ONE + F::ONE).inv();
+    let a2 = (c.d - F::ONE) * half;
+    let a4 = ((c.d + F::ONE) * half.square()).square();
+    quadratic_ell(s, a2, a4, F::ZERO)
+}
+
 fn sea(e: Gen, tors: u32) -> Option<u128> {
     let n = to_int(unsafe { ellsea(e, tors.into()) });
     (n != 0).then_some(n)
@@ -310,6 +415,42 @@ impl Count<weier127::Curve> for Pari {
     }
 }
 
+impl Count<edwards::Curve<Fq>> for Pari {
+    fn order(&mut self, c: &edwards::Curve<Fq>) -> u128 {
+        let c = *c;
+        run(move |s| to_int(unsafe { ellcard(edwards61x2_ell(s, &c), std::ptr::null_mut()) }))
+    }
+
+    fn order_early_abort(&mut self, c: &edwards::Curve<Fq>, tors: u32) -> Option<u128> {
+        let c = *c;
+        run(move |s| sea(edwards61x2_ell(s, &c), tors))
+    }
+}
+
+impl Count<weier::Curve<Fq>> for Pari {
+    fn order(&mut self, c: &weier::Curve<Fq>) -> u128 {
+        let c = *c;
+        run(move |s| to_int(unsafe { ellcard(weier61x2_ell(s, &c), std::ptr::null_mut()) }))
+    }
+
+    fn order_early_abort(&mut self, c: &weier::Curve<Fq>, tors: u32) -> Option<u128> {
+        let c = *c;
+        run(move |s| sea(weier61x2_ell(s, &c), tors))
+    }
+}
+
+impl<F: Quadratic> Count<twisted::Curve<F>> for Pari {
+    fn order(&mut self, c: &twisted::Curve<F>) -> u128 {
+        let c = *c;
+        run(move |s| to_int(unsafe { ellcard(twisted_ell(s, &c), std::ptr::null_mut()) }))
+    }
+
+    fn order_early_abort(&mut self, c: &twisted::Curve<F>, tors: u32) -> Option<u128> {
+        let c = *c;
+        run(move |s| sea(twisted_ell(s, &c), tors))
+    }
+}
+
 impl Factor for Pari {
     fn smallest_prime_factor(&mut self, m: u128) -> Option<u128> {
         // the primes of the factorization matrix come sorted
@@ -322,9 +463,12 @@ impl Factor for Pari {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::weier;
+    use crate::field::Packed;
+    use fp61x2::{Fp, P};
 
     unsafe extern "C" {
+        fn FF_to_FpXQ(x: Gen) -> Gen;
+        fn polcoef(x: Gen, degree: c_long, variable: c_long) -> Gen;
         fn gequal(x: Gen, y: Gen) -> std::ffi::c_int;
     }
 
@@ -376,6 +520,179 @@ mod tests {
         }
     }
 
+    fn fq(a: u64, b: u64) -> Fq {
+        Fq::new(Fp::new(a), Fp::new(b))
+    }
+
+    fn parts(x: Gen) -> (u64, u64) {
+        unsafe {
+            let polynomial = FF_to_FpXQ(x);
+            (
+                itou(polcoef(polynomial, 0, 0)),
+                itou(polcoef(polynomial, 1, 0)),
+            )
+        }
+    }
+
+    #[test]
+    fn fp61x2_basis_and_coefficients() {
+        let values = [fq(0, 0), fq(1, 0), fq(0, 1), fq(P - 1, P - 2), fq(2, 3)];
+        let got = run(move |s| values.map(|x| parts(quadratic_value(s, x))));
+        assert_eq!(got, values.map(|x| (x.a.value(), x.b.value())));
+
+        let (x, y) = (fq(2, 3), fq(5, 7));
+        let product =
+            run(move |s| unsafe { parts(gmul(quadratic_value(s, x), quadratic_value(s, y))) });
+        assert_eq!(product, (P - 11, 29)); // (2+3i)(5+7i), i² = −1
+    }
+
+    // PARI 2.17.3 fixtures over i²+1, p=2^61−1. These test the binding;
+    // agreement with GP is not an independent point-counting algorithm.
+    // In GP, i=ffgen(Mod(1,2^61-1)*(x^2+1)), d=4+i. Edwards counts use
+    // ellcard(ellinit([0,(1+d)/2,0,(1-d)^2/16,0],i)), with d or -d;
+    // Weierstrass counts use ellcard(ellinit([-3,b],i)), with b=1+i or 1.
+    const EDWARDS_PLUS: u128 = 5316911983139663486184127572655626632;
+    const EDWARDS_MINUS: u128 = 5316911983139663488214545196698422472;
+    const WEIER: u128 = 5316911983139663485373691078963717768;
+
+    #[test]
+    fn fp61x2_edwards_counts_match_gp() {
+        let d = fq(4, 1);
+        assert_eq!(Pari.order(&edwards::Curve::new(d).unwrap()), EDWARDS_PLUS);
+        // a=1, parameter −d is isomorphic to a=−1, parameter d via u'=iu.
+        assert_eq!(Pari.order(&edwards::Curve::new(-d).unwrap()), EDWARDS_MINUS);
+    }
+
+    #[test]
+    fn fp61x2_weier_count_matches_gp() {
+        assert_eq!(Pari.order(&weier::Curve::new(fq(1, 1)).unwrap()), WEIER);
+    }
+
+    #[test]
+    fn fp61x2_base_coefficients_keep_the_extension_domain() {
+        let base_order = 2305843011750340688_u128;
+        let p1 = P as u128 + 1;
+        let trace = p1.abs_diff(base_order);
+        let expected = p1 * p1 - trace * trace;
+        assert_eq!(expected, 5316911983139663485180651577861924608);
+        assert_eq!(Pari.order(&weier::Curve::new(fq(1, 0)).unwrap()), expected);
+    }
+
+    #[test]
+    fn fp61x2_sea_full_and_early_abort() {
+        let edwards = edwards::Curve::new(fq(4, 1)).unwrap();
+        let weier = weier::Curve::new(fq(1, 1)).unwrap();
+        assert_eq!(Pari.order_early_abort(&edwards, 0), Some(EDWARDS_PLUS));
+        assert_eq!(Pari.order_early_abort(&weier, 0), Some(WEIER));
+        assert_eq!(Pari.order_early_abort(&edwards, 2), None);
+        assert_eq!(Pari.order_early_abort(&weier, 1), None);
+    }
+
+    /// Check the exact basis, including canonical exports at the modulus
+    /// boundary. Equal point counts alone cannot detect conjugating i.
+    fn quadratic_basis<F: Quadratic + Packed>(values: [F; 5], p: u64, nu: u64) {
+        let got = run(move |s| values.map(|x| parts(quadratic_value(s, x))));
+        assert_eq!(got, [(0, 0), (1, 0), (0, 1), (p - 1, p - 2), (2, 3)]);
+
+        let width = F::BITS / 2;
+        let (x, y) = (values[4], F::unpack(5 | 7 << width).unwrap());
+        let product =
+            run(move |s| unsafe { parts(gmul(quadratic_value(s, x), quadratic_value(s, y))) });
+        assert_eq!(product, (((10 + 21 * nu as u128) % p as u128) as u64, 29));
+    }
+
+    #[test]
+    fn quadratic_fp61_basis() {
+        quadratic_basis(
+            [fq(0, 0), fq(1, 0), fq(0, 1), fq(P - 1, P - 2), fq(2, 3)],
+            P,
+            P - 1,
+        );
+    }
+
+    #[test]
+    fn quadratic_fp64_basis() {
+        use fp64x2::{Fp, Fq, P};
+        let fq = |a, b| Fq::new(Fp::new(a), Fp::new(b));
+        quadratic_basis(
+            [fq(0, 0), fq(1, 0), fq(0, 1), fq(P - 1, P - 2), fq(2, 3)],
+            P,
+            2,
+        );
+    }
+
+    #[test]
+    fn quadratic_goldilocks_basis() {
+        use goldilocks2::{Fp, P, new};
+        let fq = |a, b| new(Fp::new(a), Fp::new(b));
+        quadratic_basis(
+            [fq(0, 0), fq(1, 0), fq(0, 1), fq(P - 1, P - 2), fq(2, 3)],
+            P,
+            7,
+        );
+        // The backend also permits redundant base-field representatives.
+        let x = fq(P, P + 1);
+        assert_eq!(run(move |s| parts(quadratic_value(s, x))), (0, 1));
+    }
+
+    /// The returned order is that of E, while the public point operations
+    /// and identity test are in G = E/⟨T⟩, of order #E/2.
+    fn quotient_order<F: Quadratic + Packed>(d: F, p: u64) -> u128 {
+        let c = twisted::Curve::new(d).unwrap();
+        let n = Pari.order(&c);
+        let p = p as u128;
+        assert!(((p - 1).pow(2)..=(p + 1).pow(2)).contains(&n));
+        assert_eq!(n % 4, 0);
+        let salt = crate::hash::Salted::new(b"quadratic-count-binding", &[0; 32]);
+        for index in 0u32..3 {
+            let a = c.hash_to_curve(&salt, &index.to_le_bytes());
+            assert!(c.mul(&c.from_affine(&a), n / 2).is_identity());
+        }
+        assert_eq!(Pari.order_early_abort(&c, 0), Some(n));
+        n
+    }
+
+    #[test]
+    fn quadratic_twisted61_order() {
+        let d = fq(4, 1);
+        assert_eq!(quotient_order(d, P), EDWARDS_MINUS);
+        assert_eq!(
+            Pari.order_early_abort(&twisted::Curve::new(d).unwrap(), 2),
+            None
+        );
+    }
+
+    #[test]
+    fn quadratic_twisted64_order() {
+        use fp64x2::{Fp, Fq, P};
+        let d = Fq::new(Fp::ZERO, Fp::ONE);
+        // GP 2.17.3, i=ffgen(Mod(1,2^64-59)*(x^2-2)), d=i:
+        // ellcard(ellinit([0,(d-1)/2,0,(d+1)^2/16,0],i)).
+        let n = 340282366920938461281225221704229487896;
+        assert_eq!(quotient_order(d, P), n);
+        // tors=2 tolerates the entire 2-part, including 8 | #E.
+        assert_eq!(n % 16, 8);
+        assert_eq!(
+            Pari.order_early_abort(&twisted::Curve::new(d).unwrap(), 2),
+            Some(n)
+        );
+    }
+
+    #[test]
+    fn quadratic_twisted_goldilocks_order() {
+        use goldilocks2::{Fp, P, new};
+        let d = new(Fp::new(0), Fp::new(1));
+        // The same GP expression with i²=7 and p=2^64-2^32+1.
+        assert_eq!(
+            quotient_order(d, P),
+            340282366762482138486535933895052498568
+        );
+        assert_eq!(
+            Pari.order_early_abort(&twisted::Curve::new(d).unwrap(), 2),
+            None
+        );
+    }
+
     /// x^3 - 3x + b has a root, a point of order 2, exactly when #E is
     /// even: `OddCurve::new` against PARI's count, over F_p and GF(p^2).
     #[test]
@@ -388,6 +705,12 @@ mod tests {
         for (b, _) in samples(crate::field::fp127::P) {
             let Some(c) = weier127::Curve::new(crate::field::fp127::Fp::new(b)) else {
                 continue; // the all-ones sample is p, so b = 0
+            };
+            check(weier::OddCurve::new(c).is_some(), Pari.order(&c));
+        }
+        for (b0, b1) in samples(u128::from(P)) {
+            let Some(c) = weier::Curve::new(fq(b0 as u64, b1 as u64)) else {
+                continue;
             };
             check(weier::OddCurve::new(c).is_some(), Pari.order(&c));
         }

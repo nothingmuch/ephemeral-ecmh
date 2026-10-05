@@ -12,6 +12,7 @@
 
 use crate::field::fp127::Fp;
 use crate::field::gf2_127::{Gf, from_u128};
+use crate::field::{OddField, Packed, fp61x2, fp64x2, goldilocks2};
 use core::ops::{Add, Mul, Neg, Sub};
 
 /// A coefficient field: `field::Field`, and what root finding needs.
@@ -54,6 +55,27 @@ impl Field for Fp {
         Fp::new(k as u128)
     }
 }
+
+/// `Field` for a quadratic field's `Fq`, packed a | b << BITS/2.
+macro_rules! quadratic {
+    ($f:ty) => {
+        impl Field for $f {
+            const CHAR2: bool = false;
+            const Q: u128 = <$f as OddField>::ORDER;
+            fn small(n: u64) -> Self {
+                <$f as Packed>::reduce(n.into())
+            }
+            fn shift(k: u32) -> Self {
+                let (j, c) = (u128::from(k / 3), u128::from(k % 3));
+                <$f as Packed>::reduce(j | c << (<$f as Packed>::BITS / 2))
+            }
+        }
+    };
+}
+
+quadratic!(fp61x2::Fq);
+quadratic!(fp64x2::Fq);
+quadratic!(goldilocks2::Fq);
 
 /// Coefficients from x^0 up, with no trailing zeros (0 is empty).
 #[derive(Clone, Debug)]
@@ -607,6 +629,15 @@ pub(crate) mod tests {
             let n = if n.is_square() { -n } else { n };
             prop_assume!(!n.is_square());
             roots(&rs, &Poly::new(vec![-n, Fp::ZERO, Fp::ONE]));
+        }
+
+        /// Over GF(p^2), with each root's conjugate r^p among them, which
+        /// no shift in F_p separates from r.
+        #[test]
+        fn fp61x2_roots(rs in prop::collection::vec(fp61x2::tests::fq(), 0..5), n in fp61x2::tests::fq()) {
+            prop_assume!(!n.is_square());
+            let rs: Vec<_> = rs.iter().flat_map(|&r| [r, fp61x2::Fq::new(r.a, -r.b)]).collect();
+            roots(&rs, &Poly::new(vec![-n, fp61x2::Fq::ZERO, fp61x2::Fq::ONE]));
         }
     }
 

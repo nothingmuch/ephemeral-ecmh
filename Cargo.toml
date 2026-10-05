@@ -48,6 +48,10 @@ name = "compare122"
 harness = false
 
 [[bench]]
+name = "compare_fp2"
+harness = false
+
+[[bench]]
 name = "agm"
 harness = false
 

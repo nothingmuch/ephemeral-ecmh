@@ -229,4 +229,16 @@ pub mod group {
         binary122_gls_u,
         crate::curve::binary::unscaled::Curve<crate::curve::binary122::M122Gls>
     );
+    family!(edwards61x2, crate::curve::edwards61x2::Curve);
+    family!(weier61x2, crate::curve::weier61x2::OddCurve);
+    family!(
+        weier61x2_jacobian,
+        crate::curve::weier::jacobian::Curve<crate::field::fp61x2::Fq>
+    );
+    family!(twisted61x2, crate::curve::twisted61x2::Curve);
+    family!(twisted64x2, crate::curve::twisted64x2::Curve);
+    family!(
+        twisted_goldilocks2,
+        crate::curve::twisted_goldilocks2::Curve
+    );
 }

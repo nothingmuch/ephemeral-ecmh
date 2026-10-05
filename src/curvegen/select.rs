@@ -727,7 +727,11 @@ mod tests {
             degenerates
         }
         let seed = &[3; 32];
-        let n = check(|j| Weier127::candidate(seed, j), seed);
+        let n = check(|j| Weier127::candidate(seed, j), seed)
+            + check(
+                |j| crate::curvegen::select_fp2::Weier61x2::candidate(seed, j),
+                seed,
+            );
         assert!(n > 0, "no (0 : 0 : 0) was produced");
     }
 }

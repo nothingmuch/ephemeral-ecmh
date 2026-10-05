@@ -15,9 +15,11 @@ mod kats109;
 mod kats122;
 #[path = "common/kats128.rs"]
 mod kats128;
+#[path = "common/kats_fp2.rs"]
+mod kats_fp2;
 
 use ephemeral_ecmh::curvegen::select::{Certificate, Error};
-use ephemeral_ecmh::curvegen::{select, select107, select109, select122, select128};
+use ephemeral_ecmh::curvegen::{select, select_fp2, select107, select109, select122, select128};
 
 /// A malformation applied to a valid (seed, certificate).
 #[derive(Clone, Copy, Debug)]
@@ -161,6 +163,9 @@ const P128: u128 = u128::MAX - 274;
 const Q127: u128 = 1 << 127;
 const Q109: u128 = 1 << 109;
 const Q122: u128 = 1 << 122;
+const P61: u128 = (1 << 61) - 1;
+const P64: u128 = u64::MAX as u128 - 58;
+const PG: u128 = (1u128 << 64) - (1 << 32) + 1;
 
 #[test]
 fn malformed_certificates_keep_their_outcomes() {
@@ -240,6 +245,41 @@ fn malformed_certificates_keep_their_outcomes() {
         kats128::FP128_CERTS,
         cert16,
         select128::verify_fp128
+    );
+    family!(
+        "twisted61x2",
+        P61 * P61,
+        kats_fp2::TWISTED61X2_CERTS,
+        cert16,
+        select_fp2::verify_twisted61x2
+    );
+    family!(
+        "twisted64x2",
+        P64 * P64,
+        kats_fp2::TWISTED64X2_CERTS,
+        cert16,
+        select_fp2::verify_twisted64x2
+    );
+    family!(
+        "twisted_goldilocks2",
+        PG * PG,
+        kats_fp2::TWISTED_GOLDILOCKS2_CERTS,
+        cert16,
+        select_fp2::verify_twisted_goldilocks2
+    );
+    family!(
+        "edwards61x2",
+        P61 * P61,
+        kats_fp2::EDWARDS61X2_CERTS,
+        cert16,
+        select_fp2::verify_edwards61x2
+    );
+    family!(
+        "weier61x2",
+        P61 * P61,
+        kats_fp2::WEIER61X2_CERTS,
+        cert16,
+        select_fp2::verify_weier61x2
     );
 
     let got = format!("{HEADER}{}\n", out.join("\n"));

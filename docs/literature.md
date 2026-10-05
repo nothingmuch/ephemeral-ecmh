@@ -74,6 +74,15 @@ the same distinctions.
   $s \cdot q^{2d}/(q^{n/2} \cdot n)$ gives $2^{-52.3}$). Accepted without a
   check: across $T$ epochs the probability is at most $T$ times this heuristic
   figure, and a descent compromises only its own epoch.
+- `hankerson-karabina-menezes-2009`. Security analysis of GLS curves over
+  $\mathrm{GF}(2^{2m})$: the GHS descent to $\mathrm{GF}(2^m)$ and the $n = 2$
+  index calculus leave the discrete logarithm at about $2^m$, the rho cost. It
+  is the reference for the $\mathrm{GF}(2^{122})$ family's security statement.
+- `gaudry-2009`. Index calculus for $E$ over $\mathrm{GF}(q^n)$ in
+  $\widetilde{O}(q^{2-2/n})$ for fixed $n \ge 2$: $\widetilde{O}(q)$ at $n = 2$,
+  which ties rho for every quadratic-extension family here (fp61x2, fp64x2,
+  goldilocks2, and $\mathrm{GF}(2^{122})$ as $\mathrm{GF}(2^{61})^2$). The
+  reason degree 2 is admissible and degree $\ge 3$ is not.
 
 ### Point counting and curve generation
 

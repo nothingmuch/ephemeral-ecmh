@@ -343,3 +343,71 @@ suite!(
     P - 4,
     P - 2
 );
+
+mod fp61x2 {
+    use super::*;
+    use crate::field::fp61x2::{Fp, Fq, tests::fq};
+    use proptest::prelude::*;
+
+    /// RFC 9380's g for GF(p^2) = F_p(i).
+    const I: Fq = Fq::new(Fp::ZERO, Fp::ONE);
+
+    fn map(b: Fq) -> Option<(Fq, Sswu<Fq>)> {
+        let curve = Curve::new(b)?;
+        let map = Sswu::search_from(curve, I, 64)?;
+        Some((map.z, map))
+    }
+
+    #[test]
+    fn ratio_zero_is_square() {
+        assert_eq!(
+            Fq::ratio_root(Fq::ZERO, Fq::ONE, &Fq::NON_SQUARE),
+            (true, Fq::ZERO)
+        );
+    }
+
+    /// The exceptional denominator Z^2 u^4 + Z u^2 = 0 at u = 0 only: -1
+    /// is a square in GF(p^2), so u^2 = -1/Z has no root for a non-square Z.
+    #[test]
+    fn exceptional_input_matches_affine_reference() {
+        let b = Fq::new(Fp::new(5), Fp::new(7));
+        let (z, map) = map(b).expect("fixed curve admits SSWU setup");
+        let curve = Curve::new(b).unwrap();
+        assert!(!(-z.invert()).is_square());
+        let p = map.map_to_curve(Fq::ZERO);
+        assert_eq!(p, reference(&curve, z, Fq::ZERO));
+        assert!(curve.is_on_curve(&p));
+    }
+
+    proptest! {
+        #[test]
+        fn matches_affine_reference(b in fq(), u in fq()) {
+            let candidate = map(b);
+            prop_assume!(candidate.is_some());
+            let (z, map) = candidate.unwrap();
+            let curve = Curve::new(b).unwrap();
+            let p = map.map_to_curve(u);
+            prop_assert_eq!(p, reference(&curve, z, u));
+            prop_assert!(curve.is_on_curve(&p));
+            if !u.is_zero() {
+                prop_assert_eq!(map.map_to_curve(-u), p.neg());
+            }
+        }
+
+        #[test]
+        fn ratio_root_handles_both_square_classes(x in fq(), d in fq()) {
+            prop_assume!(!d.is_zero());
+            let z = Fq::NON_SQUARE;
+            let n = d * x.square();
+            let (square, r) = Fq::ratio_root(n, d, &z);
+            prop_assert!(square);
+            prop_assert_eq!(r.square() * d, n);
+            if !x.is_zero() {
+                let n = z * n;
+                let (square, r) = Fq::ratio_root(n, d, &z);
+                prop_assert!(!square);
+                prop_assert_eq!(r.square() * d, z * n);
+            }
+        }
+    }
+}

@@ -28,8 +28,12 @@ use crate::curve::{binary127, edwards127, weier127};
 use crate::curvegen::select::{self, Certificate, Policy, affine_mul, is_prime};
 use crate::hash::Salted;
 
+mod fp2;
 mod gf2;
 pub use crate::curvegen::select::{Binary127, Edwards127, Weier127};
+pub use crate::curvegen::select_fp2::{
+    Edwards61x2, Twisted61x2, Twisted64x2, TwistedGoldilocks2, Weier61x2,
+};
 pub use crate::curvegen::select122::{Dense122, Gls122};
 pub use gf2::{Binary109, certificate109};
 

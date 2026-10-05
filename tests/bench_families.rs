@@ -37,11 +37,17 @@ fn registry_retains_the_recorded_group_inventory() {
         "binary.127",
         "edwards.107",
         "edwards.127",
+        "edwards.61x2",
         "twisted.128",
+        "twisted.61x2",
+        "twisted.64x2",
+        "twisted.goldilocks2",
         "weier-jacobian.107",
         "weier-jacobian.127",
+        "weier-jacobian.61x2",
         "weier.107",
         "weier.127",
+        "weier.61x2",
     ]
     .into_iter()
     .map(str::to_owned)
