@@ -11,6 +11,10 @@ okf_version: "0.2"
 * [Security considerations](ecc_security.md) - Nominal rho costs per family, extension-field attacks, the limits of the security evidence, and the known weaknesses.
 * [Measurement methodology](methodology.md) - What the benchmarks measure, the decision table and dominance rule, how to run checks, benchmarks and reports, and how results are published.
 
+# Evidence
+
+* [Field and curve code generation](codegen.md) - Static instruction counts of field and point operations across 24 compiler targets and CPU models, from the asm-report run at revision 2d6c7e3c.
+
 # Reference
 
 * [Annotated literature](literature.md) - For each key of references.bib, what the work contributes to the evaluation of ECMH-based RIBLT checksums over per-namespace curves; in the book, headed by the formatted entry.
