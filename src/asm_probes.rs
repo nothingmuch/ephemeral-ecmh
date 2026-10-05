@@ -93,12 +93,26 @@ pub mod field {
     }
 
     pub mod prime {
+        use p3_field::PrimeCharacteristicRing;
+
         prime_field!(fp127, crate::field::fp127::Fp, square: |a: crate::field::fp127::Fp| a.square(),
             invert: |a: crate::field::fp127::Fp| a.invert(), sqrt: |a: crate::field::fp127::Fp| a.sqrt());
         prime_field!(fp107, crate::field::fp107::Fp, square: |a: crate::field::fp107::Fp| a.square(),
             invert: |a: crate::field::fp107::Fp| a.invert(), sqrt: |a: crate::field::fp107::Fp| a.sqrt());
         prime_field!(fp128, crate::field::fp128::Fp, square: |a: crate::field::fp128::Fp| a.square(),
             invert: |a: crate::field::fp128::Fp| a.invert(), sqrt: |a: crate::field::fp128::Fp| a.sqrt());
+        prime_field!(fp61, crate::field::fp61x2::Fp, square: |a: crate::field::fp61x2::Fp| a.square(),
+            invert: |a: crate::field::fp61x2::Fp| a.invert(), sqrt: |a: crate::field::fp61x2::Fp| a.sqrt());
+        prime_field!(fp61x2, crate::field::fp61x2::Fq, square: |a: crate::field::fp61x2::Fq| a.square(),
+            invert: |a: crate::field::fp61x2::Fq| a.invert(), sqrt: |a: crate::field::fp61x2::Fq| a.sqrt());
+        prime_field!(fp64, crate::field::fp64x2::Fp, square: |a: crate::field::fp64x2::Fp| a.square(),
+            invert: |a: crate::field::fp64x2::Fp| a.invert(), sqrt: |a: crate::field::fp64x2::Fp| a.sqrt());
+        prime_field!(fp64x2, crate::field::fp64x2::Fq, square: |a: crate::field::fp64x2::Fq| a.square(),
+            invert: |a: crate::field::fp64x2::Fq| a.invert(), sqrt: |a: crate::field::fp64x2::Fq| a.sqrt());
+        prime_field!(goldilocks, crate::field::goldilocks2::Fp, square: |a: crate::field::goldilocks2::Fp| a.square(),
+            invert: crate::field::goldilocks2::invert_base, sqrt: crate::field::goldilocks2::sqrt_base);
+        prime_field!(goldilocks2, crate::field::goldilocks2::Fq, square: |a: crate::field::goldilocks2::Fq| a.square(),
+            invert: crate::field::goldilocks2::invert, sqrt: crate::field::goldilocks2::sqrt);
     }
 }
 

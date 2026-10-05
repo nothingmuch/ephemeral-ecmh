@@ -100,6 +100,32 @@ field	fp128/square latency (dependent chain)
 field	fp128/square throughput (8 chains)
 field	fp128/sub
 field	fp128/unpack
+field	fp61x2/add
+field	fp61x2/batch invert (product tree)
+field	fp61x2/invert
+field	fp61x2/mul latency (dependent chain)
+field	fp61x2/mul throughput (8 chains)
+field	fp61x2/neg
+field	fp61x2/pack
+field	fp61x2/sqrt
+field	fp61x2/sqrt_ratio
+field	fp61x2/square latency (dependent chain)
+field	fp61x2/square throughput (8 chains)
+field	fp61x2/sub
+field	fp61x2/unpack
+field	fp64x2/add
+field	fp64x2/batch invert (product tree)
+field	fp64x2/invert
+field	fp64x2/mul latency (dependent chain)
+field	fp64x2/mul throughput (8 chains)
+field	fp64x2/neg
+field	fp64x2/pack
+field	fp64x2/sqrt
+field	fp64x2/sqrt_ratio
+field	fp64x2/square latency (dependent chain)
+field	fp64x2/square throughput (8 chains)
+field	fp64x2/sub
+field	fp64x2/unpack
 field	gf2_109/batch invert (product tree)
 field	gf2_109/halftrace
 field	gf2_109/halftrace (byte tables)
@@ -137,6 +163,19 @@ field	gf2_127/sqrt
 field	gf2_127/square latency (dependent chain)
 field	gf2_127/square throughput (8 chains)
 field	gf2_127/trace
+field	goldilocks2/add
+field	goldilocks2/batch invert (product tree)
+field	goldilocks2/invert
+field	goldilocks2/mul latency (dependent chain)
+field	goldilocks2/mul throughput (8 chains)
+field	goldilocks2/neg
+field	goldilocks2/pack
+field	goldilocks2/sqrt
+field	goldilocks2/sqrt_ratio
+field	goldilocks2/square latency (dependent chain)
+field	goldilocks2/square throughput (8 chains)
+field	goldilocks2/sub
+field	goldilocks2/unpack
 group.add	binary-lambda.109/mode=latency
 group.add	binary-lambda.109/mode=throughput
 group.add	binary-lambda.122-gls/mode=latency

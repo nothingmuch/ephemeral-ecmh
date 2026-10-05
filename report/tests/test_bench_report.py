@@ -368,6 +368,20 @@ def test_current_suite_is_fully_classified(table):
             ("hash to curve", "gf2_122-lambda", "hash to addend", "batch"),
         ),
         # the F_{p^2} prototypes, and the codecs of the odd fields
+        (
+            "field/fp61x2/mul throughput (8 chains)",
+            ("field", "fp61x2", "mul", "throughput"),
+        ),
+        ("field/fp64x2/sqrt", ("field", "fp64x2", "sqrt", "per-element")),
+        (
+            "field/fp64x2/batch invert (product tree)",
+            ("field", "fp64x2", "batch invert", "batch"),
+        ),
+        ("field/fp61x2/pack", ("field", "fp61x2", "pack", "per-element")),
+        (
+            "field/fp64x2/square latency (dependent chain)",
+            ("field", "fp64x2", "square", "latency"),
+        ),
         # the Weierstrass curves' Jacobian families
         (
             "group.add/weier-jacobian.127/mode=throughput",
@@ -382,6 +396,11 @@ def test_current_suite_is_fully_classified(table):
             ("field", "fp128", "sqrt_ratio", "per-element"),
         ),
         # Plonky3's fields
+        (
+            "field/goldilocks2/mul throughput (8 chains)",
+            ("field", "goldilocks2", "mul", "throughput"),
+        ),
+        ("field/goldilocks2/unpack", ("field", "goldilocks2", "unpack", "per-element")),
         (
             "field/gf2_127/normalize (to_u128)",
             ("field", "gf2_127", "normalize", "per-element"),
@@ -538,6 +557,11 @@ def test_addend_equality_is_present_in_elementary_table(tmp_path):
     rendered = br.to_html([("grid", grid)])
     assert "equals addend" in rendered
     assert "group.equals/binary.127" in rendered
+
+
+@pytest.mark.parametrize("name, bits", [("fp61x2", 122), ("fp64x2", 128)])
+def test_quadratic_field_width_is_the_extension_width(name, bits):
+    assert rules.family(name) == (name, "fp127", bits)
 
 
 def test_variants_keep_their_family_and_base():

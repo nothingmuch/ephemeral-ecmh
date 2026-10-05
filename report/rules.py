@@ -77,6 +77,9 @@ FAMILIES = {
     "fp127": ("fp127", 127),
     "fp107": ("fp127", 107),
     "fp128": ("fp127", 128),
+    "fp61x2": ("fp127", 122),
+    "fp64x2": ("fp127", 128),
+    "goldilocks2": ("fp127", 128),
     "edwards127": ("edwards127", 127),
     "edwards107": ("edwards127", 107),
     "twisted128": ("edwards127", 128),
@@ -316,6 +319,9 @@ FIELDS = {
     "fp127": "fp127",
     "fp107": "fp127",
     "fp128": "fp127",
+    "fp61x2": "fp127",
+    "fp64x2": "fp127",
+    "goldilocks2": "fp127",
 }
 CURVES = [
     "xor",
@@ -448,6 +454,14 @@ FIELD_GROUPS = [
             ("fp127", "p = 2^127 − 1"),
             ("fp107", "p = 2^107 − 1"),
             ("fp128", "p = 2^128 − 275, for twisted128"),
+        ],
+    ),
+    (
+        "quadratic extensions of prime fields",
+        [
+            ("fp61x2", "GF(p^2) = F_p[i]/(i^2 + 1), p = 2^61 − 1"),
+            ("fp64x2", "GF(p^2) = F_p[i]/(i^2 − 2), p = 2^64 − 59"),
+            ("goldilocks2", "GF(p^2) = F_p[i]/(i^2 − 7), p = 2^64 − 2^32 + 1"),
         ],
     ),
 ]
