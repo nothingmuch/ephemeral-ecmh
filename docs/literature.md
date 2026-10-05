@@ -178,7 +178,12 @@ the same distinctions.
 
 ### Binary curve models and addition formulas
 
+- `pornin-2022`. Complete formulas for ordinary binary curves with $|E| = 2r$ in
+  $(x, s)$ coordinates, the extended $(X : S : Z : T)$ accumulators of
+  `curve::binary::extended`, the $w$ encoding of `wcodec`, and the mixed
+  addition that `unscaled` reduces to $7M + 2S$ by moving the curve constant
+  into the addend, against $8M + 2S$ for the implemented incomplete $\lambda$
+  formula.
 - `pornin-2023`. The same formulas over
-  $\mathrm{GF}(2^{254}) = \mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
-  curve. The $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})[u]$ tower and the GLS
-  family (`binary.122-gls`) test whether this shape transfers at half the size.
+  $mathrm{GF}(2^{254}) = mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
+  curve.

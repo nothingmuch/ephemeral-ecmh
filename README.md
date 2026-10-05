@@ -113,6 +113,22 @@ derived from the beacon value as well, deterministically, by a public
 candidate-selection procedure. A participant must be able to derive and check
 the curve for each new beacon value.
 
+## Design
+
+The checksum uses hashing to the curve, point addition, and negation; scalar
+multiplication occurs only in curve selection. The items are public, so the
+arithmetic may run in variable time and items may be hashed by
+try-and-increment; the map from an item's SHA-256 digest to the group need not
+be uniform, only such that relations are hard to find within the subset it
+reaches ([Adversary](docs/problem.md#adversary)). Over binary fields, the
+complete formulas of Pornin [pornin-2022, pornin-2023] have an operation count
+for addition independent of the extension degree $m$, negation is one field
+addition, and a dense curve constant enters Pornin's extended coordinates only
+through two multiplications by $\beta = B^{1/4}$ per addition. Scaling the
+addends by the inverse of $b = B^{1/2}$ when they are decoded removes these,
+leaving seven field multiplications and two squarings ($7M + 2S$) per mixed
+addition.
+
 ## License
 
 [MIT](./LICENSE)
