@@ -611,6 +611,164 @@ mod tests {
         every_group!(rejects_forgeries);
     }
 
+    /// The XOR of the first 8 bytes of each item's salted digest, the checksum
+    /// yangl1996/riblt#3 is about, in the simulator's cells.
+    #[derive(Clone, Copy)]
+    struct Xor64;
+
+    impl Group for Xor64 {
+        type Affine = u64;
+        type Point = u64;
+        fn identity(&self) -> u64 {
+            0
+        }
+        fn is_identity(&self, p: &u64) -> bool {
+            *p == 0
+        }
+        fn to_affine(&self, p: &u64) -> u64 {
+            *p
+        }
+    }
+
+    impl crate::group::Accumulate for Xor64 {
+        type Addend = u64;
+        fn prepare(&self, a: &u64) -> u64 {
+            *a
+        }
+        fn add(&self, p: &u64, a: &u64) -> u64 {
+            p ^ a
+        }
+        fn add_affine(&self, p: &u64, a: &u64) -> u64 {
+            p ^ a
+        }
+    }
+
+    impl Negate for Xor64 {
+        fn neg(&self, a: &u64) -> u64 {
+            *a
+        }
+        fn neg_addend(&self, a: &u64) -> u64 {
+            *a
+        }
+    }
+
+    impl HashToCurve for Xor64 {
+        fn hash(&self, h: &Salted, msg: &[u8]) -> u64 {
+            u64::from_le_bytes(h.digest(msg, 0)[..8].try_into().unwrap())
+        }
+    }
+
+    /// The indices of a subset of `rows` whose XOR is `target`, if one exists,
+    /// by Gaussian elimination over F_2: each basis vector carries the mask of
+    /// the rows it combines. `v ^ b < v` exactly when `b`'s leading bit is set
+    /// in `v`, so with the basis in decreasing order one pass reduces fully.
+    fn dependent_subset(rows: &[u128], target: u128) -> Option<Vec<usize>> {
+        let mut basis: Vec<(u128, u128)> = vec![];
+        let reduce = |basis: &[(u128, u128)], mut v: u128, mut m: u128| {
+            for &(b, bm) in basis {
+                if v ^ b < v {
+                    v ^= b;
+                    m ^= bm;
+                }
+            }
+            (v, m)
+        };
+        for (i, &row) in rows.iter().enumerate() {
+            let (v, m) = reduce(&basis, row, 1 << i);
+            if v != 0 {
+                basis.push((v, m));
+                basis.sort_unstable_by_key(|a| core::cmp::Reverse(a.0));
+            }
+        }
+        let (v, m) = reduce(&basis, target, 0);
+        (v == 0).then(|| (0..rows.len()).filter(|i| m >> i & 1 == 1).collect())
+    }
+
+    /// Two sets whose XOR-checksum difference peels as one item in neither.
+    /// The 120 candidates `item(3, i)` share 32 bytes, so a set's XOR payload
+    /// is determined by its parity and the XOR of its indices; with the
+    /// 64-bit hash that is 97 linear constraints over F_2, and the solution is
+    /// a dependent subset of odd size whose payload and checksum are those of
+    /// the absent `e = item(3, 0)`. Split so that A holds one more of them
+    /// than B, one cell holding A - B reads as the pure cell of `e`.
+    fn forged_sets() -> (Vec<[u8; 36]>, Vec<[u8; 36]>, [u8; 36]) {
+        let r = Riblt::new(Xor64, &FORGERY_SALT);
+        let row = |i: u32| Xor64.hash(&r.item, &item(3, i)) as u128 | (i as u128) << 64 | 1 << 96;
+        // indices spread over 32 bits, none of them 0
+        let index = |k: u32| k.wrapping_mul(0x9e37_79b1);
+        let rows: Vec<u128> = (1..=120).map(|k| row(index(k))).collect();
+        let s = dependent_subset(&rows, row(0)).expect("97 constraints over 120 rows");
+        assert_eq!(s.len() % 2, 1);
+        let side = |p| {
+            s.iter()
+                .skip(p)
+                .step_by(2)
+                .map(|&j| item(3, index(j as u32 + 1)))
+                .collect()
+        };
+        (side(0), side(1), item(3, 0))
+    }
+
+    const FORGERY_SALT: [u8; 32] = [7; 32];
+
+    /// A - B in one cell, with common items on both sides.
+    fn forged_cell<G: HashToCurve + Negate>(g: G, m: usize) -> (Riblt<G>, Vec<Cell<G, 36>>) {
+        let (a, b, _) = forged_sets();
+        let common: Vec<_> = (0..10).map(|i| item(0, i)).collect();
+        let r = Riblt::new(g, &FORGERY_SALT);
+        let mut cells = r.cells(m);
+        r.encode(&mut cells, &[common.clone(), a].concat(), 1);
+        r.encode(&mut cells, &[common, b].concat(), -1);
+        (r, cells)
+    }
+
+    const PEELS: [Peel; 2] = [
+        Peel {
+            prefilter: false,
+            batch: false,
+        },
+        Peel {
+            prefilter: true,
+            batch: true,
+        },
+    ];
+
+    /// yangl1996/riblt#3 through the simulator: the XOR checksum is linear, so
+    /// the forged sets decode to a difference of one item that neither set
+    /// holds, and the mapping prefilter passes it since index 0 begins every
+    /// mapping.
+    #[test]
+    fn xor_checksum_decodes_a_forged_difference() {
+        let (a, b, e) = forged_sets();
+        assert!(!a.contains(&e) && !b.contains(&e));
+        for how in PEELS {
+            let (r, mut cells) = forged_cell(Xor64, 1);
+            assert_eq!(r.peel(&mut cells, how), Some((vec![e], vec![])));
+        }
+    }
+
+    /// The same sets under a curve checksum: one cell is not pure, so peeling
+    /// reports failure rather than an item, and enough cells decode A - B.
+    fn rejects_the_forgery<G: HashToCurve + Negate>(g: G) {
+        let (mut a, mut b, _) = forged_sets();
+        a.sort();
+        b.sort();
+        for how in PEELS {
+            let (r, mut cells) = forged_cell(g, 1);
+            assert_eq!(r.peel(&mut cells, how), None);
+            let (r, mut cells) = forged_cell(g, 100);
+            let (mut got_a, mut got_b) = r.peel(&mut cells, how).expect("100 cells decode");
+            got_a.sort();
+            got_b.sort();
+            assert_eq!((got_a, got_b), (a.clone(), b.clone()));
+        }
+    }
+
+    #[test]
+    fn curve_checksums_reject_the_forged_difference() {
+        every_group!(rejects_the_forgery);
+    }
+
     /// Reconciliation over random curves, salts and set sizes, for a
     /// representative subset of the (family, representation) pairs that the
     /// fixed-curve tests cover: `name: curve strategy => wrapper`.
