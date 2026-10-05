@@ -22,6 +22,17 @@
         stable = pkgs.rust-bin.stable.latest.default.override {
           extensions = commonExtensions ++ [ "llvm-tools" ];
         };
+        # stable plus the standard libraries of the targets whose assembly
+        # asm-report reads: compiling for them needs no linker, so no cross
+        # toolchain. A separate toolchain, so the checks' stays as it is.
+        asm = pkgs.rust-bin.stable.latest.default.override {
+          extensions = commonExtensions;
+          targets = [
+            "aarch64-apple-darwin"
+            "aarch64-linux-android"
+            "x86_64-unknown-linux-gnu"
+          ];
+        };
         nightly = pkgs.rust-bin.selectLatestNightlyWith (
           t:
           t.default.override {

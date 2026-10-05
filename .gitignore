@@ -1,5 +1,7 @@
 /target
 /bench-runs
+# asm-report runs: rustc listings, megabytes per configuration
+/asm-runs
 result
 result-*
 .direnv/

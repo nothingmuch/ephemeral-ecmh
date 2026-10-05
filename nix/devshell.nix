@@ -12,6 +12,7 @@
       rustTools = with pkgs; [
         cargo-llvm-cov
         cargo-nextest
+        cargo-show-asm
         cargo-sort
         hyperfine
         just
@@ -40,6 +41,9 @@
         # rust only (no multi-GiB sage closure), e.g. for CI
         rust = mkDevShell toolchains.stable [ ];
         nightly = mkDevShell toolchains.nightly [ ];
+        # rust with cross standard libraries, for reading other targets'
+        # assembly (cargo asm --target ...; nix run .#asm-report)
+        asm = mkDevShell toolchains.asm [ ];
         # math only: parameter generation and reference models
         math = pkgs.mkShell {
           packages = mathTools ++ [ config.treefmt.build.wrapper ];

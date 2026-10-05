@@ -6,6 +6,10 @@ description = "Elliptic-curve multiset hashing over per-namespace random curves,
 license = "MIT"
 publish = false
 
+[features]
+# src/asm_probes.rs, for nix run .#asm-report
+asm-probes = []
+
 [dependencies]
 crrl = { version = "0.9.0", default-features = false, features = [
   "std",

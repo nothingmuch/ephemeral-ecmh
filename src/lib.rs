@@ -19,6 +19,8 @@
 //! - [`curvegen`] derives curves from seeds and verifies their selection
 //!   certificates. Point counting and certificate construction are
 //!   separate from the measured accumulation path.
+#[cfg(feature = "asm-probes")]
+pub mod asm_probes;
 pub mod curve;
 pub mod curvegen;
 pub mod ecmh;
