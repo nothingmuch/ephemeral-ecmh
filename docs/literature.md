@@ -33,8 +33,17 @@ the same distinctions.
 
 ### Generic discrete-logarithm bounds and attacks
 
+- `shoup-1997`. Any generic-group algorithm needs $\Omega(\sqrt{r})$ group
+  operations to compute discrete logarithms in a group of prime order $r$. The
+  reference work factor $2^{n/2}$ for an $n$-bit group is therefore tight for
+  generic attacks, and every attack below it must use structure of the field,
+  the curve or the map.
 - `pollard-1978`. The rho method: $\sqrt{\pi r/2}$ expected group operations and
   constant memory. The reference attack behind every "rho" figure in the report.
+- `van-oorschot-wiener-1999`. Parallel collision search with distinguished
+  points: a linear speedup in the number of processors with negligible
+  communication. It makes the generic cost a machine-time quantity, which is how
+  the 48–64-bit target is to be read.
 - `wiener-zuccherato-1998`, `duursma-gaudry-morain-1999`. Rho runs $\sqrt{2}$
   faster with the negation map and $\sqrt{2m}$ faster on curves with an
   automorphism group of order $2m$ (Koblitz curves, curves with efficiently
@@ -42,15 +51,47 @@ the same distinctions.
   these factors where they apply: by $\sqrt{2}$ for every family, and by a
   further $\sqrt{2}$ for the GLS family over $\mathrm{GF}(2^{122})$, whose
   endomorphism group has order 4.
+- `bernstein-lange-schwabe-2011`. How the negation map is used in practice
+  (fruitless cycles and their cost); the source of the practical constant in
+  the rho figures.
 - `bernstein-lange-2012`, `bernstein-lange-2013`. With a precomputed table of
   size about $N^{2/3}$, each further discrete logarithm in a group of size $N$
   costs about $N^{1/3}$ operations. A fixed curve would let an attacker amortize
   this across epochs. Deriving the curve from the salt prevents direct reuse of
   curve-specific tables; field-level arithmetic and work on the candidate space
   remain reusable. These two papers motivate a curve per namespace.
+- `corrigan-gibbs-kogan-2018`. Lower bound
+  $ST^2 = \widetilde{\Omega}(\varepsilon N)$ for generic discrete-logarithm
+  algorithms with $S$ bits of advice and $T$ online queries. It shows the
+  Bernstein–Lange tradeoff is optimal and lets the report state exactly what a
+  persistent curve would concede.
+- `menezes-okamoto-vanstone-1993`, `frey-rueck-1994`. The pairing reductions
+  that move the discrete logarithm into $\mathrm{GF}(q^k)$ when $r$ divides
+  $q^k - 1$. They are why every certificate requires an embedding degree above
+  $2^{20}$ (`EMBEDDING_MIN` in `src/curvegen/number.rs`).
+- `smart-1999`. Curves with $|E| = q$ have a polynomial-time discrete logarithm.
+  The Weierstrass policy excludes $r = q$; the binary and cofactor families
+  cannot be anomalous. One clause in the policy documentation.
+- `bos-et-al-2012`, `wenger-wolfger-2014`, `bernstein-et-al-2016`,
+  `bailey-et-al-2009-breaking`, `certicom-1997`, `bailey-et-al-2009`. The solved
+  instances that calibrate the target: a 112-bit prime-field curve on about 215
+  PlayStation 3 consoles (2012), a 113-bit Koblitz curve on 18 FPGAs in an
+  extrapolated 24 days (2014), the SECG curve sect113r2 and a 117.35-bit binary
+  instance on FPGAs (2016), and the still-open ECC2K-130 effort with its cost
+  analysis. They place $2^{56}$ to $2^{60}$ group operations within reach of a
+  dedicated effort over months, the reference against which the 48–64-bit target
+  is weighed.
+- `galbraith-gaudry-2016`. Survey of the elliptic-curve discrete logarithm
+  problem: no subexponential algorithm is known for curves over prime fields or
+  over $\mathrm{GF}(2^n)$ with $n$ prime, and the state of index calculus over
+  extension fields. Cited for the statement that generic attacks are the best
+  known.
 
 ### Weil descent and index calculus over extension fields
 
+- `frey-1998`. The idea of Weil restriction as an attack: an elliptic curve over
+  $\mathrm{GF}(q^n)$ becomes an $n$-dimensional abelian variety over
+  $\mathrm{GF}(q)$.
 - `gaudry-hess-smart-2002`. The GHS construction: the descent gives a
   hyperelliptic curve over $\mathrm{GF}(q)$ of genus about $2^{m-1}$, $m$ the
   "magic number" determined by the minimal polynomial of $\sqrt{b}$ under
@@ -92,6 +133,12 @@ the same distinctions.
   $\mathrm{GF}(q^6)$-type fields; the boundary case showing where
   composite-degree extensions become dangerous, and that $n = 2$ is not among
   them.
+- `semaev-2004`, `faugere-et-al-2012`, `petit-quisquater-2012`. Summation
+  polynomials and the heuristic index calculus over $\mathrm{GF}(2^n)$, $n$
+  prime. The authors' own estimate places the crossover with generic methods
+  near $n \approx 2000$; the degrees used here are far below it, and the
+  heuristics remain unconfirmed. Cited as the reason prime-degree binary fields
+  are still considered generic-secure.
 
 ### Point counting and curve generation
 
@@ -106,6 +153,27 @@ the same distinctions.
   comparison that established the method.
 - `satoh-skjernaa-taguchi-2003`. The SST variant of the canonical lift, one
   of the methods `gaudry-2002` compares; the method implemented is the AGM.
+- `lercier-lubicz-2003`. Quasi-quadratic point counting in small characteristic
+  via canonical lifts. The asymptotic improvement does not establish a concrete
+  gain at degree 127; this implementation uses the AGM.
+- `fouquet-gaudry-harley-2001`. The early-abort strategy: test small torsion
+  before counting, since most candidates fail on the group order. The direct
+  ancestor of `curvegen::sieve`, whose witnesses double as certificate
+  rejections.
+- `rabin-1980`, `arnault-1995`, `albrecht-et-al-2018`. The Miller–Rabin test and
+  the constructions of composites that pass it for fixed bases. The certificate
+  accepts $r$ as a probable prime to 24 fixed bases; these papers are why the
+  statement is conditional. The prover cannot skip an admissible candidate,
+  since rejection witnesses exist only for inadmissible ones. For the accepted
+  candidate the verifier takes $r$ from the prover and checks $rQ = O$ for the
+  cofactor-cleared hashed point $Q$, the Hasse window, and the 24 Miller–Rabin
+  bases; the order argument is conditional on $r$ being prime.
+- `bernstein-et-al-2015`, `flori-et-al-2015`, `bos-et-al-2016`. Why the curve
+  is derived from a public seed with a verifiable certificate rather than taken
+  from a standard: manipulable standards, transparent generation of many
+  curves, and the efficiency/security tradeoffs of the selection procedure
+  itself. `flori-et-al-2015` is the closest prior work on generating a fresh
+  curve per use.
 - `ansi-x9-62-1998`, `rfc5639`, `baigneres-et-al-2015`,
   `lenstra-wesolowski-2017`. Curves derived from public randomness. X9.62's
   verifiably random curves and Brainpool's verifiably pseudo-random ones hash a
@@ -119,10 +187,24 @@ the same distinctions.
   Both provide curves for general use at the 128-bit level, where trx takes
   hours per curve; here a new beacon value selects a smaller curve for each
   namespace.
+- `safecurves`, `bernstein-lange-2024`. The rigidity criterion the selection
+  satisfies by construction, and (paper, §4.4) the batched affine addition cost
+  of about $5M + S$ per step that an attacker's rho implementation attains,
+  which is the add cost the collision-resistance figures assume for the
+  attacker.
+- `syta-et-al-2017`, `kelsey-et-al-2019`. Randomness beacons: where an
+  unpredictable public salt comes from, and the unpredictability requirement
+  the precomputation argument depends on.
 - `bonneau-clark-goldfeder-2015`. Bitcoin block hashes as a beacon: a lower
   bound on each block's min-entropy, and the cost to a miner of biasing the
   output by withholding blocks, which is the manipulation this study leaves to
   the protocol.
+- `koblitz-1991`, `solinas-2000`. Koblitz (subfield) curves: fast scalar
+  multiplication, which the workload does not use, and a $\sqrt{2m}$ rho
+  speedup, which it cannot afford. Excluded.
+- `sutherland-2012`. Constructing curves with prescribed torsion through
+  modular curves: an alternative sampler that would change the canonical
+  candidate stream and its certificate. Not used.
 - `pari-gp`, `sagemath`. The point-counting and primality oracle for
   fixtures and the `pari` feature, and the system in which the reference
   programs under `sage/` are written; Sage counts points through PARI.
@@ -176,6 +258,19 @@ the same distinctions.
   encoding from a hash indifferentiable from a random oracle; applying the
   reduction to this repository's adapted map still requires establishing that
   map's hypotheses and reduction loss.
+- `brier-et-al-2010`. Provides constructions and analysis for indifferentiable
+  hashing into ordinary elliptic curves. It explains why a deterministic
+  encoding and a random-oracle hash require different contracts, even when the
+  implementations share mapping formulas.
+- `farashahi-pellikaan-sidorenko-2008`. Deterministic extraction of a
+  subfield coefficient from uniformly distributed points on binary curves
+  of even extension degree. It distinguishes randomness extraction from
+  point encoding; it supplies no proof of the current $x$-plus-sign codec or
+  of the hash-to-curve distribution.
+- `shallue-van-de-woestijne-2006`. Constructs rational points deterministically
+  over finite fields and supplies the lineage of the SW maps used in later
+  hashing work. Its relevance is the point-construction mechanism; the required
+  output-distribution and ECMH-security arguments come from additional analysis.
 - `boneh-lynn-shacham-2001`. MapToGroup, an early reference for counter-based
   rejection sampling into a curve group. Here the shared driver `curve::h2c`
   samples digest-derived candidate encodings until decoding succeeds; the
@@ -192,9 +287,69 @@ the same distinctions.
   applicable mapping reference for suitable odd-characteristic curves with
   rational two-torsion, but its encoding alone must not be labeled a full
   random-oracle hash.
+- `hamburg-2020`. Analyzes indifferentiable constructions from Elligator 2,
+  including hash-twice-and-add. It supports the explicit separation of
+  single-map and two-map interfaces and their costs; the argument must be
+  matched to the actual map and target group.
+
+### Binary maps and their implementation
+
+- `aranha-et-al-2014`. Optimizes the characteristic-two SW map through shared
+  inversion and gives preimage analysis, quadratic-solving techniques and
+  implementation measurements. It is a direct comparison for the repository's
+  binary mapping alternatives; the paper's full Elligator Squared representation
+  timing must not be mistaken for a single hash-to-point timing.
+- `maitin-shepard-2017`. Optimizes Itoh–Tsujii inversion chains jointly with
+  multi-squaring tables using machine-specific measurements, including degree
+  127. It closes the gap between minimizing symbolic multiplication counts and
+  minimizing the actual binary-map cost, subject to memory and timing
+  constraints.
+- `fong-et-al-2004`. Examines binary-field inversion, division and SIMD
+  implementation costs. These primitives inform the affine/projective and
+  decoding tradeoffs here, although its point-halving scalar-multiplication
+  results do not measure arbitrary RIBLT-cell additions.
+
+### Odd-characteristic mapping alternatives
+
+- `chavez-saab-et-al-2022`. SwiftEC reduces full-point hashing to one
+  square-root extraction on compatible odd-characteristic curves, with per-curve
+  parameter construction and possible isogeny adaptation. For ephemeral curves,
+  compatibility and setup amortization are part of the comparison; its $x$-only
+  output, of lower cost, is insufficient by itself for signed arbitrary
+  additions.
+- `aranha-et-al-2023`. Gives faster constant-time character computation and
+  concrete SwiftEC measurements. It is the comparison for the variable-time
+  Jacobi and special-prime exponentiation paths used here, without transferring
+  its larger-field speedups to the 48–64-bit collision-security configurations.
+- `koshelev-2024`. Extends one-root indifferentiable hashing in characteristic
+  greater than three and is a possible way to broaden SwiftEC's applicability.
+  Its relevance is conditional on checking the exact target-curve construction,
+  exceptional inputs and setup cost; no speedup over the maps implemented here
+  has been established.
+- `koshelev-2025`. Studies batching root extraction on specially constructed
+  hashing-friendly curves. It represents a joint curve-selection and hashing
+  alternative, with distribution questions that require separate analysis,
+  rather than an optimization already applicable to the repository's current
+  candidate stream.
 
 ### Field primitives used by mapping and decoding
 
+- `bernstein-yang-2019`. Supplies constant-time divsteps algorithms for integer
+  and polynomial inversion. It provides alternatives to exponentiation-based
+  inversion. Its benefit depends on the field size and batch size, since
+  batching amortizes the inversion cost.
+- `adj-rodriguez-henriquez-2014`. Uses extension-field structure to compute
+  square roots and quadratic characters in odd-characteristic even-degree
+  extensions. It applies to quadratic prime-field alternatives; “even extension”
+  does not mean a binary field.
+- `bernstein-2001`. Gives precomputation/time tradeoffs for square roots when
+  the field order minus one has high two-adicity. It explains a cost specific to
+  Goldilocks-style alternatives, which is absent from the simple square-root
+  exponentiation over the current Mersenne prime fields.
+- `pornin-2023-sqrt`. Improves the subgroup discrete-logarithm stage of
+  square-root extraction in high-two-adicity fields. It is a more recent
+  alternative to assess alongside the preceding method when such fields are
+  considered, including table/setup costs.
 - `bernstein-2005`. Poly1305 evaluates a message as a polynomial in a clamped
   key over $\mathbb{F}_{2^{130} - 5}$, a field chosen for fast integer
   arithmetic, and bounds the differential probability by the polynomial's
@@ -213,6 +368,12 @@ the same distinctions.
   checksum used to decide whether the cell holds exactly one item; the
   question of what that checksum must resist, raised in yangl1996/riblt#3,
   is the question this repository answers.
+- `goodrich-mitzenmacher-2011`, `eppstein-et-al-2011`. Invertible Bloom
+  lookup tables and their use for set difference. They introduce the
+  hash-sum field that decides purity and peeling, which RIBLT inherits and
+  which an ECMH checksum replaces. Under a secret key a short keyed hash
+  suffices; the ECMH checksum is needed when the salt is public and the
+  items may be chosen against it.
 - `minsky-trachtenberg-zippel-2003`, `dodis-et-al-2008`, `naumenko-et-al-2019`.
   Algebraic set reconciliation: characteristic-polynomial interpolation, the
   PinSketch BCH syndrome, and its use in Erlay (Minisketch), proposed for
@@ -265,6 +426,12 @@ the same distinctions.
 
 ### Multiset hashes in deployment, and fixed-group baselines
 
+- `van-der-wansem-2018`, `wuille-2020`. The deployed multiset hashes for
+  UTXO-set commitments: ECMH on secp256k1 with try-and-increment, and
+  MuHash3072 in the multiplicative group of a 3072-bit prime field. Both
+  fix one group for all time at 128-bit security; they are the reference
+  for why a curve rather than a modular group, and for what a fixed group
+  costs at full size.
 - `certicom-2010`, `libsecp256k1`. secp256k1's parameters and the library
   timed in `benches/compare.rs` (compressed-point parsing, ElligatorSwift
   decoding, Jacobian accumulation): the cost of ECMH on a fixed 256-bit
@@ -281,6 +448,16 @@ the same distinctions.
 
 ### Binary fields and their dependence on carry-less multiplication
 
+- `hankerson-menezes-vanstone-2004`. Reference for $\mathrm{GF}(2^m)$
+  arithmetic: the trace, the half-trace that solves $z^2 + z = c$ in decoding
+  and hashing, Itoh–Tsujii inversion, and the multiplication-by-constant cost
+  model the operation counts in the module documentation use.
+- `taverne-et-al-2011`, `bluhm-gueron-2015`. Binary-curve software built on
+  PCLMULQDQ, with measurements of how far the carry-less multiplier
+  decides speed. The binary families are fast only where PMULL or
+  PCLMULQDQ is present; the `bench-bins-generic` runs time the portable
+  backend that stands in when it is absent, which makes the hardware
+  dependence a deployment condition stated with numbers.
 - `crrl`. Pornin's library: the $\mathrm{GF}(2^{127})$ backends
   (`field::gf2_127`) and the GLS254 code from which `curve::binary127::map` and
   the $\mathrm{GF}(2^{122})$ tower are adapted.
@@ -309,6 +486,17 @@ the same distinctions.
   this costs less than the extended accumulator, at the price of incompleteness;
   the unscaled formulas, at $7M + 2S$, move $\beta$ into the addend and cost
   less than $\lambda$'s $8M + 2S$ for the addition itself.
+- `kim-kim-2007`. PL-coordinates: López–Dahab $(X, Y, Z, T = Z^2)$ with $Y$ kept
+  unreduced. Mixed addition of an affine and a PL point costs $8M + 1S$ on
+  curves $y^2 + xy = x^3 + x^2 + b$ (Theorem 2), in an accounting that counts a
+  reduction modulo the field polynomial as a squaring and defers it. Not
+  implemented: a comparison with the $7M + 2S$ of the unscaled formulas requires
+  the same accounting; the formulas as written cover the $a = 1$ families
+  ($\mathrm{GF}(2^{127})$, $\mathrm{GF}(2^{109}){}$) and not the $a = u$
+  families over $\mathrm{GF}(2^{122})$, where $a = 1$ has trace 0.
+- `lopez-dahab-1998`. López–Dahab projective coordinates, the earlier standard
+  that $\lambda$-coordinates improve on; not implemented, and dominated by
+  `lambda` for mixed addition.
 - `galbraith-lin-scott-2009`. GLS curves: over $\mathrm{GF}(q^2)$, quadratic
   twists of curves defined over $\mathrm{GF}(q)$, with an endomorphism $\psi$,
   $\psi^2 = -1$. For binary curves, $a = u$ and $B$ in $\mathrm{GF}(2^{61})$, as
@@ -362,6 +550,24 @@ the same distinctions.
   point with no known difference, so none of these formulas applies to it; for
   generic dense parameters $D$ counts as a full $M$, and the sparse-parameter
   specialization they rely on is not established for seed-derived curves.
+- `moloney-omahony-laurent-2010`. The explicit birational maps between a
+  Weierstrass curve and its complete binary Edwards curve, with their
+  exceptional points (Section 3): the conversion a hashed Weierstrass or
+  $(x, s)$ point would need to enter the model. The affine conversion uses
+  rational functions; their denominators may be inverted in a batch or
+  retained in projective coordinates. No conversion cost has been measured
+  here.
+- `hirschfeld-batten-amain-2018`, `li-et-al-2019`. A survey of binary-curve
+  implementation choices that restates Theorem 4.3 and the operation-count
+  comparison, and an FPGA Montgomery-ladder architecture for binary curves:
+  the hardware side of the differential results, with no arbitrary-addition
+  formula.
+- `kohel-2012`, `wu-tang-feng-2012`, `wu-2026`. Other binary normal forms
+  considered: Kohel's $\mu_4$ form (addition $7M + 2S$) requires a rational
+  4-torsion point, which the certified curves of order $2r$ lack; the
+  Wu–Tang–Feng model is unified, not complete, at $12M + 2D$. The Wu 2026
+  preprint proposes a characteristic-uniform model; its addition counts were
+  not evaluated here.
 
 ### Odd-characteristic curve models and addition formulas
 
@@ -383,9 +589,29 @@ the same distinctions.
   method is `field::batch`, which every batch sum and batch normalization uses;
   the Montgomery model is the form in which `edwards` points travel and are
   summed in batches by the affine chord law.
+- `farashahi-fadavi-sabbaghian-2024`, `kim-et-al-2019`. Complete addition
+  on Montgomery curves: $15M + 2 m_c$ in 2019, then extended Montgomery
+  coordinates with multiplication-free maps to and from extended twisted
+  Edwards coordinates. The extended Montgomery laws correspond to twisted
+  Edwards laws through these maps, so the model change alone gives no
+  field-multiplication saving for the corresponding full additions. The
+  remaining practical comparisons concern cached operands, preparation and
+  conversion, and implementation scheduling.
+- `bernstein-lange-2007-inverted`. Inverted Edwards coordinates, superseded
+  for addition by the extended coordinates of `hisil-et-al-2008`.
+- `goundar-joye-miyaji-2010`, `kim-et-al-2020`. Co-Z Jacobian formulas and
+  Montgomery-ladder scalar multiplication on short Weierstrass curves over
+  fields of characteristic other than 2 and 3, built on differential
+  addition-and-doubling. Scalar multiplication, which the workload does not
+  perform.
 
 ### Prime fields
 
+- `scott-2024`. Reduction for shaped primes: Mersenne ($2^{61} - 1$,
+  $2^{107} - 1$, $2^{127} - 1$), pseudo-Mersenne ($2^{64} - 59$,
+  $2^{128} - 275$) and generalized Mersenne (Goldilocks). Every odd field here
+  has one of these shapes; the paper indicates what generated or assembly code
+  could gain over the portable implementations timed.
 - `polygon-zero-2022`, `plonky3`. The Goldilocks prime $2^{64} - 2^{32} + 1$ and
   the implementation `field::goldilocks2` uses for its base field and
   binomial extension. Its 2-adicity of 32, chosen for FFTs, makes square
