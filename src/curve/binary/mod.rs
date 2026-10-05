@@ -20,6 +20,11 @@
 //!   try-and-increment on the same x and sign.
 //! - `map`: Pornin's deterministic map, for the families whose modulus
 //!   gives it constants (`Pornin`).
+//! - `wcodec`: `lambda` with the group on the wire as one field element w,
+//!   m bits rather than m + 1, hashed and decoded straight to λ-affine
+//!   addends.
+//! - `unscaled`: Pornin's accumulators with the curve constant moved into
+//!   the addends, 7M + 2S per add and complete, on `wcodec`'s wire.
 //!
 //! The families are `binary127` and `binary109`, a = 1 over `gf2_127` and
 //! `gf2_109`, and `binary122`'s two, a = u over `gf2_122` with B dense or
@@ -35,6 +40,9 @@ pub mod lambda;
 mod map;
 #[cfg(test)]
 pub(crate) mod tests;
+pub mod unscaled;
+pub mod wcodec;
+
 pub use affine::Affine;
 pub use batch::{add_batch, sum_batch};
 pub use curve::{Constant, Curve, Model};

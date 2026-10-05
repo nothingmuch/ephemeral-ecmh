@@ -35,7 +35,7 @@
 //! ([`MapRoot`]), where try-and-increment pays an inversion to lift its
 //! point.
 
-use super::{Constant, Curve, Model, Point, lambda};
+use super::{Constant, Curve, Model, Point, lambda, unscaled};
 use crate::curve::h2c::Map;
 use crate::field::batch::{Invert, invert as batch_invert};
 use crate::field::{Binary, Field};
@@ -195,6 +195,30 @@ impl<M: Pornin> Curve<M> {
     }
 }
 
+impl<M: Pornin> unscaled::Curve<M> {
+    /// The map's point as the unscaled addend (u, v) = (x/b, w^2 u): the
+    /// map's x is b/x̄ = b u already, so 1 m_(1/b), 1S and 1M past the map,
+    /// where the lift of its affine point costs an inversion and 2M.
+    pub fn map_to_addend(&self, c: u128) -> unscaled::Affine<M> {
+        let st = Curve::<M>::map_prepare(c);
+        self.addend_of(self.w.c.map_root(&st, st.den.inv()))
+    }
+
+    /// `map_to_addend` on many inputs with one shared inversion.
+    pub fn map_to_addend_batch(&self, cs: &[u128]) -> Vec<unscaled::Affine<M>> {
+        self.w
+            .c
+            .map_batch(cs, |st, inv| self.addend_of(self.w.c.map_root(st, inv)))
+    }
+
+    fn addend_of(&self, r: MapRoot<M::F>) -> unscaled::Affine<M> {
+        let u = self.b_inv.mul(r.x);
+        unscaled::Affine {
+            u,
+            v: r.w.square() * u,
+        }
+    }
+}
 /// The map's affine outputs against (input, x, y) known answers.
 #[cfg(test)]
 pub(crate) fn check_map_vectors<M: Pornin>(c: &Curve<M>, vectors: &[(u128, u128, u128)]) {
@@ -263,6 +287,23 @@ macro_rules! map_suite {
                 for (m, p) in refs.iter().zip(batch) {
                     prop_assert_eq!(c.to_affine(&p), c.to_affine(&map1(&c, &h, m)));
                 }
+            }
+
+            #[test]
+            fn map_addends_are_the_lifted_point(c in $curve, v in any::<u128>()) {
+                let a = c.to_affine(&c.map(v));
+                prop_assert_eq!(c.map_to_lambda(v), crate::curve::binary::lambda::Affine::lift(&a));
+                let u = crate::curve::binary::unscaled::Curve::new(c);
+                prop_assert_eq!(u.map_to_addend(v), crate::curve::binary::unscaled::Affine::lift(&a));
+            }
+
+            #[test]
+            fn batched_addends_match_single(c in $curve, cs in prop::collection::vec(any::<u128>(), 0..20)) {
+                let u = crate::curve::binary::unscaled::Curve::new(c);
+                let one: Vec<_> = cs.iter().map(|&v| u.map_to_addend(v)).collect();
+                prop_assert_eq!(u.map_to_addend_batch(&cs), one);
+                let one: Vec<_> = cs.iter().map(|&v| c.map_to_lambda(v)).collect();
+                prop_assert_eq!(c.map_to_lambda_batch(&cs), one);
             }
         }
     };

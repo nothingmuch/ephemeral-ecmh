@@ -382,6 +382,268 @@ macro_rules! suite {
                 }
             }
         }
+
+        /// `binary::unscaled`, with points checked through the (x, y) law.
+        mod unscaled {
+            use super::*;
+            use crate::group::{Accumulate, Encode, Group, SumBatch};
+
+            type UCurve = crate::curve::binary::unscaled::Curve<M>;
+            type UAffine = crate::curve::binary::unscaled::Affine<M>;
+            type UPoint = crate::curve::binary::unscaled::Point<M>;
+
+            /// The (x, y) point an addend stands for: x = 1/u and
+            /// y = (v + 1) x^2 + (1 + a) x.
+            fn xy(a: &UAffine) -> Affine {
+                if a.is_identity() {
+                    return Affine::IDENTITY;
+                }
+                let x = a.u.inv();
+                Affine { x, y: (a.v + Gf::ONE) * x.square() + (Gf::ONE + M::A) * x }
+            }
+
+            fn at(u: &UCurve, p: &UPoint) -> Affine {
+                xy(&u.to_affine(p))
+            }
+
+            proptest! {
+                #[test]
+                fn lift_roundtrip((_c, ps) in curve_and_points(1)) {
+                    let p = ps[0];
+                    prop_assert_eq!(xy(&UAffine::lift(&p)), p);
+                    prop_assert_eq!(xy(&UAffine::lift(&p).neg()), p.neg());
+                    prop_assert_eq!(UAffine::lift(&Affine::IDENTITY), UAffine::IDENTITY);
+                }
+
+                #[test]
+                fn add_matches_affine((c, ps) in curve_and_points(3)) {
+                    let u = UCurve::new(c);
+                    let (p, q, s) = (ps[0], ps[1], ps[2]);
+                    let (lp, lq) = (UAffine::lift(&p), UAffine::lift(&q));
+                    let o = UAffine::IDENTITY;
+                    let n = u.neutral();
+                    let pp = n.add(&lp);
+                    prop_assert_eq!(at(&u, &pp), p);
+                    prop_assert_eq!(at(&u, &pp.add(&lq)), p.add(&q));
+                    // N, P = Q and P = -Q
+                    prop_assert!(n.add(&o).is_identity());
+                    prop_assert_eq!(at(&u, &pp.add(&o)), p);
+                    prop_assert_eq!(at(&u, &pp.add(&lp)), p.add(&p));
+                    prop_assert!(pp.add(&lp.neg()).is_identity());
+                    // the same again with Z != 1
+                    let pq = pp.add(&lq);
+                    let spq = UAffine::lift(&p.add(&q));
+                    prop_assert_eq!(at(&u, &pq.add(&spq)), p.add(&q).add(&p.add(&q)));
+                    prop_assert!(pq.add(&spq.neg()).is_identity());
+                    prop_assert_eq!(at(&u, &pq.add(&o)), p.add(&q));
+                    prop_assert_eq!(at(&u, &pq.add(&UAffine::lift(&s))), p.add(&q).add(&s));
+                    prop_assert!(!pq.z.is_zero() && !pq.add(&spq.neg()).z.is_zero());
+                }
+
+                #[test]
+                fn chains_match_affine((c, ps) in curve_and_points(8), ops in prop::collection::vec((0usize..8, 0u8..4), 0..48)) {
+                    // Ops 2 and 3 add or subtract the running sum, exercising
+                    // doubling and cancellation after arbitrary preceding additions.
+                    let u = UCurve::new(c);
+                    let (mut acc, mut want) = (u.neutral(), Affine::IDENTITY);
+                    for (i, op) in ops {
+                        let a = match op {
+                            0 => ps[i],
+                            1 => ps[i].neg(),
+                            2 => want,
+                            _ => want.neg(),
+                        };
+                        acc = u.add(&acc, &UAffine::lift(&a));
+                        want = want.add(&a);
+                        prop_assert_eq!(at(&u, &acc), want);
+                        prop_assert_eq!(acc.is_identity(), want.is_identity());
+                        prop_assert!(acc.equals_affine(&UAffine::lift(&want)));
+                    }
+                }
+
+                #[test]
+                fn equality((c, ps) in curve_and_points(2)) {
+                    let u = UCurve::new(c);
+                    let (lp, lq) = (UAffine::lift(&ps[0]), UAffine::lift(&ps[1]));
+                    let o = UAffine::IDENTITY;
+                    let (n, pp, qq) = (u.neutral(), u.neutral().add(&lp), u.neutral().add(&lq));
+                    let (pq, qp) = (pp.add(&lq), qq.add(&lp));
+                    // same point, different representatives
+                    prop_assert!(pq.equals(&qp) && pq.equals_affine(&UAffine::lift(&ps[0].add(&ps[1]))));
+                    // p and q may coincide; p and -p never do, in odd order
+                    let same = ps[0] == ps[1];
+                    prop_assert_eq!(pp.equals(&qq), same);
+                    prop_assert_eq!(pp.equals_affine(&lq), same);
+                    prop_assert!(pp.equals(&n.add(&lp)) && pp.equals_affine(&lp));
+                    prop_assert!(!pp.equals(&n) && !pp.equals(&n.add(&lp.neg())));
+                    prop_assert!(!pp.equals_affine(&lp.neg()) && !pp.equals_affine(&o));
+                    prop_assert!(n.equals(&pp.add(&lp.neg())) && n.equals_affine(&o) && !n.equals_affine(&lp));
+                    prop_assert!(pp.add(&lp.neg()).equals_affine(&o));
+                }
+
+                #[test]
+                fn to_affine_batch_matches((c, ps) in curve_and_points(6)) {
+                    let u = UCurve::new(c);
+                    let mut pts: Vec<UPoint> = ps.windows(2).map(|w| u.neutral().add(&UAffine::lift(&w[0])).add(&UAffine::lift(&w[1]))).collect();
+                    pts.push(u.neutral());
+                    let want: Vec<UAffine> = pts.iter().map(|p| u.to_affine(p)).collect();
+                    prop_assert_eq!(u.to_affine_batch(&pts), want);
+                    let lifted: Vec<UAffine> = ps.iter().map(UAffine::lift).collect();
+                    let sum = ps.iter().fold(Affine::IDENTITY, |s, p| s.add(p));
+                    prop_assert_eq!(xy(&u.sum_batch(&lifted)), sum);
+                }
+
+                #[test]
+                fn codec_is_wcodecs((c, ps) in curve_and_points(3)) {
+                    let u = UCurve::new(c);
+                    let w = &u.w;
+                    let lam = crate::curve::binary::lambda::Affine::<M>::lift;
+                    let a = UAffine::lift(&ps[0]);
+                    let e = u.encode(&a);
+                    prop_assert_eq!(e, w.encode(&lam(&ps[0])));
+                    prop_assert_eq!(u.decode(e), Some(a));
+                    prop_assert_eq!(u.encode(&a.neg()), w.encode(&lam(&ps[0].neg())));
+                    prop_assert_eq!(u.encode(&UAffine::IDENTITY), M::to_bytes(0));
+                    prop_assert_eq!(u.decode(M::to_bytes(0)), Some(UAffine::IDENTITY));
+                    // from accumulators, one at a time or batched, with O among them
+                    let pts = [u.neutral().add(&a), u.neutral().add(&a).add(&UAffine::lift(&ps[1])), u.neutral(), u.neutral().add(&a).add(&a.neg())];
+                    let want: Vec<_> = pts.iter().map(|p| u.encode(&u.to_affine(p))).collect();
+                    let direct: Vec<_> = pts.iter().map(|p| u.encode_point(p)).collect();
+                    prop_assert_eq!(direct[0], e);
+                    prop_assert_eq!(direct[1], w.encode(&lam(&ps[0].add(&ps[1]))));
+                    prop_assert_eq!(&direct, &want);
+                    prop_assert_eq!(Encode::encode_batch(&u, &pts), want);
+                }
+
+                #[test]
+                fn decode_accepts_only_canonical((c, v) in (curve(), any::<u128>())) {
+                    let u = UCurve::new(c);
+                    let e = M::to_bytes(v & (Gf::MASK | 1 << M::SIGN));
+                    let got = u.decode(e);
+                    prop_assert_eq!(got.map(|a| xy(&a)), u.w.decode(e).map(|a| crate::curve::binary::lambda::Point::from(a).to_affine()));
+                    if let Some(a) = got {
+                        prop_assert_eq!(u.encode(&a), e);
+                    }
+                }
+
+                #[test]
+                fn decode_batch_matches_single((c, ps) in curve_and_points(4), junk in prop::collection::vec(any::<u128>(), 0..4)) {
+                    let u = UCurve::new(c);
+                    let mut es: Vec<_> = ps.iter().map(|p| u.encode(&UAffine::lift(p))).collect();
+                    es.push(M::to_bytes(0));
+                    es.extend(junk.into_iter().map(M::to_bytes));
+                    let want: Vec<_> = es.iter().map(|&e| u.decode(e)).collect();
+                    prop_assert_eq!(u.decode_batch(&es), want);
+                }
+
+                #[test]
+                fn hash_is_wcodecs((c, msgs) in (curve(), prop::collection::vec(any::<[u8; 4]>(), 0..12))) {
+                    let u = UCurve::new(c);
+                    let h = Salted::new(b"wcodec test", &[0; 32]);
+                    let refs: Vec<&[u8]> = msgs.iter().map(|m| &m[..]).collect();
+                    let to_xy = |a: &crate::curve::binary::lambda::Affine<M>| crate::curve::binary::lambda::Point::from(*a).to_affine();
+                    let want: Vec<_> = refs.iter().map(|m| to_xy(&u.w.hash(&h, m))).collect();
+                    let one: Vec<_> = refs.iter().map(|m| xy(&crate::group::HashToCurve::hash(&u, &h, m))).collect();
+                    let batch: Vec<_> = crate::group::HashToCurve::hash_batch(&u, &h, &refs).iter().map(xy).collect();
+                    prop_assert_eq!(&one, &want);
+                    prop_assert_eq!(&batch, &want);
+                }
+            }
+        }
+
+        /// `binary::wcodec`, with points checked through the (x, y) law.
+        mod wcodec {
+            use super::*;
+            use crate::curve::binary::wcodec::to_lambda_batch;
+
+            type WCurve = crate::curve::binary::wcodec::Curve<M>;
+            type WAffine = crate::curve::binary::lambda::Affine<M>;
+            type WPoint = crate::curve::binary::lambda::Point<M>;
+
+            /// The (x, y) point a λ-affine one stands for.
+            fn xy(a: &WAffine) -> Affine {
+                WPoint::from(*a).to_affine()
+            }
+
+            proptest! {
+                #[test]
+                fn roundtrip((c, ps) in curve_and_points(1)) {
+                    let w = WCurve::new(c);
+                    let a = WAffine::lift(&ps[0]);
+                    let e = w.encode(&a);
+                    prop_assert_eq!(w.decode(e).map(|b| xy(&b)), Some(ps[0]));
+                    // -P is w + 1
+                    let mut n = e;
+                    n[0] ^= 1;
+                    prop_assert_eq!(w.encode(&a.neg()), n);
+                    prop_assert_eq!(w.encode(&WAffine::IDENTITY), M::to_bytes(0));
+                    prop_assert!(w.decode(M::to_bytes(0)).unwrap().is_identity());
+                }
+
+                #[test]
+                fn decode_accepts_only_canonical((c, v) in (curve(), any::<u128>())) {
+                    let w = WCurve::new(c);
+                    // the bits a point encoding may have, of which the sign
+                    // bit is outside the mask and nothing encodes
+                    let v = v & (Gf::MASK | 1 << M::SIGN);
+                    let e = M::to_bytes(v);
+                    if let Some(a) = w.decode(e) {
+                        let p = xy(&a);
+                        prop_assert!(c.is_on_curve(&p) && (p.is_identity() || p.x.trace() == 1));
+                        prop_assert_eq!(w.encode(&a), e);
+                        prop_assert!(v & !Gf::MASK == 0);
+                    }
+                }
+
+                #[test]
+                fn hash_lands_in_the_group((c, msg) in (curve(), any::<[u8; 8]>())) {
+                    let w = WCurve::new(c);
+                    let h = Salted::new(b"wcodec test", &[0; 32]);
+                    let a = w.hash(&h, &msg);
+                    let p = xy(&a);
+                    prop_assert!(!a.is_identity() && c.is_on_curve(&p) && p.x.trace() == 1);
+                    prop_assert_eq!(w.decode(w.encode(&a)).map(|b| xy(&b)), Some(p));
+                }
+
+                #[test]
+                fn hash_batch_matches_single((c, msgs) in (curve(), prop::collection::vec(any::<[u8; 4]>(), 0..12))) {
+                    let w = WCurve::new(c);
+                    let h = Salted::new(b"wcodec test", &[0; 32]);
+                    let refs: Vec<&[u8]> = msgs.iter().map(|m| &m[..]).collect();
+                    let got: Vec<_> = w.hash_batch(&h, &refs).iter().map(xy).collect();
+                    let want: Vec<_> = refs.iter().map(|m| xy(&w.hash(&h, m))).collect();
+                    prop_assert_eq!(got, want);
+                }
+
+                #[test]
+                fn to_lambda_matches((c, ps) in curve_and_points(6)) {
+                    let w = WCurve::new(c);
+                    let mut pts: Vec<WPoint> = ps
+                        .windows(2)
+                        .map(|p| WPoint::from(WAffine::lift(&p[0])).add_affine(&WAffine::lift(&p[1])))
+                        .collect();
+                    pts.push(WPoint::IDENTITY);
+                    let want: Vec<_> = pts.iter().map(|p| p.to_affine()).collect();
+                    let single: Vec<_> = pts.iter().map(|p| xy(&p.to_lambda())).collect();
+                    let batch: Vec<_> = to_lambda_batch(&pts).iter().map(xy).collect();
+                    prop_assert_eq!(&single, &want);
+                    prop_assert_eq!(&batch, &want);
+                    let lam: Vec<WAffine> = ps.iter().map(WAffine::lift).collect();
+                    let sum = ps.iter().fold(Affine::IDENTITY, |s, p| s.add(p));
+                    prop_assert_eq!(xy(&crate::group::SumBatch::sum_batch(&w, &lam)), sum);
+                }
+            }
+
+            proptest! {
+                #[test]
+                fn w0_decodes_to_nothing(c in curve()) {
+                    // Tr(b/d^2) = 1, with w0 = 0 iff Tr(b/a^2) = 1, as d(0) = a
+                    let w = WCurve::new(c);
+                    let d = w.w0.square() + w.w0 + M::A;
+                    prop_assert_eq!((c.b.gf() * d.square().inv()).trace(), 1);
+                }
+            }
+        }
     };
 }
 pub(crate) use suite;

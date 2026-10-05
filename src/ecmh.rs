@@ -230,5 +230,15 @@ mod tests {
         fn binary127_lambda_matches_binary127(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
             check_lambda_matches_binary127(c, salt, xs, signs)?;
         }
+
+        #[test]
+        fn binary127_w_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::wcodec::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary127_unscaled_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
+        }
     }
 }
