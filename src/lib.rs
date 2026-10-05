@@ -16,7 +16,11 @@
 //!   hash mappings, canonical codecs, and concrete field instances.
 //! - [`group`] exposes the capabilities needed by each workload.
 //! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
+//! - [`curvegen`] derives curves from seeds and verifies their selection
+//!   certificates. Point counting and certificate construction are
+//!   separate from the measured accumulation path.
 pub mod curve;
+pub mod curvegen;
 pub mod ecmh;
 pub mod field;
 pub mod group;
