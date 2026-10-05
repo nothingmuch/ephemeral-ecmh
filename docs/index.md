@@ -18,3 +18,4 @@ okf_version: "0.2"
 # Reference
 
 * [Annotated literature](literature.md) - For each key of references.bib, what the work contributes to the evaluation of ECMH-based RIBLT checksums over per-namespace curves; in the book, headed by the formatted entry.
+* [Repository organization](repository.md) - Where the field arithmetic, curves, group capabilities, benchmarks, reports, published results and reference programs live.
