@@ -1,0 +1,20 @@
+[package]
+name = "ephemeral-ecmh"
+version = "0.1.0"
+edition = "2024"
+description = "Elliptic-curve multiset hashing over per-namespace random curves, compared across fields and curve models for RIBLT checksums"
+license = "MIT"
+publish = false
+
+# The per-commit test check: dev's debug assertions and overflow checks,
+# but optimized, since the curvegen tests (sieve and AGM against Sage,
+# BSGS against brute force) take 20x longer at opt-level 0. They run no
+# slower at 1 than at 2, and the crate compiles in 0.8 of the time.
+[profile.ci]
+inherits = "dev"
+opt-level = 1
+debug = false
+incremental = false
+
+[profile.ci.package."*"]
+opt-level = 3

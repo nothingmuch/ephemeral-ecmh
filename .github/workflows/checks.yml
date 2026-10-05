@@ -1,0 +1,50 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  actions: read # lets hestia detect evicted cache entries upfront
+  contents: read
+jobs:
+  # The commits to validate: those of the pull request, or those the push
+  # added; all of them when the branch is new. One job per commit, as the
+  # whole history exceeds a job's time limit.
+  commits:
+    runs-on: ubuntu-latest
+    outputs:
+      commits: ${{ steps.list.outputs.commits }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: list
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ -z $BASE || $BASE =~ ^0+$ ]] || ! git cat-file -e "$BASE^{commit}"; then
+            range=$HEAD
+          else
+            range=$BASE..$HEAD
+          fi
+          echo "commits=$(git rev-list --reverse --no-merges "$range" | jq -Rnc '[inputs]')" >>"$GITHUB_OUTPUT"
+  validate:
+    needs: commits
+    if: needs.commits.outputs.commits != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        commit: ${{ fromJSON(needs.commits.outputs.commits) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # main
+      - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
+        with:
+          # Do not upload paths that cache.nixos.org already serves.
+          upstream-cache-filter: true
+      - name: Validate ${{ matrix.commit }}
+        run: nix run --no-update-lock-file .#validate-commits -- "${{ matrix.commit }}^!"
