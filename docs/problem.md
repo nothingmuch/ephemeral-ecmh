@@ -195,6 +195,7 @@ Each beacon value therefore determines both the salt and the curve. Subject to
 the entropy of the beacon and to the parameter-selection procedure, this
 prevents direct reuse of tables computed for earlier curves. It does not exclude
 all useful precomputation, nor does it guarantee the generic work factor in
+every namespace.
 
 selection under the same candidate criteria and filters that reject only
 
@@ -218,6 +219,9 @@ These assumptions differ from those of fixed-curve design:
   by one point addition or subtraction per coded symbol the item maps to, plus
   encoding and equality tests during peeling. Scalar multiplication is not among
   them; only curve selection and certification use it.
+- Curve parameters vary by namespace. An optimization tied to particular
+  parameters must include its setup cost and its amortization within one
+  namespace. Constants fixed by the field or the curve model remain available.
 - The arithmetic processes public data, so variable-time implementations are
   acceptable ([Adversary](#adversary)).
 - Point counting and parameter certification occur once per namespace and are
