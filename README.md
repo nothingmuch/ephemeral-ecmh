@@ -152,6 +152,12 @@ word, and points have 16-byte encodings; the 107-bit and 109-bit families have
 [Candidate constructions](docs/constructions.md) lists the constructions
 compared and their operation counts.
 
+In a RIBLT, an item's point is added to about $2 \ln m$ of the first $m$ coded
+symbols, and the item is hashed once per namespace, so additions outnumber
+hashes ([Workload](docs/workload.md)). The simulator reproduces the forgery of
+yangl1996/riblt#3 against the XOR checksum, and every curve group rejects the
+forged cells.
+
 ## License
 
 [MIT](./LICENSE)
