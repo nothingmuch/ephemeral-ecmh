@@ -8,9 +8,11 @@
 //!   F_2\[z\]/(z^61 + z^23 + z^15 + z^5 + 1), with the same three
 //!   backends, for `binary122`.
 //! - `fp127`: F_p, p = 2^127 - 1, portable, for `edwards127` and `weier127`.
+//! - `fp107`: F_p, p = 2^107 - 1, portable, for `edwards107` and `weier107`.
 //! - `batch`: Montgomery's batch inversion, for any of them.
 
 pub mod batch;
+pub mod fp107;
 pub mod fp127;
 pub mod gf2_109;
 pub mod gf2_122;
@@ -144,6 +146,7 @@ macro_rules! prime {
         }
     };
 }
+prime!(fp107, fp107::Fp::new(fp107::P - 1), 107);
 prime!(fp127, fp127::Fp::new(fp127::P - 1), 127);
 /// GF(2^m), as the binary curve laws use it: the arithmetic, and a
 /// canonical integer for each element. + is also -.
@@ -326,10 +329,16 @@ mod tests {
 
     #[test]
     fn boundaries_prime() {
+        boundaries::<fp107::Fp>(1, fp107::P);
         boundaries::<fp127::Fp>(1, fp127::P);
     }
 
     proptest! {
+        #[test]
+        fn odd_fp107(x in fp107::tests::fp(), y in fp107::tests::fp(), v in any::<u128>()) {
+            odd(1, x, y, v)?;
+        }
+
         #[test]
         fn odd_fp127(x in fp127::tests::fp(), y in fp127::tests::fp(), v in any::<u128>()) {
             odd(1, x, y, v)?;

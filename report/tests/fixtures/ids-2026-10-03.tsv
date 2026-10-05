@@ -49,6 +49,21 @@ digest	ristretto255/streaming
 digest	secp256k1/try-and-increment + combine_keys
 digest	weier127/batch
 digest	xor-sha256
+field	fp107 schoolbook/mul latency (dependent chain)
+field	fp107 schoolbook/mul throughput (8 chains)
+field	fp107/add
+field	fp107/batch invert (product tree)
+field	fp107/invert
+field	fp107/mul latency (dependent chain)
+field	fp107/mul throughput (8 chains)
+field	fp107/neg
+field	fp107/pack
+field	fp107/pow_p34 (x^(2^105-1))
+field	fp107/sqrt (x^(2^105))
+field	fp107/sqrt_ratio
+field	fp107/square latency (dependent chain)
+field	fp107/square throughput (8 chains)
+field	fp107/unpack
 field	fp127/add
 field	fp127/batch invert (product tree)
 field	fp127/invert

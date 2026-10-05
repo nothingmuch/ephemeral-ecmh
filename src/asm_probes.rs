@@ -95,6 +95,8 @@ pub mod field {
     pub mod prime {
         prime_field!(fp127, crate::field::fp127::Fp, square: |a: crate::field::fp127::Fp| a.square(),
             invert: |a: crate::field::fp127::Fp| a.invert(), sqrt: |a: crate::field::fp127::Fp| a.sqrt());
+        prime_field!(fp107, crate::field::fp107::Fp, square: |a: crate::field::fp107::Fp| a.square(),
+            invert: |a: crate::field::fp107::Fp| a.invert(), sqrt: |a: crate::field::fp107::Fp| a.sqrt());
     }
 }
 

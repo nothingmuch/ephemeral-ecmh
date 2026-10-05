@@ -33,6 +33,10 @@ impl Signed for crate::field::fp127::Fp {
     type Bytes = [u8; 16];
 }
 
+impl Signed for crate::field::fp107::Fp {
+    type Bytes = [u8; crate::field::fp107::BYTES];
+}
+
 /// The x bits, and O's x.
 fn x_mask<F: Packed>() -> u128 {
     u128::MAX >> (128 - F::BITS)
@@ -90,7 +94,7 @@ pub(crate) fn candidate<F: Signed>(c: u128) -> Option<u128> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::field::fp127;
+    use crate::field::{fp107, fp127};
     use proptest::prelude::*;
 
     /// The x, the sign and O's x fit in `Bytes`, which fits in a u128, keeps
@@ -108,6 +112,11 @@ mod tests {
         #[test]
         fn layout_fp127(v in any::<u128>()) {
             layout::<fp127::Fp>(v)?;
+        }
+
+        #[test]
+        fn layout_fp107(v in any::<u128>()) {
+            layout::<fp107::Fp>(v)?;
         }
     }
 }

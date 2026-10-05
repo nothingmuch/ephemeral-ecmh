@@ -75,6 +75,7 @@ FAMILIES = {
         for acc in ACCUMULATORS
     },
     "fp127": ("fp127", 127),
+    "fp107": ("fp127", 107),
     "edwards127": ("edwards127", 127),
     "weier127": ("weier127", 127),
     "weier127-jacobian": ("weier127", 127),
@@ -300,6 +301,7 @@ FIELDS = {
     "gf2_109": "gf2_127",
     "gf2_122": "gf2_127",
     "fp127": "fp127",
+    "fp107": "fp127",
 }
 CURVES = [
     "xor",
@@ -405,7 +407,7 @@ FIELD_GROUPS = [
             ("gf2_109", "F_2[z]/(z^109 + z^5 + z^4 + z^2 + 1)"),
         ],
     ),
-    ("prime", [("fp127", "p = 2^127 − 1")]),
+    ("prime", [("fp127", "p = 2^127 − 1"), ("fp107", "p = 2^107 − 1")]),
 ]
 # each curve's field, whose inversions its batches share
 FIELD_OF = {
