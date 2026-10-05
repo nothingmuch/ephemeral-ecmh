@@ -5,7 +5,8 @@
 //! Each cell stores the XOR of item bytes, a signed count, and the signed sum
 //! of their hashed curve points. Item bytes remain the recovery payload;
 //! curve points provide a separate checksum. This simulator does not implement
-//! the point-identifier protocol or a wire format.
+//! the point-identifier protocol or a wire format; [`rateless`] implements
+//! upstream's rateless stream over the same cells, hashes and mapping.
 //!
 //! The caller supplies the salt used by separate item-hashing and mapping tags.
 //! Each item's mapping is drawn from xoshiro256++ seeded by its salted map
@@ -24,6 +25,8 @@
 //! party that keeps its cells between rounds instead performs one hash, one
 //! preparation and k(m) additions per new item. `peel` is the decoding either
 //! way.
+
+pub mod rateless;
 
 use crate::ecmh::TAG_ITEM;
 use crate::group::{Group, HashToCurve, Negate};
@@ -69,6 +72,12 @@ impl Prng for Mcg64 {
 /// as for every xoshiro; the salted digest is modelled as uniform, under
 /// which such a state is no likelier than any other. Cryptographic strength
 /// does not enter: the digest is a salted hash and the mapping is public.
+///
+/// The state is 32 bytes against ChaCha8Rng's 312, a 256-byte sample buffer
+/// with the key schedule. [`rateless`]'s window keeps one mapping per item
+/// and advances them in heap order, so at d = 10^5 the mappings it works
+/// over would be a 32 MB table under ChaCha8 and are 4 MB here, which is
+/// what its cache behaviour turns on.
 #[derive(Clone, Debug)]
 pub struct Xoshiro256pp(Xoshiro256PlusPlus);
 
