@@ -2,6 +2,11 @@
 result
 result-*
 .direnv/
+__pycache__/
 *.sage.py
 /.claude/
+.pytest_cache/
+.ruff_cache/
 /mutants.out*
+# local copies of the papers in references.bib
+/pdfs/

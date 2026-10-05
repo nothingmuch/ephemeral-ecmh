@@ -3,7 +3,7 @@
 ## Authorship and disclaimer
 
 The author formulated the research question, defined the threat model
-and security arguments not related to
+([Adversary](docs/problem.md#adversary)) and security arguments not related to
 curve selection, and directed the language models that carried out the work.
 The implementation and evaluation were carried out almost entirely by Claude
 Opus 5.5, with review and contributions from Codex Astra 6 and Claude Fable
@@ -37,6 +37,81 @@ RIBLT over sets with potentially adversarial items. The question is whether such
 a checksum attains a work factor between $2^{48}$ and $2^{64}$ group operations
 for each curve, and which field, curve model, and representation minimize its
 cost per item.
+
+## Motivation
+
+Set reconciliation lets two peers that hold similar sets exchange only their
+difference. In peer-to-peer networks the sets often accept items from any party:
+Erlay proposes set reconciliation for the transaction relay of Bitcoin nodes
+[naumenko-et-al-2019], and IBLT-based reconciliation has been evaluated for the
+channel and node announcements of Lightning gossip [bolt-7, chen-et-al-2026];
+neither is deployed, and both networks relay by flooding. Their items may be
+adversarial inputs. The adversary considered here is a third party that authors
+items and places them in the sets of honest peers, for instance by broadcasting
+them, aiming to make two honest peers fail to reconcile or obtain a wrong
+difference; resistance to it is what Meyer and Scherer call censorship
+resistance [meyer-scherer-2024]. A participating peer can always disrupt
+reconciliation by sending corrupt data or misrepresenting its set; that is
+unavoidable and not considered ([Adversary](docs/problem.md#adversary)).
+
+A RIBLT [yang-gilad-alizadeh-2024] recognizes a coded symbol that holds a single
+item by a checksum. In the reference implementation the checksum is the XOR of
+item hashes. An adversary who can evaluate the item hash constructs two distinct
+sets with equal checksums by linear algebra over $\mathbb{F}_2$, at negligible
+cost and with any hash function
+([yangl1996/riblt#3](https://github.com/yangl1996/riblt/issues/3)). Addition
+modulo $2^{64}$ in place of XOR has the same weakness, by lattice reduction and
+Wagner's algorithm [wagner-2002].
+
+A secret key defeats the attack when the adversary cannot evaluate the keyed
+hash. This is the model of short keyed hashes such as SipHash
+[aumasson-bernstein-2012], designed against hash flooding of hash tables.
+Bitcoin's compact block relay keys the 48-bit short identifiers of a block's
+transactions with a hash of the block header and a nonce [corallo-2016]: the
+header commits to the transactions, so the set is fixed before the key is
+revealed and no transaction can be chosen against it. Open sets have no such
+ordering. Items keep arriving after a key shared by all peers is published, and
+the attack on the XOR checksum applies whatever the hash. A key kept per
+connection, as Erlay's salts are [naumenko-et-al-2019], or a secret key
+coordinated by the two peers, as the Rateless IBLT paper proposes against
+injected items, repeats the hashing of every item for each key, and the
+checksums of coded symbols no longer serve every peer, though their sums do
+[yang-gilad-alizadeh-2024, Section 4.3]. Meyer and Scherer count that cost
+against randomizing per session [meyer-scherer-2024].
+
+The hashing can instead be shared within an epoch. In a namespace salted by a
+beacon value, such as a key derived from a block hash, an adversary who can
+neither predict nor influence that value cannot search for collisions before the
+namespace begins. Unlike in compact block relay, it can still author items
+afterwards, so the checksum must resist relation finding without a secret until
+the next beacon value; with a block hash as the beacon, new blocks determine how
+long that is.
+
+An ECMH sums hashed points in an elliptic-curve group. For maps to the curve
+that satisfy the hypotheses of the known reductions, its collision resistance
+reduces to the discrete-logarithm problem in that group
+[maitin-shepard-et-al-2016]; whether the maps used here satisfy them is open.
+The curves in use
+for this purpose have about $2^{256}$ points and about 128-bit security, and
+hashing an item to them costs far more than the SHA-256 hash of the XOR
+checksum. A shorter horizon
+and a failure confined to one namespace suggest that a work factor of $2^{48}$
+to $2^{64}$ suffices, provided the application detects a sketch collision by
+other means and recovers, for example by re-keying or by another reconciliation
+method. This is an application assumption.
+
+A small fixed curve is exposed to precomputation [bernstein-lange-2012]. With
+the discrete logarithms of the item hashes, the checksum becomes AdHash modulo
+the group order, and the attack on the XOR checksum carries over through
+Wagner's algorithm or lattice reduction; without them, the group does not expose
+the residues modulo its order that these algorithms need. Hoyte reports such
+collisions modulo $2^{256}$ in about 28 hours on eight cores [hoyte-2023]. The
+group orders here are below $2^{128}$, where the leading-order estimate for
+Wagner's algorithm is smaller by a factor of $2^{9.5}$ to $2^{11.5}$, so a
+discrete-logarithm break makes the attack practical. The curve is therefore
+derived from the beacon value as well, deterministically, by a public
+candidate-selection procedure. A participant must be able to derive and check
+the curve for each new beacon value.
 
 ## License
 

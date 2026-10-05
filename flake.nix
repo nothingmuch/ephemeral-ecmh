@@ -27,8 +27,10 @@
 
       imports = [
         ./nix/toolchain.nix
+        ./nix/python.nix
         ./nix/mutants.nix
         ./nix/package.nix
+        ./nix/site.nix
         ./nix/checks.nix
         ./nix/treefmt.nix
         ./nix/validate-commits.nix

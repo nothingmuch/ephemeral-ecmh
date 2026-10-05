@@ -97,7 +97,7 @@
                 ;
             }
             // {
-              inherit (config.checks) treefmt;
+              inherit (config.checks) treefmt site;
             }
           );
         };
