@@ -53,7 +53,8 @@ subexponential in the size of the modulus. The security of AdHash rests on the
 hardness of a weighted knapsack problem, which requires a modulus of thousands
 of bits [bellare-micciancio-1997, wagner-2002]; a variant of one incremental
 hash of this kind was proposed with its modulus raised from $2^{160}$ to
-$2^{1600}$ in response to Wagner's algorithm [phan-wagner-2006, Section 2].
+$2^{1600}$ in response to Wagner's algorithm [phan-wagner-2006, Section 2]
+([Known weaknesses](ecc_security.md#known-weaknesses)).
 
 ## Keyed and group-based checksums
 

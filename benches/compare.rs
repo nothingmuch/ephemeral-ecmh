@@ -3,6 +3,8 @@
 //!
 //!   nix develop -c cargo bench --bench compare
 //!
+//! Curve fixtures have seed-derived dense parameters from
+//! `tests/common/kats.rs`.
 //! Most iterations process N synthetic 36-byte items. Criterion records the
 //! iteration time and element throughput; the report normalizes per element.
 //! Ristretto255, libsecp256k1, and XOR-SHA256 provide fixed-group and hash
@@ -13,6 +15,9 @@ use common::{each, whole};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
+use ephemeral_ecmh::curve::h2c::map1;
+use ephemeral_ecmh::curve::{binary, binary127};
+use ephemeral_ecmh::ecmh::digest_batch;
 use ephemeral_ecmh::field::gf2_127::{self, Gf, from_u128};
 use ephemeral_ecmh::hash::{Salted, halves};
 use secp256k1::PublicKey;
@@ -25,6 +30,8 @@ const N: usize = 1024;
 const ACCS: usize = 8;
 
 struct Setup {
+    seed: [u8; 32],
+    bin: binary127::Curve,
     salt: Salted,
     items: Vec<[u8; 36]>,
     /// the first digest half of each item: a hash-to-curve candidate
@@ -32,14 +39,21 @@ struct Setup {
 }
 
 fn setup() -> Setup {
-    let seed = [0u8; 32];
+    let bin = common::families::binary127();
+    let seed = bin.seed;
     let salt = Salted::new(ephemeral_ecmh::ecmh::TAG_ITEM, &seed);
     let items = common::items(&[], N);
     let cands = items
         .iter()
         .map(|m| halves(&salt.digest(m, 0))[0])
         .collect();
-    Setup { salt, items, cands }
+    Setup {
+        seed,
+        bin: bin.group,
+        salt,
+        items,
+        cands,
+    }
 }
 
 impl Setup {
@@ -180,6 +194,75 @@ fn hash_to_curve(c: &mut Criterion) {
     each(&mut g, "sha256 (XOR baseline)", &refs, |m| {
         s.salt.digest(m, 0)
     });
+    each(&mut g, "gf2_127/pornin map x1", &refs, |m| {
+        map1(&s.bin, &s.salt, m)
+    });
+    whole(&mut g, "gf2_127/pornin map x1, batched", &refs, |ms| {
+        s.bin.hash_to_curve_map1_batch(&s.salt, ms)
+    });
+
+    // The map straight to a prepared addend: hash and prepare in one row, no
+    // lift. One map, so the image is at most 2^(m-1) points of E[r] and not
+    // uniform on it; see binary/map.rs.
+    let u = binary::unscaled::Curve::new(s.bin);
+    each(&mut g, "gf2_127-u/pornin map x1 to (u, v)", &refs, |m| {
+        u.map_to_addend(halves(&s.salt.digest(m, 0))[0])
+    });
+    whole(
+        &mut g,
+        "gf2_127-u/pornin map x1 to (u, v), batched",
+        &refs,
+        |ms| {
+            let cs: Vec<u128> = ms.iter().map(|m| halves(&s.salt.digest(m, 0))[0]).collect();
+            u.map_to_addend_batch(&cs)
+        },
+    );
+    each(
+        &mut g,
+        "gf2_127-lambda/pornin map x1 to (x, λ)",
+        &refs,
+        |m| s.bin.map_to_lambda(halves(&s.salt.digest(m, 0))[0]),
+    );
+    whole(
+        &mut g,
+        "gf2_127-lambda/pornin map x1 to (x, λ), batched",
+        &refs,
+        |ms| {
+            let cs: Vec<u128> = ms.iter().map(|m| halves(&s.salt.digest(m, 0))[0]).collect();
+            s.bin.map_to_lambda_batch(&cs)
+        },
+    );
+    // the w codec's addend is the same (x, λ): its own rows, since the
+    // report keys hash-to-addend recipes by family
+    each(&mut g, "gf2_127-w/pornin map x1 to (x, λ)", &refs, |m| {
+        s.bin.map_to_lambda(halves(&s.salt.digest(m, 0))[0])
+    });
+    whole(
+        &mut g,
+        "gf2_127-w/pornin map x1 to (x, λ), batched",
+        &refs,
+        |ms| {
+            let cs: Vec<u128> = ms.iter().map(|m| halves(&s.salt.digest(m, 0))[0]).collect();
+            s.bin.map_to_lambda_batch(&cs)
+        },
+    );
+    // and try-and-increment to the same addend, as compare109.rs and
+    // compare122.rs time it
+    each(
+        &mut g,
+        "gf2_127-lambda/try-and-increment to (x, λ)",
+        &refs,
+        |m| s.bin.hash_to_lambda(&s.salt, m),
+    );
+    whole(
+        &mut g,
+        "gf2_127-lambda/try-and-increment to (x, λ), batched",
+        &refs,
+        |ms| s.bin.hash_to_lambda_batch(&s.salt, ms),
+    );
+    each(&mut g, "gf2_127/pornin map x2", &refs, |m| {
+        s.bin.hash_to_curve_map2(&s.salt, m)
+    });
     each(&mut g, "ristretto255/hash_from_bytes<Sha512>", &refs, |m| {
         RistrettoPoint::hash_from_bytes::<Sha512>(m)
     });
@@ -217,12 +300,14 @@ fn h2c_parts(c: &mut Criterion) {
 fn negate(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
+    let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
         .collect();
     let hs: Vec<_> = refs.iter().map(|m| secp_hash(&s.salt, m)).collect();
     let mut g = c.benchmark_group("negate");
+    each(&mut g, "gf2_127/affine (y += x)", &hb, |p| p.neg());
     each(&mut g, "ristretto255/-P", &hr, |p| -p);
     each(&mut g, "secp256k1/PublicKey::negate", &hs, |p| p.negate());
     g.finish();
@@ -231,14 +316,42 @@ fn negate(c: &mut Criterion) {
 fn add(c: &mut Criterion) {
     let s = setup();
     let refs = s.refs();
+    let hb = s.bin.hash_to_curve_batch(&s.salt, &refs);
     let hr: Vec<_> = refs
         .iter()
         .map(|m| RistrettoPoint::hash_from_bytes::<Sha512>(m))
         .collect();
-    let hx: Vec<[u8; 32]> = refs.iter().map(|m| s.salt.digest(m, 0)).collect();
+    let hx: Vec<[u64; 4]> = refs
+        .iter()
+        .map(|m| {
+            let d = s.salt.digest(m, 0);
+            core::array::from_fn(|i| u64::from_le_bytes(d.as_chunks::<8>().0[i]))
+        })
+        .collect();
 
     let mut g = c.benchmark_group("add");
     g.throughput(Throughput::Elements(N as u64));
+    // The RIBLT forms (extended, Cached, RCB) are in benches/group.rs; these
+    // are the other representations, throughput-bound: ACCS accumulators
+    // round robin, like updating distinct RIBLT cells.
+    macro_rules! streaming {
+        ($name:expr, $zero:expr, $xs:expr, $add:expr) => {
+            g.bench_function(concat!($name, ", 1 accumulator"), |bn| {
+                bn.iter(|| $xs.iter().fold($zero, |acc, p| $add(&acc, p)))
+            });
+            g.bench_function(concat!($name, ", 8 accumulators"), |bn| {
+                bn.iter(|| {
+                    let mut acc = [$zero; ACCS];
+                    for ch in $xs.chunks(ACCS) {
+                        for (a, p) in acc.iter_mut().zip(ch) {
+                            *a = $add(a, p);
+                        }
+                    }
+                    acc
+                })
+            });
+        };
+    }
     macro_rules! throughput {
         ($name:expr, $zero:expr, $xs:expr, $add:expr) => {
             g.bench_function(concat!($name, ", 8 accumulators"), |bn| {
@@ -254,16 +367,24 @@ fn add(c: &mut Criterion) {
             });
         };
     }
-    g.bench_function("xor-sha256/xor 32B", |bn| {
-        bn.iter(|| {
-            hx.iter().fold([0u64; 4], |mut acc, d| {
-                for (a, w) in acc.iter_mut().zip(d.as_chunks::<8>().0) {
-                    *a ^= u64::from_le_bytes(*w);
-                }
-                acc
-            })
-        })
+    streaming!(
+        "xor-sha256/xor 32B",
+        [0u64; 4],
+        hx,
+        |a: &[u64; 4], p: &[u64; 4]| { core::array::from_fn::<u64, 4, _>(|i| a[i] ^ p[i]) }
+    );
+    g.bench_function("gf2_127/batch affine (tree sum)", |bn| {
+        bn.iter(|| binary127::sum_batch(black_box(&hb)))
     });
+    throughput!("gf2_127/extended += affine", s.bin.neutral(), hb, |a, p| s
+        .bin
+        .add_affine(a, p));
+    streaming!(
+        "ristretto255/+=",
+        RistrettoPoint::default(),
+        hr,
+        |a: &RistrettoPoint, p| a + p
+    );
     throughput!(
         "ristretto255/-=",
         RistrettoPoint::default(),
@@ -291,6 +412,9 @@ fn digest(c: &mut Criterion) {
                 acc
             })
         })
+    });
+    g.bench_function("gf2_127/batch", |bn| {
+        bn.iter(|| digest_batch(s.bin, &s.seed, &refs))
     });
     g.bench_function("ristretto255/streaming", |bn| {
         bn.iter(|| {

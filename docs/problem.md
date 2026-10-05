@@ -34,7 +34,8 @@ for instance by broadcasting them. It authors items whose hashes satisfy a
 relation, aiming to make two honest peers fail to reconcile, or obtain a wrong
 difference, when the items lie in the symmetric difference of their sets; items
 common to both sets cancel. The RIBLT's mapping of items to coded symbols admits
-a similar attack that does not involve the checksum.
+a similar attack that does not involve the checksum ([Known
+weaknesses](ecc_security.md#known-weaknesses)).
 
 The items, the salt and the curve are public, so the timing of the computation
 reveals nothing that the adversary could not compute itself, and implementations
@@ -60,7 +61,8 @@ enters, and two items whose elements and signs agree hash to the same point on
 every curve that accepts that element. Without the salt, such a pair would cost
 about $2^{64}$ digests once and serve in every namespace; with it, the search is
 repeated for each namespace. An unsalted mapping would likewise let colliding
-schedules be searched for before the beacon. The two keys serve different
+schedules be searched for before the beacon ([Known
+weaknesses](ecc_security.md#known-weaknesses)). The two keys serve different
 ends. The hash to the curve keeps the public salt, under which an item's point
 identifies it, and resists collisions, in every session of the namespace. The
 schedule is better keyed by a secret that each pair of peers shares, where one
@@ -117,7 +119,8 @@ probability [maitin-shepard-et-al-2016, Section 4.1, Theorem 1, and Appendix A].
 An encoding that misses a fixed fraction of the points can qualify: their
 characteristic-2 Shallue–van de Woestijne encoding misses about $9/32$ of them
 and has $\beta$ close to 3 [maitin-shepard-et-al-2016, Section 4.2]. Whether the
-maps used here meet these hypotheses is open.
+maps used here meet these hypotheses is open ([Known
+weaknesses](ecc_security.md#known-weaknesses)).
 
 A participating peer can always prevent reconciliation by misrepresenting its
 set; no checksum prevents this, and it is not considered. Corrupt coded symbols
@@ -136,7 +139,8 @@ data against a source or a key from which every legitimate symbol derives,
 whereas the items of a reconciled set are authored by any party, the adversary
 included, and carry no signature or key that distinguishes an honest item from
 an adversarial one. Whoever supplies a curve certificate stands in a separate
-relation to its verifier.
+relation to its verifier ([Parameter selection and
+verification](#parameter-selection-and-verification)).
 
 ## Setting and reference work factor
 
@@ -195,7 +199,50 @@ Each beacon value therefore determines both the salt and the curve. Subject to
 the entropy of the beacon and to the parameter-selection procedure, this
 prevents direct reuse of tables computed for earlier curves. It does not exclude
 all useful precomputation, nor does it guarantee the generic work factor in
+every namespace.
 
+## Parameter selection and verification
+
+Candidate curves are derived from the beacon value by hashing, and a namespace
+uses the first candidate whose group order is an admissible cofactor times a
+prime $r$. Deriving curves from public randomness has precedent in verifiably
+random seeds [ansi-x9-62-1998, rfc5639], lottery draws [baigneres-et-al-2015],
+and a beacon whose outputs seed a stream of curves [lenstra-wesolowski-2017];
+those curves serve general use at the 128-bit level, whereas here each beacon
+value selects a smaller one for its namespace. A participant may determine that
+curve by counting points itself, or may check a certificate: for the accepted
+candidate, $r$ and a hashed point $P$ whose cofactor multiple $Q$ is not $O$ and
+satisfies $rQ = O$, and for each earlier candidate a witness that its order is
+inadmissible, as trx proposes for its own enumeration. The verifier accepts any
+witness that satisfies the certificate rules. This repository's prover derives
+its witnesses from hashed points, so its certificate is determined by the seed
+and the rejection policy (how labels are chosen, and whether by factoring).
+Checking a certificate requires scalar multiplications, a probable-prime test,
+and an embedding-degree bound, but no point counting.
+
+The probable-prime test is Miller–Rabin to 24 fixed bases, so the primality of
+$r$ is probable, not proven. A candidate with the required prime-order structure
+has no valid rejection witness, so a certificate cannot skip it. The prover
+supplies $r$ for the accepted candidate; the verifier checks its admissible
+interval, the condition $rQ = O$ with $Q$ not $O$, and the 24 Miller–Rabin
+bases. The second condition establishes that the order of $Q$ divides $r$. If
+$r$ is prime, $Q$ has order $r$, and the family's cofactor and the Hasse bound
+then establish $|E| = hr$. The fixed-base test does not prove that $r$ is prime.
+
+The direct checker and certificate verifier share the order-parameter
+predicates: the probable-prime test, the Hasse interval at the required
+cofactor, exclusion of $r = q$, and the embedding-degree bound. Direct checking
+takes the full order from a trusted point counter. Certificate verification
+uses the nonidentity point and Hasse argument above instead; its order
+conclusion remains conditional on $r$ being prime.
+
+These formats do not certify every possible outcome of direct checking. An
+order-admissible candidate can fail the fixed certificate-point check, and the
+formats have no rejection witness for an anomalous order or a failed embedding
+bound. A family without a full-order rejection witness also needs a factor for
+a rejected composite. Direct selection can proceed without those witnesses;
+the prover reports failure rather than skipping an uncertifiable candidate.
+Whenever certification succeeds, its selected index agrees with direct
 selection under the same candidate criteria and filters that reject only
 
 other implementation is this repository's own, in Rust, for binary fields only;
@@ -218,10 +265,14 @@ These assumptions differ from those of fixed-curve design:
   by one point addition or subtraction per coded symbol the item maps to, plus
   encoding and equality tests during peeling. Scalar multiplication is not among
   them; only curve selection and certification use it.
+- Curve parameters vary by namespace. An optimization tied to particular
+  parameters must include its setup cost and its amortization within one
+  namespace. Constants fixed by the field or the curve model remain available.
 - The arithmetic processes public data, so variable-time implementations are
   acceptable ([Adversary](#adversary)).
 - Point counting and parameter certification occur once per namespace and are
-  amortized, but must remain tractable for each new beacon value.
+  amortized, but must remain tractable for each new beacon value ([Parameter
+  selection and verification](#parameter-selection-and-verification)).
 
 The constructions compared have
 128-bit and shorter encodings. Their arithmetic costs are measured here; their

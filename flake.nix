@@ -29,6 +29,7 @@
         ./nix/toolchain.nix
         ./nix/python.nix
         ./nix/report.nix
+        ./nix/asm.nix
         ./nix/mutants.nix
         ./nix/sage.nix
         ./nix/package.nix

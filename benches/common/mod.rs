@@ -4,8 +4,11 @@
 // Each benchmark binary uses a different subset of these helpers.
 #![allow(dead_code)]
 
+pub mod families;
+
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput};
+use ephemeral_ecmh::curvegen::select::Certificate;
 use ephemeral_ecmh::hash::Salted;
 use std::hint::black_box;
 use std::time::Duration;
@@ -34,6 +37,27 @@ pub fn items(message: &[u8], n: usize) -> Vec<[u8; 36]> {
             x[32..].copy_from_slice(&i.to_le_bytes());
             x
         })
+        .collect()
+}
+
+/// Convert the integer KAT witnesses to their 14- or 16-byte wire encoding.
+pub fn certificate<const N: usize>(
+    index: u32,
+    r: u128,
+    rejections: &[(u128, u128)],
+) -> Certificate<N> {
+    Certificate {
+        index,
+        r,
+        rejections: rejection_bytes(rejections),
+    }
+}
+
+/// Encode witnesses for either certificate type, retaining the low `N` bytes.
+pub fn rejection_bytes<const N: usize>(rejections: &[(u128, u128)]) -> Vec<(u128, [u8; N])> {
+    rejections
+        .iter()
+        .map(|&(l, p)| (l, p.to_le_bytes()[..N].try_into().unwrap()))
         .collect()
 }
 

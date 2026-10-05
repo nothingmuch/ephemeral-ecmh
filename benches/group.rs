@@ -1,0 +1,253 @@
+//! Group capabilities relevant to ECMH and RIBLT costs, measured through
+//! one generic harness for each included curve and representation.
+//!
+//!   nix develop -c cargo bench --bench group
+//!
+//! Identifiers are `<layer>.<op>/<family>.<bits>/<parameters>`, with `h2c`
+//! as the hash layer:
+//!
+//! - h2c: hash one item (mode=indep), or chunks of n (mode=batch,n=...).
+//!   Preparation, encoding, and decoding use this sweep.
+//! - group.prepare: convert a hash output to the addend reused across cells:
+//!   extended on binary curves, lambda-affine on binary-lambda, Cached on
+//!   Edwards, and affine on Weierstrass. The binary-w and binary-u hashes
+//!   already return their addend representation, so preparation is a copy.
+//! - group.add: update one dependent accumulator (mode=latency), or ACCS
+//!   independent accumulators in round-robin order (mode=throughput).
+//! - group.sub: the same accumulation with addend negation on every update,
+//!   mode=throughput only: subtraction is negation and addition, both
+//!   measured, so the row is decoding's check on their composition.
+//! - group.neg: negate a prepared addend.
+//! - group.is_identity: the empty-cell test, applied to running-sum
+//!   accumulator fixtures.
+//! - group.equals: the purity check, comparing a cell's sum with an addend:
+//!   mode=mismatch on running sums against the next addend (impure cells,
+//!   peeling's common case, where a comparison may stop at the first
+//!   coordinate), mode=match on sums equal to the addend at a non-unit
+//!   scale (pure cells).
+//! - group.encode: produce accumulators' canonical point bytes for
+//!   transmission of cells, through the affine form unless the group
+//!   encodes accumulators directly. Batch measurements share normalization
+//!   work.
+//! - group.decode: recover the group's affine representation from point bytes,
+//!   independently or in batches; the w codec returns lambda-affine points.
+//!
+//! Coverage follows the families' standing. The binary families over
+//! GF(2^109) and GF(2^127), the leading contenders, run every row: the
+//! batch sweep n = 8, 64 and N, subtraction, and both equality modes.
+//! edwards.127 also runs the batch sweep, as the prime-field contrast; the
+//! other families batch at N only, prime-field hashing being bound by its
+//! square roots, which a batch does not share, and take the mismatch
+//! equality mode only.
+//!
+//! Registry fixtures verify their certificates before timing; each available family supplies its own group and representations.
+mod common;
+use common::each;
+
+use criterion::measurement::WallTime;
+use criterion::{BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main};
+use ephemeral_ecmh::ecmh::TAG_ITEM;
+use ephemeral_ecmh::group::{Decode, Group, HashToCurve, Negate};
+use ephemeral_ecmh::hash::Salted;
+use std::hint::black_box;
+
+const N: usize = 1024;
+/// Batch sizes for mode=batch.
+const BATCHES: [usize; 3] = [8, 64, N];
+/// Independent accumulators for mode=throughput.
+const ACCS: usize = 8;
+
+/// Process all xs in chunks of each size in `sizes`. Criterion records
+/// the iteration time with xs.len() elements of throughput; the report
+/// normalizes per element to compare the effect of batch size.
+/// An encoder can batch a whole set; a decoder has the candidates in one
+/// peeling wave, often far fewer.
+fn batched<T, R>(
+    g: &mut BenchmarkGroup<WallTime>,
+    name: &str,
+    sizes: &[usize],
+    xs: &[T],
+    f: impl Fn(&[T]) -> R,
+) {
+    g.throughput(Throughput::Elements(xs.len() as u64));
+    for &n in sizes {
+        g.bench_function(format!("{name}/mode=batch,n={n}"), |bn| {
+            bn.iter(|| {
+                for ch in xs.chunks(n) {
+                    black_box(f(black_box(ch)));
+                }
+            })
+        });
+    }
+}
+
+/// Folds `step` over xs, one accumulator (latency) and ACCS (throughput).
+fn accumulate<G: Group, T>(
+    g: &mut BenchmarkGroup<WallTime>,
+    name: &str,
+    group: &G,
+    xs: &[T],
+    latency: bool,
+    step: impl Fn(&G::Point, &T) -> G::Point,
+) {
+    g.throughput(Throughput::Elements(xs.len() as u64));
+    if latency {
+        g.bench_function(format!("{name}/mode=latency"), |bn| {
+            bn.iter(|| xs.iter().fold(group.identity(), |acc, a| step(&acc, a)))
+        });
+    }
+    g.bench_function(format!("{name}/mode=throughput"), |bn| {
+        bn.iter(|| {
+            let mut acc = [group.identity(); ACCS];
+            for ch in xs.chunks(ACCS) {
+                for (p, a) in acc.iter_mut().zip(ch) {
+                    *p = step(p, a);
+                }
+            }
+            acc
+        })
+    });
+}
+
+fn family<G: HashToCurve + Negate + Decode>(
+    c: &mut Criterion,
+    fixture: common::families::Fixture<G>,
+) {
+    let name = fixture.family.id();
+    let name = name.as_str();
+    let group = fixture.group;
+    let seed = &fixture.seed;
+    let r = fixture.r;
+    let info = fixture.family.curve;
+    let leading = info.id_model == "binary" && matches!(info.id_field, "109" | "127");
+    let sizes: &[usize] = if leading || name == "edwards.127" {
+        &BATCHES
+    } else {
+        &[N]
+    };
+    // Parameters belong to the verified fixture, not to its display name.
+    eprintln!(
+        "group-fixture\t{name}\tr={r}\tcofactor={}\tautomorphisms={}",
+        info.cofactor, info.automorphisms
+    );
+    let salt = Salted::new(TAG_ITEM, seed);
+    let items = common::items(&[], N);
+    let refs: Vec<&[u8]> = items.iter().map(|x| x.as_slice()).collect();
+    let hs = group.hash_batch(&salt, &refs);
+    let adds = group.prepare_batch(&hs);
+    // Running sums provide accumulator inputs for identity and codec timings.
+    let pts: Vec<G::Point> = adds
+        .iter()
+        .scan(group.identity(), |p, a| {
+            *p = group.add(p, a);
+            Some(*p)
+        })
+        .collect();
+
+    let mut g = c.benchmark_group("h2c");
+    each(&mut g, &format!("{name}/mode=indep"), &refs, |m| {
+        group.hash(&salt, m)
+    });
+    batched(&mut g, name, sizes, &refs, |ms| group.hash_batch(&salt, ms));
+    g.finish();
+
+    let mut g = c.benchmark_group("group.prepare");
+    each(&mut g, &format!("{name}/mode=indep"), &hs, |a| {
+        group.prepare(a)
+    });
+    batched(&mut g, name, sizes, &hs, |a| group.prepare_batch(a));
+    g.finish();
+
+    let mut g = c.benchmark_group("group.add");
+    accumulate(&mut g, name, &group, &adds, true, |p, a| group.add(p, a));
+    g.finish();
+
+    if leading {
+        let mut g = c.benchmark_group("group.sub");
+        accumulate(&mut g, name, &group, &adds, false, |p, a| {
+            group.add(p, &group.neg_addend(a))
+        });
+        g.finish();
+    }
+
+    let mut g = c.benchmark_group("group.neg");
+    each(&mut g, name, &adds, |a| group.neg_addend(a));
+    g.finish();
+
+    let mut g = c.benchmark_group("group.is_identity");
+    each(&mut g, name, &pts, |p| group.is_identity(p));
+    g.finish();
+
+    // A pure cell's sum equals the candidate's addend, but as an accumulator
+    // two updates away from it, so with a scale that is not one; an impure
+    // cell's sum differs, and comparisons can stop at the first coordinate.
+    let pure: Vec<(G::Point, G::Addend)> = adds
+        .iter()
+        .zip(adds.iter().cycle().skip(1))
+        .map(|(a, b)| {
+            let p = group.add(&group.add(&group.identity(), a), b);
+            (group.add(&p, &group.neg_addend(b)), *a)
+        })
+        .collect();
+    let impure: Vec<(G::Point, G::Addend)> = pts
+        .iter()
+        .copied()
+        .zip(adds.iter().copied().cycle().skip(1))
+        .collect();
+    assert!(
+        pure.iter().all(|(p, a)| group.equals_addend(p, a)),
+        "{name}: impure match row"
+    );
+    assert!(
+        !impure.iter().any(|(p, a)| group.equals_addend(p, a)),
+        "{name}: pure mismatch row"
+    );
+    let mut g = c.benchmark_group("group.equals");
+    if leading {
+        each(&mut g, &format!("{name}/mode=match"), &pure, |(p, a)| {
+            group.equals_addend(p, a)
+        });
+    }
+    each(
+        &mut g,
+        &format!("{name}/mode=mismatch"),
+        &impure,
+        |(p, a)| group.equals_addend(p, a),
+    );
+    g.finish();
+
+    let mut g = c.benchmark_group("group.encode");
+    each(&mut g, &format!("{name}/mode=indep"), &pts, |p| {
+        group.encode_point(p)
+    });
+    batched(&mut g, name, sizes, &pts, |ps| group.encode_batch(ps));
+    g.finish();
+
+    let es = group.encode_batch(&pts);
+    let mut g = c.benchmark_group("group.decode");
+    each(&mut g, &format!("{name}/mode=indep"), &es, |e| {
+        group.decode(e)
+    });
+    batched(&mut g, name, sizes, &es, |es| group.decode_batch(es));
+    g.finish();
+}
+
+fn groups(c: &mut Criterion) {
+    struct Bench<'a>(&'a mut Criterion);
+    impl common::families::Visitor for Bench<'_> {
+        fn visit<G: HashToCurve + Negate + Decode>(
+            &mut self,
+            fixture: common::families::Fixture<G>,
+        ) {
+            family(self.0, fixture);
+        }
+    }
+    common::families::Fixtures::new().visit(&mut Bench(c));
+}
+
+criterion_group! {
+    name = benches;
+    config = common::config();
+    targets = groups
+}
+criterion_main!(benches);

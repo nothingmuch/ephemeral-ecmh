@@ -1,15 +1,13 @@
 import json
 import re
-from pathlib import Path
 
 import bench_report
 import bibliography
 import book
 import figures
 import pytest
-from criterion_fixture import read_rows, write_tree
+from criterion_fixture import write_bench
 
-FIXTURE = Path(__file__).parent / "fixtures" / "2026-09-30.tsv"
 BLOB = "https://example.org/r/blob/abc"
 BIB = (
     "@misc{a-2001,\n  author = {Doe, Jane},\n  title = {A},\n  year = {2001},\n}\n"
@@ -170,7 +168,22 @@ def repository(root, published=()):
         (root / "docs" / f"{name}.md").write_text(f"# {name}\n")
     for name in published:
         run = root / "bench-runs" / name
-        write_tree(read_rows(FIXTURE), run / "criterion")
+        n = 1024
+        for g, v in zip(
+            ["group.add", "h2c", "group.prepare", "group.encode", "group.decode"],
+            [10, 100, 20, 30, 40],
+        ):
+            mode = "mode=throughput" if g == "group.add" else f"mode=batch,n={n}"
+            write_bench(
+                run / "criterion",
+                g,
+                f"binary.127/{mode}",
+                None,
+                0.9 * v * n,
+                v * n,
+                1.1 * v * n,
+                {"Elements": n},
+            )
         (run / "meta.json").write_text(json.dumps(META | {"name": name}))
         bench_report.export(run, root / "results" / name)
     return root

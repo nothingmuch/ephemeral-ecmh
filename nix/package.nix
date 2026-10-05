@@ -8,11 +8,12 @@ in
     { toolchains, ... }:
     let
       craneLib = toolchains.stable;
-      # The Cargo sources.
+      # The Cargo sources, and the recorded test fixtures that are not Rust.
       src = lib.fileset.toSource {
         root = ../.;
         fileset = lib.fileset.unions [
           (craneLib.fileset.commonCargoSources ../.)
+          ../tests/fixtures
         ];
       };
 

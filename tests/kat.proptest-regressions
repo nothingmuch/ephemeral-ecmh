@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6f0b0cf4d0c4355790079affc7d016db12a9c4c60b75839fe1003dab27d34383 # shrinks to i = 0, t = Ell(Index(4427218577690292388))
+cc 01d34018e7c8909e1d0f43362c01a018c614afb909e9815a5973e97d2e467310 # shrinks to i = 0, t = Point(Index(0), 15, 128)

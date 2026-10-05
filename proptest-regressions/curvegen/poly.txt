@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc af8af9f585563d8c29e25cc520eb1576ee8bf989131aed91138ba0002d4b25d6 # shrinks to rs = [Fq { a: Fp(1), b: Fp(1) }, Fq { a: Fp(2), b: Fp(1) }], n = Fq { a: Fp(2), b: Fp(326713519535419838) }
