@@ -34,10 +34,11 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 
-use crate::curve::{binary109, binary127, edwards127, weier127};
+use crate::curve::{binary109, binary122, binary127, edwards127, weier127};
 use crate::curvegen::prove::Factor;
 use crate::field::fp127::P;
-use crate::field::{gf2_109, gf2_127};
+use crate::field::gf2_122::gf2_61::{self, MASK61};
+use crate::field::{gf2_109, gf2_122, gf2_127};
 
 type Gen = *mut c_long;
 
@@ -70,10 +71,15 @@ unsafe extern "C" {
     fn mkintmod(x: Gen, y: Gen) -> Gen;
     fn mkvec5(a: Gen, b: Gen, c: Gen, d: Gen, e: Gen) -> Gen;
     fn gmul(x: Gen, y: Gen) -> Gen;
+    fn gadd(x: Gen, y: Gen) -> Gen;
     fn binaire(x: Gen) -> Gen;
     fn gtopoly(x: Gen, v: c_long) -> Gen;
+    fn poleval(x: Gen, y: Gen) -> Gen;
+    fn fetch_user_var(s: *const c_char) -> c_long;
+    fn ffinit(p: Gen, n: c_long, v: c_long) -> Gen;
     fn ffgen(t: Gen, v: c_long) -> Gen;
     fn Fq_to_FF(x: Gen, ff: Gen) -> Gen;
+    fn FFX_roots(f: Gen, ff: Gen) -> Gen;
 
     fn ellinit(x: Gen, d: Gen, prec: c_long) -> Gen;
     fn ellcard(e: Gen, p: Gen) -> Gen;
@@ -88,6 +94,11 @@ struct State {
     g: Gen,
     /// generator of F_2[t]/(t^109 + t^5 + t^4 + t^2 + 1)
     g109: Gen,
+    /// z and u of the GF(2^122) tower, as roots of z^61 + z^23 + z^15 +
+    /// z^5 + 1 and u^2 + u + 1 in a degree-122 field from `ffinit`. Any
+    /// pair of roots embeds the tower; which one PARI returns first does
+    /// not change a count.
+    tower: [Gen; 2],
 }
 
 type Job = Box<dyn FnOnce(&State) + Send>;
@@ -105,6 +116,17 @@ fn bits_poly(v: u128) -> Gen {
 /// A cloned generator of F_2[t]/(f), f given by its bits.
 fn binary_generator(f: u128) -> Gen {
     unsafe { gclone(ffgen(gmul(bits_poly(f), mkintmod(gen_1, stoi(2))), -1)) }
+}
+
+/// Cloned roots z of the base modulus and u of u^2 + u + 1 in GF(2^122).
+fn tower_generators() -> [Gen; 2] {
+    unsafe {
+        // a variable below x in priority, as FFX_roots needs for its field
+        let t = fetch_user_var(c"t".as_ptr());
+        let k = ffgen(ffinit(stoi(2), 122, t), -1);
+        let f61 = 1 << 61 | 1 << 23 | 1 << 15 | 1 << 5 | 1;
+        [f61, 0b111].map(|f| gclone(gel(FFX_roots(bits_poly(f), k), 1)))
+    }
 }
 
 /// Non-negative t_INT below 2^128.
@@ -142,6 +164,7 @@ fn start() -> mpsc::Sender<Job> {
                     p: gclone(int(P)),
                     g: binary_generator(1 << 127 | 1 << 63 | 1),
                     g109: binary_generator(1 << 109 | 1 << 5 | 1 << 4 | 1 << 2 | 1),
+                    tower: tower_generators(),
                 }
             };
             for job in rx {
@@ -189,6 +212,31 @@ fn binary_ell(g: Gen, big_b: u128) -> Gen {
     }
 }
 
+/// a0 + a1 u, from `gf2_122::to_u128`'s a0 | a1 << 64, in PARI's field.
+fn tower_value(s: &State, v: u128) -> Gen {
+    let [z, u] = s.tower;
+    let (a0, a1) = (v & MASK61 as u128, v >> 64);
+    unsafe {
+        gadd(
+            poleval(bits_poly(a0), z),
+            gmul(poleval(bits_poly(a1), z), u),
+        )
+    }
+}
+
+/// y^2 + xy = x^3 + u x^2 + B over GF(2^122), B as `gf2_122::to_u128`.
+fn binary122_ell(s: &State, big_b: u128) -> Gen {
+    let [_, u] = s.tower;
+    unsafe {
+        let b = tower_value(s, big_b);
+        ellinit(
+            mkvec5(gen_1, u, gen_0, gen_0, b),
+            std::ptr::null_mut(),
+            DEFAULTPREC,
+        )
+    }
+}
+
 /// y^2 = x^3 + a2 x^2 + a4 x + a6 over F_p.
 fn fp127_ell(s: &State, a2: u128, a4: u128, a6: u128) -> Gen {
     unsafe {
@@ -221,6 +269,20 @@ impl Count<binary109::Curve> for Pari {
     fn order(&mut self, c: &binary109::Curve) -> u128 {
         let big_b = gf2_109::to_u128(c.big_b);
         run(move |s| to_int(unsafe { ellcard(binary_ell(s.g109, big_b), std::ptr::null_mut()) }))
+    }
+}
+
+impl Count<binary122::Dense> for Pari {
+    fn order(&mut self, c: &binary122::Dense) -> u128 {
+        let big_b = gf2_122::to_u128(c.big_b);
+        run(move |s| to_int(unsafe { ellcard(binary122_ell(s, big_b), std::ptr::null_mut()) }))
+    }
+}
+
+impl Count<binary122::Gls> for Pari {
+    fn order(&mut self, c: &binary122::Gls) -> u128 {
+        let big_b = gf2_61::to_u64(c.big_b).into();
+        run(move |s| to_int(unsafe { ellcard(binary122_ell(s, big_b), std::ptr::null_mut()) }))
     }
 }
 
@@ -290,6 +352,24 @@ mod tests {
             let ab = gf2_109::to_u128(f(a) * f(b));
             let same = run(move |s| unsafe {
                 let x = |v| Fq_to_FF(bits_poly(v), s.g109);
+                gequal(gmul(x(a), x(b)), x(ab)) != 0
+            });
+            assert!(same, "{a:#x} * {b:#x}");
+        }
+    }
+
+    /// `tower_value` is a ring homomorphism from `gf2_122` into PARI's
+    /// field, so `binary122_ell` counts the curve the tower defines.
+    #[test]
+    fn gf2_122_tower_embeds() {
+        let f = |v| gf2_122::from_u128(v);
+        let mut pairs = samples(gf2_122::MASK122);
+        // u * u = u + 1, and z * z^60 = z^61 reduces in the base field
+        pairs.extend([(1 << 64, 1 << 64), (2, 1 << 60)]);
+        for (a, b) in pairs {
+            let ab = gf2_122::to_u128(f(a) * f(b));
+            let same = run(move |s| unsafe {
+                let x = |v| tower_value(s, v);
                 gequal(gmul(x(a), x(b)), x(ab)) != 0
             });
             assert!(same, "{a:#x} * {b:#x}");

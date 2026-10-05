@@ -1,6 +1,6 @@
 # What the Sage KAT generators share: the byte framing of src/hash.rs, the
 # certificate search helpers, the seeds and the `CertKat` emitter. Loaded by
-# sage/kat.sage and kat109.sage, which are run from
+# sage/kat.sage, kat109.sage and kat122.sage, which are run from
 # the repository root:
 #
 #   nix develop .#math -c sage sage/kat<family>.sage > tests/common/kats<family>.rs

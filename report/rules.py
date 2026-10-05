@@ -62,7 +62,7 @@ LAYER_NOTES = {
 # gf2_122-gls, binary122's curves with their constant in GF(2^61) (and
 # gf2_122-gls-lambda, both), or weier127-jacobian, the Weierstrass curves
 # under Jacobian accumulators. xor is the SHA-256-only baseline.
-BINARY = [(127, ""), (109, "")]
+BINARY = [(127, ""), (109, ""), (122, ""), (122, "-gls")]
 ACCUMULATORS = ["", "-lambda", "-w", "-u"]
 # Families of benchmarks that involve no curve or field: the RIBLT
 # mapping's index generators (benches/riblt.rs, riblt.mapping).
@@ -81,7 +81,6 @@ FAMILIES = {
     "ristretto255": ("ristretto255", None),
     "secp256k1": ("secp256k1", None),
 }
-FAMILIES["gf2_122"] = ("gf2_127", 122)
 # How ids spell a family: the first word of the function id's first
 # component, e.g. "binary-u.122-gls" in group.add/binary-u.122-gls/...,
 # "gf2_127" in h2c_parts/gf2_127 t&i/... Each family's name spells it.
@@ -278,6 +277,14 @@ ELEMENTARY = [
         ("per-element",),
     ),
     ("hash to curve", "batched", "hash to curve", "hash to curve", ("batch",)),
+    (
+        "hash to addend",
+        "one at a time",
+        "hash to curve",
+        "hash to addend",
+        ("per-element",),
+    ),
+    ("hash to addend", "batched", "hash to curve", "hash to addend", ("batch",)),
 ]
 # A hash's cell is the fastest construction that yields its output, so the
 # comparison maps' rows compete with try-and-increment's.
@@ -304,6 +311,14 @@ CURVES = [
     "gf2_109-lambda",
     "gf2_109-w",
     "gf2_109-u",
+    "gf2_122",
+    "gf2_122-lambda",
+    "gf2_122-w",
+    "gf2_122-u",
+    "gf2_122-gls",
+    "gf2_122-gls-lambda",
+    "gf2_122-gls-w",
+    "gf2_122-gls-u",
     "edwards127",
     "weier127",
     "weier127-jacobian",
@@ -336,6 +351,24 @@ CURVE_GROUPS = [
             ("gf2_127-lambda", "λ-projective (X:L:Z) accumulators"),
             ("gf2_127-w", "λ-projective, w codec: hashes and decodes to λ-affine"),
             ("gf2_127-u", "unscaled (X:S:Z), w codec, direct addend hashes"),
+        ],
+    ),
+    (
+        "GF(2^122) = GF(2^61)[u], dense constant, 16 bytes",
+        [
+            ("gf2_122", "(X:S:Z:T) extended"),
+            ("gf2_122-lambda", "λ-projective"),
+            ("gf2_122-w", "λ-projective, w codec"),
+            ("gf2_122-u", "unscaled (X:S:Z), w codec"),
+        ],
+    ),
+    (
+        "GF(2^122), constant in GF(2^61) (GLS-shaped), 16 bytes",
+        [
+            ("gf2_122-gls", "(X:S:Z:T) extended"),
+            ("gf2_122-gls-lambda", "λ-projective"),
+            ("gf2_122-gls-w", "λ-projective, w codec"),
+            ("gf2_122-gls-u", "unscaled (X:S:Z), w codec"),
         ],
     ),
     (

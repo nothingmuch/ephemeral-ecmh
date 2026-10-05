@@ -164,6 +164,24 @@ pub mod group {
         binary109_w,
         crate::curve::binary::wcodec::Curve<crate::curve::binary109::M109>
     );
+    family!(binary122, crate::curve::binary122::Dense);
+    family!(
+        binary122_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary122::M122>
+    );
+    family!(binary122_gls, crate::curve::binary122::Gls);
+    family!(
+        binary122_gls_lambda,
+        crate::curve::binary::lambda::Curve<crate::curve::binary122::M122Gls>
+    );
+    family!(
+        binary122_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary122::M122>
+    );
+    family!(
+        binary122_gls_w,
+        crate::curve::binary::wcodec::Curve<crate::curve::binary122::M122Gls>
+    );
     family!(edwards127, crate::curve::edwards127::Curve);
     family!(weier127, crate::curve::weier127::OddCurve);
     family!(
@@ -177,5 +195,13 @@ pub mod group {
     family!(
         binary109_u,
         crate::curve::binary::unscaled::Curve<crate::curve::binary109::M109>
+    );
+    family!(
+        binary122_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary122::M122>
+    );
+    family!(
+        binary122_gls_u,
+        crate::curve::binary::unscaled::Curve<crate::curve::binary122::M122Gls>
     );
 }

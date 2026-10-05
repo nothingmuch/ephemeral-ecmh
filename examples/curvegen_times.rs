@@ -48,11 +48,11 @@ use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, AdmissibleR, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary109, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve,
-    SmallL, Verdict, Weier127,
+    self, Binary109, Binary127, Dense122, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve,
+    Rejection, Sieve, SmallL, Verdict, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error, Policy};
-use ephemeral_ecmh::curvegen::{select109, sieve};
+use ephemeral_ecmh::curvegen::{select109, select122, sieve};
 use ephemeral_ecmh::hash::Salted;
 use std::cell::Cell;
 use std::fs::File;
@@ -329,6 +329,12 @@ fn main() {
     family::<Binary109, _>(o, "gf2_109", "agm", s, Agm, NoFactor, n, v);
     family::<Binary109, _>(o, "gf2_109", "agm+factor", s, Agm, Pari, n, v);
     family::<Binary109, _>(o, "gf2_109", "pari", s, Pari, Pari, n, v);
+    let v = select122::verify_dense;
+    family::<Dense122, _>(o, "gf2_122", "agm", s, Agm, NoFactor, n, v);
+    family::<Dense122, _>(o, "gf2_122", "pari", s, Pari, NoFactor, n, v);
+    let v = select122::verify_gls;
+    family::<Gls122, _>(o, "gf2_122-gls", "agm", s, Agm, NoFactor, n, v);
+    family::<Gls122, _>(o, "gf2_122-gls", "pari", s, Pari, NoFactor, n, v);
     let (v, b) = (select::verify_fp127, l(sieve::EDWARDS127));
     family::<Edwards127, _>(o, "edwards127", "pari+sieve", s, Pari, Pari, b, v);
     let (v, b) = (select::verify_weier127, l(sieve::WEIER127));

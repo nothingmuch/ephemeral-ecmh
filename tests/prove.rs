@@ -8,6 +8,8 @@
 mod kats;
 #[path = "common/kats109.rs"]
 mod kats109;
+#[path = "common/kats122.rs"]
+mod kats122;
 #[path = "common/orders.rs"]
 mod orders;
 
@@ -17,11 +19,11 @@ use std::collections::HashMap;
 
 use ephemeral_ecmh::curve::{binary109, binary127, edwards127, weier127};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary109, Binary127, Edwards127, Factor, Family, NoFactor, NoSieve, Rejection, Sieve,
-    SmallL, Weier127,
+    self, Binary109, Binary127, Dense122, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve,
+    Rejection, Sieve, SmallL, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
-use ephemeral_ecmh::curvegen::{select109, sieve};
+use ephemeral_ecmh::curvegen::{select109, select122, sieve};
 use ephemeral_ecmh::field::gf2_127::to_u128;
 use kats::CertKat;
 use orders::Orders;
@@ -327,6 +329,45 @@ fn rust_alone_certifies_the_binary127_kat_curves() {
         assert_eq!((cert.index, cert.r), (k.index, k.r));
         select::verify_gf2_127(&k.seed, &cert).unwrap();
     }
+}
+
+/// The 122-bit families in Rust alone, by AGM counts and no factoring,
+/// give sage/kat122.sage's certificates to the byte.
+fn check_gf2_122<F: Family>(
+    ks: &[kats122::CertKat],
+    verify: fn(&[u8; 32], &Certificate) -> Result<F::Curve, select::Error>,
+) where
+    Agm: Count<F::Curve>,
+{
+    for k in ks {
+        let (cert, _) = prove::prove::<F>(&k.seed, &mut Agm, &mut NoFactor, &mut NoSieve);
+        assert_eq!((cert.index, cert.r), (k.index, k.r));
+        let kat: Vec<Rejection> = k
+            .rejections
+            .iter()
+            .map(|&(l, p)| (l, p.to_le_bytes()))
+            .collect();
+        assert_eq!(cert.rejections, kat);
+        verify(&k.seed, &cert).unwrap();
+        // proving is deterministic, to the last witness byte
+        let (again, _) = prove::prove::<F>(&k.seed, &mut Agm, &mut NoFactor, &mut NoSieve);
+        assert_eq!(
+            (again.index, again.r, again.rejections),
+            (cert.index, cert.r, cert.rejections)
+        );
+        let f = criteria::find::<F>(&k.seed, &mut Agm, &mut NoSieve);
+        assert_eq!((f.index, f.r), (k.index, k.r));
+    }
+}
+
+#[test]
+fn rust_alone_certifies_the_binary122_kat_curves() {
+    check_gf2_122::<Dense122>(kats122::GF2_122_CERTS, select122::verify_dense);
+}
+
+#[test]
+fn rust_alone_certifies_the_binary122_gls_kat_curves() {
+    check_gf2_122::<Gls122>(kats122::GF2_122_GLS_CERTS, select122::verify_gls);
 }
 
 /// Rust alone certifies binary109's KAT curves: AGM counts, no `Factor`.

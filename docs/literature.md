@@ -39,7 +39,9 @@ the same distinctions.
   faster with the negation map and $\sqrt{2m}$ faster on curves with an
   automorphism group of order $2m$ (Koblitz curves, curves with efficiently
   computable endomorphisms). The report divides the reference work factor by
-  $sqrt{2}$ for the negation map, which every family admits.
+  these factors where they apply: by $\sqrt{2}$ for every family, and by a
+  further $\sqrt{2}$ for the GLS family over $\mathrm{GF}(2^{122})$, whose
+  endomorphism group has order 4.
 - `bernstein-lange-2012`, `bernstein-lange-2013`. With a precomputed table of
   size about $N^{2/3}$, each further discrete logarithm in a group of size $N$
   costs about $N^{1/3}$ operations. A fixed curve would let an attacker amortize
@@ -47,12 +49,45 @@ the same distinctions.
   curve-specific tables; field-level arithmetic and work on the candidate space
   remain reusable. These two papers motivate a curve per namespace.
 
+### Weil descent and index calculus over extension fields
+
+- `gaudry-hess-smart-2002`. The GHS construction: the descent gives a
+  hyperelliptic curve over $\mathrm{GF}(q)$ of genus about $2^{m-1}$, $m$ the
+  "magic number" determined by the minimal polynomial of $\sqrt{b}$ under
+  Frobenius. `sage/ghs.sage` computes $m$ for the binary families and the genus
+  that results.
+- `menezes-qu-2001`. For $n$ prime in $[160, 600]$ the GHS genus is too large
+  for any attack. The degree 127 lies outside that range and is the exceptional
+  small prime degree: 2 has order 7 modulo 127, so $x^{127} - 1$ splits into
+  degree-7 factors over $\mathbb{F}_2$ and the minimal genus is $2^6$, so the
+  descent must be examined for $\mathrm{GF}(2^{127})$.
+- `galbraith-hess-smart-2002`. Isogenous curves have equal order and the
+  attack transfers along isogenies, so the vulnerable set is a union of isogeny
+  classes, not of curves. `sage/ghs122.sage` checks the class, and the $m = 127$
+  statement counts classes.
+- `hess-2003`. Generalizes GHS: with $\sqrt{b} = \gamma_1 \cdot \gamma_2$ for
+  $\gamma_1, \gamma_2$ in the span of a degree-7 factor's kernel and
+  $\mathbb{F}_2$, the descent still has genus 127 or 128. Over
+  $\mathrm{GF}(2^{127})$ this reaches 4537 Frobenius classes, 65 of them of
+  order $2 \cdot \text{prime}$ and so admissible to the certificate, a heuristic
+  $2^{-52}$ of the admissible isogeny classes (Hess's own estimate
+  $s \cdot q^{2d}/(q^{n/2} \cdot n)$ gives $2^{-52.3}$). Accepted without a
+  check: across $T$ epochs the probability is at most $T$ times this heuristic
+  figure, and a descent compromises only its own epoch.
+
 ### Point counting and curve generation
 
 - `schoof-1995`. Schoof's algorithm and the Elkies–Atkin improvements (SEA):
   polynomial-time point counting over any finite field. PARI's `ellsea` runs it
   for the odd-field families, with the Elkies-prime early abort the `pari`
   module uses.
+- `satoh-2000`, `mestre-2000`, `gaudry-2002`. Canonical lifts and Mestre's AGM
+  for characteristic 2: counting a curve over $\mathrm{GF}(2^{127})$ in
+  milliseconds. The Rust `agm` counter is a canonical lift of this kind and
+  PARI's `F2xq_ellcard` is Harley's variant of the AGM; `gaudry-2002` is the
+  comparison that established the method.
+- `satoh-skjernaa-taguchi-2003`. The SST variant of the canonical lift, one
+  of the methods `gaudry-2002` compares; the method implemented is the AGM.
 - `ansi-x9-62-1998`, `rfc5639`, `baigneres-et-al-2015`,
   `lenstra-wesolowski-2017`. Curves derived from public randomness. X9.62's
   verifiably random curves and Brainpool's verifiably pseudo-random ones hash a
@@ -214,5 +249,13 @@ the same distinctions.
   into the addend, against $8M + 2S$ for the implemented incomplete $\lambda$
   formula.
 - `pornin-2023`. The same formulas over
-  $mathrm{GF}(2^{254}) = mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
-  curve.
+  $\mathrm{GF}(2^{254}) = \mathrm{GF}(2^{127})[u]$ (GLS254) and the map to the
+  curve. The $\mathrm{GF}(2^{122}) = \mathrm{GF}(2^{61})[u]$ tower and the GLS
+  family (`binary.122-gls`) test whether this shape transfers at half the size.
+- `galbraith-lin-scott-2009`. GLS curves: over $\mathrm{GF}(q^2)$, quadratic
+  twists of curves defined over $\mathrm{GF}(q)$, with an endomorphism $\psi$,
+  $\psi^2 = -1$. For binary curves, $a = u$ and $B$ in $\mathrm{GF}(2^{61})$, as
+  in `binary.122-gls`. The endomorphism speeds scalar multiplication, which this
+  workload does not perform; what the family gains here is a curve constant in
+  $\mathrm{GF}(2^{61})$, so each multiplication by it costs two word products
+  instead of three. Its rho penalty is in the security section.

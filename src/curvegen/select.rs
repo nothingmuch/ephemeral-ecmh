@@ -66,6 +66,7 @@
 //! The weakness is accepted: under this heuristic the probability is about
 //! 2^-52 per epoch, and by the union bound at most T * 2^-52 across T
 //! epochs; a descent compromises only the epoch whose curve it reaches.
+//! [`super::select109`] and [`super::select122`] discuss GF(2^109) and
 //! GF(2^122).
 
 use super::criteria::{AdmissibleR, Criteria, OrderError};

@@ -40,12 +40,13 @@ use ephemeral_ecmh::curvegen::embedding_degree_ok;
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{Binary127, Edwards127, Family, Weier127};
 use ephemeral_ecmh::curvegen::select::{self, Certificate, Error};
-use ephemeral_ecmh::curvegen::select109;
+use ephemeral_ecmh::curvegen::{select109, select122};
 use std::hint::black_box;
 use std::time::Duration;
 
 use common::families::kats;
 use common::families::kats109;
+use common::families::kats122;
 
 fn setup() {
     assert!(
@@ -170,6 +171,22 @@ fn verify(c: &mut Criterion) {
         &fixtures!(kats109::GF2_109_CERTS),
         select109::accept,
         select109::verify,
+    );
+    family(
+        c,
+        "gf2_122",
+        1 << 122,
+        &fixtures!(kats122::GF2_122_CERTS),
+        select122::accept_dense,
+        select122::verify_dense,
+    );
+    family(
+        c,
+        "gf2_122-gls",
+        1 << 122,
+        &fixtures!(kats122::GF2_122_GLS_CERTS),
+        select122::accept_gls,
+        select122::verify_gls,
     );
 }
 

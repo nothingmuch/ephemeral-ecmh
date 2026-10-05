@@ -56,6 +56,7 @@ pub fn digest_batch<G: HashToCurve + SumBatch + Encode>(
 mod tests {
     use super::*;
     use crate::curve::binary::lambda;
+    use crate::curve::binary122;
     use crate::curve::binary127;
     use crate::curve::edwards127;
     use crate::curve::weier127;
@@ -218,9 +219,8 @@ mod tests {
     }
 
     /// `check_lambda_matches_binary127` for any two accumulators over the
-    /// same curve, points and encodings (a Weierstrass family's projective
-    /// and Jacobian accumulators): digests, and signed running sums of
-    /// prepared addends, agree.
+    /// same curve, points and encodings (a `binary122` family and its λ
+    /// one): digests, and signed running sums of prepared addends, agree.
     fn check_same_digests<G, H>(
         g: G,
         h: H,
@@ -311,7 +311,42 @@ mod tests {
         }
 
         #[test]
+        fn binary122_ecmh(c in binary122::tests::dense::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_gls_ecmh(c in binary122::tests::gls::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_lambda_ecmh(c in binary122::tests::dense::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(lambda::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_gls_lambda_ecmh(c in binary122::tests::gls::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(lambda::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_lambda_matches_binary122(c in binary122::tests::dense::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_same_digests(c, lambda::Curve(c), salt, xs, signs)?;
+        }
+
+        #[test]
+        fn binary122_gls_lambda_matches_binary122_gls(c in binary122::tests::gls::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_same_digests(c, lambda::Curve(c), salt, xs, signs)?;
+        }
+
+        #[test]
         fn binary127_w_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::wcodec::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_w_ecmh(c in binary122::tests::dense::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(crate::curve::binary::wcodec::Curve::new(c), salt, xs, ys, perm)?;
         }
 
@@ -327,6 +362,16 @@ mod tests {
 
         #[test]
         fn binary109_unscaled_ecmh(c in crate::curve::binary109::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_unscaled_ecmh(c in binary122::tests::dense::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary122_gls_unscaled_ecmh(c in binary122::tests::gls::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(crate::curve::binary::unscaled::Curve::new(c), salt, xs, ys, perm)?;
         }
     }

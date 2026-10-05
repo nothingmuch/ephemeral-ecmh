@@ -38,6 +38,10 @@ name = "compare109"
 harness = false
 
 [[bench]]
+name = "compare122"
+harness = false
+
+[[bench]]
 name = "agm"
 harness = false
 

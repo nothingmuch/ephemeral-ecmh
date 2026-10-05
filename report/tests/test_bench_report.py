@@ -28,6 +28,12 @@ EXTRA = [
     ("add", "gf2_109/extended += affine, 8 accumulators", None, 1024),
     ("group.add", "binary-lambda.127/mode=throughput", None, 1024),
     ("group.add", "binary-w.127/mode=throughput", None, 1024),
+    ("group.add", "binary.122/mode=throughput", None, 1024),
+    ("group.add", "binary-lambda.122/mode=throughput", None, 1024),
+    ("group.add", "binary.122-gls/mode=throughput", None, 1024),
+    ("group.add", "binary-lambda.122-gls/mode=throughput", None, 1024),
+    ("group.add", "binary-w.122/mode=throughput", None, 1024),
+    ("group.add", "binary-w.122-gls/mode=throughput", None, 1024),
     # one family's pipeline, through the group traits
     ("h2c", "binary.127/mode=indep", None, 1024),
     ("h2c", "binary.127/mode=batch,n=1024", None, 1024),
@@ -36,6 +42,13 @@ EXTRA = [
     ("group.add", "binary.127/mode=throughput", None, 1024),
     ("group.add", "binary.127/mode=latency", None, 1024),
     # a λ family's hash straight to its addend
+    ("hash_to_curve", "gf2_122-lambda/try-and-increment to (x, λ)", None, 1024),
+    (
+        "hash_to_curve",
+        "gf2_122-lambda/try-and-increment to (x, λ), batched",
+        None,
+        1024,
+    ),
 ]
 
 
@@ -184,6 +197,10 @@ def test_current_suite_is_fully_classified(table):
             ("comparison maps", "gf2_109-lambda", "one map to addend", "per-element"),
         ),
         (
+            "hash_to_curve/gf2_122-gls/pornin map x1, batched",
+            ("comparison maps", "gf2_122-gls", "one map", "batch"),
+        ),
+        (
             "hash_to_curve/edwards127/elligator2 x1",
             ("comparison maps", "edwards127", "one map", "per-element"),
         ),
@@ -237,6 +254,10 @@ def test_current_suite_is_fully_classified(table):
         ),
         # a batch to affine, not a sum
         (
+            "add/gf2_122-gls/normalize, batched",
+            ("group ops", "gf2_122-gls", "normalize", "batch"),
+        ),
+        (
             "agm/order",
             ("curve generation", "gf2_127", "point count (Rust AGM)", "per-element"),
         ),
@@ -257,6 +278,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "group.encode/edwards.127/mode=indep",
             ("group ops", "edwards127", "encode", "per-element"),
+        ),
+        (
+            "group.encode/binary-w.122/mode=batch,n=1024",
+            ("group ops", "gf2_122-w", "encode", "batch"),
         ),
         (
             "group.decode/binary.109/mode=indep",
@@ -293,6 +318,30 @@ def test_current_suite_is_fully_classified(table):
         # riblt.peel's parameters say whether it peels in batches
         # the two XOR baselines are told apart by their hash
         # binary122: GLS constants, λ accumulators, and both
+        (
+            "group.add/binary.122/mode=latency",
+            ("group ops", "gf2_122", "add", "latency"),
+        ),
+        (
+            "group.add/binary.122-gls/mode=throughput",
+            ("group ops", "gf2_122-gls", "add", "throughput"),
+        ),
+        (
+            "group.add/binary-lambda.122/mode=throughput",
+            ("group ops", "gf2_122-lambda", "add", "throughput"),
+        ),
+        (
+            "h2c/binary-lambda.122-gls/mode=batch,n=1024",
+            ("hash to curve", "gf2_122-gls-lambda", "hash to curve", "batch"),
+        ),
+        (
+            "add/gf2_122-gls/extended += affine, 8 accumulators",
+            ("group ops", "gf2_122-gls", "add", "throughput"),
+        ),
+        (
+            "hash_to_curve/gf2_122-lambda/try-and-increment to (x, λ), batched",
+            ("hash to curve", "gf2_122-lambda", "hash to addend", "batch"),
+        ),
         # the F_{p^2} prototypes, and the codecs of the odd fields
         # the Weierstrass curves' Jacobian families
         (
@@ -316,6 +365,10 @@ def test_current_suite_is_fully_classified(table):
         (
             "hash_to_curve/gf2_109-lambda/try-and-increment to (x, λ)",
             ("hash to curve", "gf2_109-lambda", "hash to addend", "per-element"),
+        ),
+        (
+            "h2c_parts/gf2_122-gls t&i/2. test Tr(b/x) (rejected)",
+            ("hash to curve", "gf2_122-gls", "steps: gf2_122-gls t&i", "per-element"),
         ),
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
@@ -345,6 +398,7 @@ def test_both_spellings_name_one_family(old, new):
 @pytest.mark.parametrize(
     "group, function, parameter, operation",
     [
+        ("curvegen/verify_accept", "gf2_122-gls", "3", "accept certificate"),
         (
             "curvegen/find",
             "gf2_127 agm+sieve/index 30",
@@ -365,6 +419,8 @@ def test_curvegen_names_each_family(group, function, parameter, operation):
     [
         ("binary-u.127", "gf2_127-u", "gf2_127", 127),
         ("binary-u.109", "gf2_109-u", "gf2_109", 109),
+        ("binary-u.122", "gf2_122-u", "gf2_122", 122),
+        ("binary-u.122-gls", "gf2_122-gls-u", "gf2_122", 122),
     ],
 )
 @pytest.mark.parametrize("group", ["group.add", "group.decode", "h2c"])
@@ -451,6 +507,16 @@ def test_addend_equality_is_present_in_elementary_table(tmp_path):
     assert "group.equals/binary.127" in rendered
 
 
+def test_variants_keep_their_family_and_base():
+    lam = rules.classify("group.add", "binary-lambda.127/mode=latency", None, True)
+    assert (lam.family, lam.base, lam.bits) == ("gf2_127-lambda", "gf2_127", 127)
+    w = rules.classify("group.add", "binary-w.127/mode=latency", None, True)
+    assert (w.family, w.base, w.bits) == ("gf2_127-w", "gf2_127", 127)
+    gw = rules.classify("group.add", "binary-w.122-gls/mode=latency", None, True)
+    assert (gw.family, gw.bits) == ("gf2_122-gls-w", 122)
+    assert rules.family("gf2_122-gls-w/add")[0] == "gf2_122-gls-w"
+
+
 def test_every_base_has_a_dark_and_a_light_shade():
     assert rules.COLORS.keys() == rules.LIGHT.keys()
     assert (
@@ -524,6 +590,9 @@ def test_no_machine_is_flagged(rendered):
     assert "## Machine\n\nUnknown: no meta.json" in md
 
 
+GLS122 = {"r": str(2**121 + 5), "cofactor": 2, "automorphisms": 4}
+
+
 def test_runs_before_r_was_recorded_still_render(tmp_path):
     root = tmp_path / "criterion"
     write_bench(
@@ -536,11 +605,29 @@ def test_runs_before_r_was_recorded_still_render(tmp_path):
     assert br.fixtures(table, meta) == {"binary.127": {"status": "certified"}}
 
 
+@pytest.mark.parametrize("record", [GLS122, None])
+def test_curve_parameters_are_not_benchmark_results(tmp_path, record):
+    root = tmp_path / "criterion"
+    write_bench(
+        root, "group.add", "binary.122-gls/mode=latency", None, 1, 2, 3, {"Elements": 1}
+    )
+    df, skipped = br.load(root)
+    assert not skipped
+    table = br.tidy(df)
+    meta = {"group_fixtures": {"binary.122-gls": record}} if record else None
+    blocks = br.blocks(table, {}, [], "fixture", meta=meta)
+    md, html = br.to_markdown(blocks), br.to_html(blocks)
+    assert "Curve parameters" not in md and "Curve parameters" not in html
+    assert "Certificate verified" not in md
+
+
 def test_rho_is_sqrt_pi_r_over_2a():
     r = 2**126
     assert br.rho_bits(r, 2) == pytest.approx(math.log2(math.sqrt(math.pi * r / 4)))
     # a further sqrt 2 for an automorphism group of order 4
     assert br.rho_bits(r, 2) - br.rho_bits(r, 4) == pytest.approx(0.5)
+    # docs/ecc_security.md: 59.8 for the GLS family
+    assert f"{br.rho_bits(int(GLS122['r']), GLS122['automorphisms']):.1f}" == "59.8"
 
 
 def test_machine(tmp_path):
@@ -615,6 +702,20 @@ def test_index_lists_the_runs_newest_first(tmp_path):
     assert "| [x86](x86/report/report.md) | 2026-10-03T09:00:00Z | AMD EPYC |" in md
     with pytest.raises(SystemExit, match="no report.html"):
         br.index(tmp_path / "empty")
+
+
+def test_labels_wrap_between_parameters_not_inside_them():
+    s = "binary-lambda.122-gls/d=100,m=200,prefilter=true,batch=false"
+    lines = figures.wrap_label(s, 30).split("\n")
+    assert lines == [
+        "binary-lambda.122-gls/d=100,",
+        "m=200,prefilter=true,",
+        "batch=false",
+    ]
+    assert (
+        figures.wrap_label("gf2/batch affine (tree sum)")
+        == "gf2/batch affine (tree sum)"
+    )
 
 
 def test_raw_tables_tell_operations_apart(tmp_path):

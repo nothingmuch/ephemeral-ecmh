@@ -20,7 +20,9 @@ use super::*;
 use crate::curve::{binary, binary109};
 use crate::curvegen::criteria::AdmissibleR;
 use crate::curvegen::select::Arithmetic;
-use crate::curvegen::select109;
+use crate::curvegen::{select109, select122};
+use select122::{Dense122, Gls122};
+use std::sync::OnceLock;
 
 /// A point of order l on a binary curve of order n = 2 * odd, from hashed
 /// points of the odd part.
@@ -118,10 +120,87 @@ pub fn certificate109(c: Certificate) -> select109::Certificate {
     }
 }
 
+/// sage/kat122.sage's trial bound: labels below it are prime factors.
+const TRIAL122: u32 = 1 << 16;
+
+/// The odd primes below `TRIAL122`.
+fn primes122() -> &'static [u32] {
+    static P: OnceLock<Vec<u32>> = OnceLock::new();
+    P.get_or_init(|| {
+        let mut composite = vec![false; TRIAL122 as usize];
+        (3..TRIAL122)
+            .step_by(2)
+            .filter(|&l| {
+                let prime = !composite[l as usize];
+                if prime {
+                    (l * l..TRIAL122)
+                        .step_by(2 * l as usize)
+                        .for_each(|k| composite[k as usize] = true);
+                }
+                prime
+            })
+            .collect()
+    })
+}
+
+/// m mod l in 64-bit arithmetic, from m's halves: l < 2^16 keeps every
+/// product below 2^32.
+fn rem(m: u128, l: u32) -> u64 {
+    let l = u64::from(l);
+    let (hi, lo) = ((m >> 64) as u64 % l, m as u64 % l);
+    let wrap = (u64::MAX % l + 1) % l;
+    (hi * wrap + lo) % l
+}
+
+/// r = n/2 with sage/kat122.sage's labels: its smallest prime factor below
+/// 2^16, else `Composite` (for a rejection by order) or acceptance, which
+/// requires the embedding degree to exceed `EMBEDDING_MIN`.
+fn verdict122<F: Criteria>(n: u128) -> Verdict {
+    let m = n / 2;
+    if let Some(&l) = primes122().iter().find(|&&l| rem(m, l) == 0) {
+        return Verdict::Reject(l.into());
+    }
+    if !is_prime(m) {
+        return Verdict::Composite(m);
+    }
+    if let Err(reason) = F::check_order(n) {
+        return Verdict::Inadmissible(reason);
+    }
+    Verdict::Accept(m)
+}
+
+macro_rules! binary122_family {
+    ($name:ident) => {
+        impl Family for $name {
+            fn verdict(n: u128) -> Verdict {
+                verdict122::<Self>(n)
+            }
+
+            fn witness(c: &Self::Curve, h: &Salted, j: u32, n: u128, l: u128) -> [u8; 16] {
+                witness_point(c, h, j, n, l).encode()
+            }
+
+            /// Any hashed point: not O, and of odd order dividing n.
+            fn order_witness(c: &Self::Curve, h: &Salted, j: u32, _: u128) -> Option<[u8; 16]> {
+                Some(c.hash_to_curve(h, &msg(j, 0)).encode())
+            }
+        }
+    };
+}
+
+binary122_family!(Dense122);
+binary122_family!(Gls122);
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn primes_below_the_trial_bound() {
+        let p = primes122();
+        assert_eq!((p.len(), p[0], *p.last().unwrap()), (6541, 3, 65521));
+    }
 
     /// The 16-byte adapter decodes a native encoding under a zero pad,
     /// nothing under a nonzero one, and `certificate109` strips the pad.
@@ -150,5 +229,10 @@ mod tests {
         assert_eq!(certificate109(cert).rejections, [(3, enc)]);
     }
 
-    proptest! {}
+    proptest! {
+        #[test]
+        fn rem_matches_u128(m in any::<u128>(), l in 1u32..TRIAL122) {
+            prop_assert_eq!(u128::from(rem(m, l)), m % u128::from(l));
+        }
+    }
 }

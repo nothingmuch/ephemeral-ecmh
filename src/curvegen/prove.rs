@@ -30,6 +30,7 @@ use crate::hash::Salted;
 
 mod gf2;
 pub use crate::curvegen::select::{Binary127, Edwards127, Weier127};
+pub use crate::curvegen::select122::{Dense122, Gls122};
 pub use gf2::{Binary109, certificate109};
 
 pub const TAG_WITNESS: &[u8] = b"ephemeral-ecmh/prove/witness";

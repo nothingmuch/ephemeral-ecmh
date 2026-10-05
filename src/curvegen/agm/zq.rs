@@ -38,6 +38,26 @@ impl Modulus for Gf109 {
     const LOW: &'static [usize] = &[5, 4, 2, 0];
 }
 
+/// crate::field::gf2_122::gf2_61: GF(2^61) = F_2\[z\]/(z^61 + z^23 + z^15 +
+/// z^5 + 1), the base field of the GF(2^122) tower.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gf61;
+
+impl Modulus for Gf61 {
+    const M: usize = 61;
+    const LOW: &'static [usize] = &[23, 15, 5, 0];
+}
+
+/// GF(2^122) = F_2\[z\]/(z^122 + z^6 + z^2 + z + 1): not `field::gf2_122`'s
+/// tower basis, but isomorphic to it by `flat122::ToFlat`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gf122;
+
+impl Modulus for Gf122 {
+    const M: usize = 122;
+    const LOW: &'static [usize] = &[6, 2, 1, 0];
+}
+
 /// Multiplications, squarings and Frobenius matrix products on this
 /// thread, so tests can pin the cost of a count.
 #[cfg(test)]

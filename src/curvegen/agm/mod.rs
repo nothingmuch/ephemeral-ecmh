@@ -1,7 +1,10 @@
-//! Point counting on E_B : y^2 + xy = x^3 + x^2 + B over GF(2^m),
-//! without PARI. The counter is generic over the field's polynomial
-//! basis (`Modulus`); `binary127` and `binary109` have a = 1, the model counted here.
-
+//! Point counting on E_B : y^2 + xy = x^3 + x^2 + B over GF(2^m), so that
+//! a reconciling party can derive the per-namespace curve (select.rs,
+//! select109.rs, select122.rs) without PARI. The counter is generic over
+//! the field's polynomial basis (`Modulus`); `binary127` and `binary109`
+//! have a = 1, the model counted here. `binary122` has a = u: a GLS curve
+//! is counted through its subfield curve (`Counter<Gf61>::order`), a dense
+//! one in a flat basis of GF(2^122) (`flat122`).
 //!
 //! Satoh–Skjernaa–Taguchi lifting on the AGM modular equation (Gaudry's
 //! MSST). For the AGM step (a, b) -> ((a + b)/2, sqrt(ab)), the Landen
@@ -35,12 +38,15 @@
 //! The plain AGM iteration (Mestre, Harley) takes a step per bit, each a
 //! 2-adic square root and inverse (~13 multiplications), ~800 in all.
 
+mod flat122;
 mod zq;
 
-pub use zq::{CAP, Frobenius, Gf109, Gf127, Modulus, Zq};
+pub use flat122::{Counter122, ToFlat};
+pub use zq::{CAP, Frobenius, Gf61, Gf109, Gf122, Gf127, Modulus, Zq};
 
-use crate::curve::{binary, binary109, binary127};
+use crate::curve::{binary, binary109, binary122, binary127};
 use crate::curvegen::criteria::Count;
+use crate::field::gf2_122::gf2_61;
 use crate::field::{gf2_109, gf2_127};
 use crate::hash::Salted;
 use std::sync::OnceLock;
@@ -55,6 +61,8 @@ const MASK66: u128 = (1 << 66) - 1;
 const HASSE: u128 = 26087635650665564424;
 /// floor(2 sqrt(2^109)), as in select109.rs.
 const HASSE109: u128 = 50952413380206180;
+/// floor(2 sqrt(2^61)).
+const HASSE61: u128 = 3037000499;
 const TAG_CHECK: &[u8] = b"ephemeral-ecmh/agm/check";
 
 const fn inv_odd(a: u64) -> u64 {
@@ -230,6 +238,30 @@ impl Counter<Gf109> {
     }
 }
 
+impl Counter<Gf61> {
+    /// #E over GF(q^2), q = 2^61, for a GLS curve E : y^2 + xy = x^3 +
+    /// u x^2 + B of `binary122`, from the trace t1 of its subfield curve.
+    ///
+    /// B = beta^4 lies in GF(q), so E_0 : y^2 + xy = x^3 + B is defined
+    /// over GF(q); this counts E_0 there (m = 61 < 66, so `trace` computes
+    /// q/N). Over GF(q^2), E_0 has trace t1^2 - 2q, and E is its quadratic
+    /// twist, as Tr(u) = 1 (`gf2_122::Gf::trace`): #E = q^2 + 1 + t1^2 -
+    /// 2q = (q - 1)^2 + t1^2. The sign of t1 does not enter: a = 1 over
+    /// GF(q) (Tr(1) = 1, m odd) gives the twist of E_0, of trace -t1,
+    /// which over GF(q^2), where Tr(1) = 0, is E_0 again. Nor does the
+    /// choice of B against beta: y^2 + xy = x^3 + beta is E_0 conjugated by
+    /// sigma^-2, with the same trace. t1 is odd, so #E = 2 mod 8.
+    pub fn order(&self, c: &binary122::Gls) -> u128 {
+        let t = self.trace(gf2_61::to_u64(c.big_b).into());
+        assert!(
+            t.unsigned_abs() <= HASSE61,
+            "trace outside the Hasse interval"
+        );
+        let q1 = (1u128 << 61) - 1;
+        checked(c, q1 * q1 + t.unsigned_abs().pow(2))
+    }
+}
+
 /// The GF(2^127) counter, built on first use (~750 multiplications).
 pub fn counter() -> &'static Counter<Gf127> {
     static C: OnceLock<Counter<Gf127>> = OnceLock::new();
@@ -240,6 +272,18 @@ pub fn counter() -> &'static Counter<Gf127> {
 pub fn counter109() -> &'static Counter<Gf109> {
     static C: OnceLock<Counter<Gf109>> = OnceLock::new();
     C.get_or_init(Counter::new)
+}
+
+/// The GF(2^61) counter, for `binary122`'s GLS curves, built on first use.
+pub fn counter61() -> &'static Counter<Gf61> {
+    static C: OnceLock<Counter<Gf61>> = OnceLock::new();
+    C.get_or_init(Counter::new)
+}
+
+/// The counter for `binary122`'s dense curves, built on first use.
+pub fn counter122() -> &'static Counter122 {
+    static C: OnceLock<Counter122> = OnceLock::new();
+    C.get_or_init(Counter122::new)
 }
 
 /// Native point-counting backend for the binary candidates.
@@ -253,6 +297,17 @@ impl Count<binary127::Curve> for Agm {
 impl Count<binary109::Curve> for Agm {
     fn order(&mut self, c: &binary109::Curve) -> u128 {
         counter109().order(c)
+    }
+}
+impl Count<binary122::Dense> for Agm {
+    fn order(&mut self, c: &binary122::Dense) -> u128 {
+        counter122().order(c)
+    }
+}
+/// Through the subfield curve over GF(2^61).
+impl Count<binary122::Gls> for Agm {
+    fn order(&mut self, c: &binary122::Gls) -> u128 {
+        counter61().order(c)
     }
 }
 
@@ -299,6 +354,28 @@ mod tests {
         assert_eq!(d[ops::FROB], 69);
     }
 
+    /// At m = 61 < 66, t = g + 2^61 g^-1 mod 2^66 for the unit root g, and
+    /// the second term is nonzero. Traces of y^2 + xy = x^3 + B over
+    /// GF(2)[z]/(z^61 + z^23 + z^15 + z^5 + 1) from PARI's ellcard, two of
+    /// each sign, for the signed reconstruction from t mod 2^66.
+    #[test]
+    fn trace_at_m61_adds_q_over_n() {
+        let c = counter61();
+        let pari: [(u128, i128); 4] = [
+            (0x2, -1061914623),
+            (0x3, 444951285),
+            (0x6, 2670774273),
+            (0x9, -1422662539),
+        ];
+        for (b, t) in pari {
+            let g = c.unit_root(&c.lift(b));
+            let q_g = (inv_mod66(g) << 61) & MASK66;
+            assert_ne!(q_g, 0);
+            assert_eq!((g + q_g) & MASK66, t as u128 & MASK66, "B = {b:#x}");
+            assert_eq!(c.trace(b), t, "B = {b:#x}");
+        }
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(16))]
 
@@ -318,6 +395,17 @@ mod tests {
             let n = counter109().order(&c);
             prop_assert_eq!(n % 4, 2);
             prop_assert!(n.abs_diff(1 << 109 | 1) <= HASSE109);
+            for p in ps {
+                let o = |k| c.mul(&c.from_affine(&p), k).is_identity();
+                prop_assert!(o(n) && o(n / 2));
+            }
+        }
+
+        #[test]
+        fn order_gls_kills_points((c, ps) in binary122::tests::gls::curve_and_points(2)) {
+            let n = counter61().order(&c);
+            prop_assert_eq!(n % 8, 2);
+            prop_assert!(n.abs_diff(1 << 122 | 1) <= 1 << 62);
             for p in ps {
                 let o = |k| c.mul(&c.from_affine(&p), k).is_identity();
                 prop_assert!(o(n) && o(n / 2));

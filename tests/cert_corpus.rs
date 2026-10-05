@@ -9,9 +9,11 @@
 mod kats;
 #[path = "common/kats109.rs"]
 mod kats109;
+#[path = "common/kats122.rs"]
+mod kats122;
 
 use ephemeral_ecmh::curvegen::select::{Certificate, Error};
-use ephemeral_ecmh::curvegen::{select, select109};
+use ephemeral_ecmh::curvegen::{select, select109, select122};
 
 /// A malformation applied to a valid (seed, certificate).
 #[derive(Clone, Copy, Debug)]
@@ -152,6 +154,7 @@ fn cert14(index: u32, r: u128, rejections: &[(u128, u128)]) -> Certificate<14> {
 const P127: u128 = (1 << 127) - 1;
 const Q127: u128 = 1 << 127;
 const Q109: u128 = 1 << 109;
+const Q122: u128 = 1 << 122;
 
 #[test]
 fn malformed_certificates_keep_their_outcomes() {
@@ -196,6 +199,20 @@ fn malformed_certificates_keep_their_outcomes() {
         kats109::GF2_109_CERTS,
         cert14,
         select109::verify
+    );
+    family!(
+        "gf2_122",
+        Q122,
+        kats122::GF2_122_CERTS,
+        cert16,
+        select122::verify_dense
+    );
+    family!(
+        "gf2_122_gls",
+        Q122,
+        kats122::GF2_122_GLS_CERTS,
+        cert16,
+        select122::verify_gls
     );
 
     let got = format!("{HEADER}{}\n", out.join("\n"));

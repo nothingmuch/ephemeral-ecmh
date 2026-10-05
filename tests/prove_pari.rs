@@ -5,6 +5,8 @@
 mod kats;
 #[path = "common/kats109.rs"]
 mod kats109;
+#[path = "common/kats122.rs"]
+mod kats122;
 #[path = "common/orders.rs"]
 mod orders;
 use ephemeral_ecmh::curve::{binary127, edwards127, weier127};
@@ -12,10 +14,11 @@ use ephemeral_ecmh::curvegen::agm::Agm;
 use ephemeral_ecmh::curvegen::criteria::{self, Count, Criteria};
 use ephemeral_ecmh::curvegen::pari::{self, Pari};
 use ephemeral_ecmh::curvegen::prove::{
-    self, Binary109, Edwards127, Factor, Family, NoSieve, Sieve, SmallL, Verdict, Weier127,
+    self, Binary109, Dense122, Edwards127, Factor, Family, Gls122, NoFactor, NoSieve, Sieve,
+    SmallL, Verdict, Weier127,
 };
 use ephemeral_ecmh::curvegen::select::{self, Certificate};
-use ephemeral_ecmh::curvegen::{select109, sieve};
+use ephemeral_ecmh::curvegen::{select109, select122, sieve};
 use ephemeral_ecmh::field::fp127::Fp;
 use ephemeral_ecmh::field::gf2_127::from_u128;
 use ephemeral_ecmh::hash::Salted;
@@ -116,6 +119,20 @@ fn gf2_109_kats() {
     }
 }
 
+/// The 122-bit families with PARI's counts and no factoring.
+#[test]
+fn gf2_122_kats() {
+    let cheapest = |ks: &'static [kats122::CertKat]| ks.iter().min_by_key(|k| k.index).unwrap();
+    let k = cheapest(kats122::GF2_122_CERTS);
+    let (cert, _) = prove::prove::<Dense122>(&k.seed, &mut Pari, &mut NoFactor, &mut NoSieve);
+    assert_eq!((cert.index, cert.r), (k.index, k.r));
+    select122::verify_dense(&k.seed, &cert).unwrap();
+    let k = cheapest(kats122::GF2_122_GLS_CERTS);
+    let (cert, _) = prove::prove::<Gls122>(&k.seed, &mut Pari, &mut NoFactor, &mut NoSieve);
+    assert_eq!((cert.index, cert.r), (k.index, k.r));
+    select122::verify_gls(&k.seed, &cert).unwrap();
+}
+
 /// A certificate is a function of the seed: proving twice, and counting
 /// by the AGM or by PARI under the same factor backend, give the same
 /// index, r, labels and encoded witnesses.
@@ -142,12 +159,30 @@ fn gf2_certificates_are_deterministic_and_counter_independent() {
         .min_by_key(|k| k.index)
         .unwrap();
     same_certificates::<Binary109>(&k.seed, &mut Pari);
+    let cheapest = |ks: &'static [kats122::CertKat]| {
+        let k = ks.iter().filter(|k| k.index > 0).min_by_key(|k| k.index);
+        k.unwrap().seed
+    };
+    same_certificates::<Dense122>(&cheapest(kats122::GF2_122_CERTS), &mut NoFactor);
+    same_certificates::<Gls122>(&cheapest(kats122::GF2_122_GLS_CERTS), &mut NoFactor);
 }
 
 #[test]
 fn counts_match_gf2_109_kats() {
     for k in kats109::GF2_109_CERTS {
         let c = select109::candidate;
+        check_binary_kat(&k.seed, k.index, k.r, k.rejections, c);
+    }
+}
+
+#[test]
+fn counts_match_gf2_122_kats() {
+    for k in kats122::GF2_122_CERTS {
+        let c = select122::dense_candidate;
+        check_binary_kat(&k.seed, k.index, k.r, k.rejections, c);
+    }
+    for k in kats122::GF2_122_GLS_CERTS {
+        let c = select122::gls_candidate;
         check_binary_kat(&k.seed, k.index, k.r, k.rejections, c);
     }
 }
