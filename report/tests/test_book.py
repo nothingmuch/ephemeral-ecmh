@@ -224,7 +224,7 @@ def test_each_published_run_is_a_chapter_of_evidence(tmp_path):
         "(48a229cea 2026-09-01) with RUSTFLAGS -C target-cpu=apple-m4, in the "
         "full profile.\n\n"
     )
-    assert "box.local" not in text
+    assert "## Families compared" in text and "box.local" not in text
     # the grids shaded, as the report's introduction states
     assert '<table class="grid">' in text and "background:" in text
     light = re.findall(r'<img class="fig-light" src="([^"]+)"', text)

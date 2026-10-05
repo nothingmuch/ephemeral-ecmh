@@ -57,3 +57,33 @@ fn registry_retains_the_recorded_group_inventory() {
     Fixtures::new().visit(&mut inventory);
     assert_eq!(inventory.0, recorded);
 }
+
+/// The ristretto255 wrapper of the RIBLT comparison rows reconciles 50
+/// differences in 100 cells, under both purity-test orders.
+#[test]
+fn ristretto255_wrapper_peels_a_difference() {
+    use common::ristretto::Ristretto255;
+    use ephemeral_ecmh::riblt::{Peel, Riblt};
+    let r = Riblt::new(Ristretto255, &[7; 32]);
+    let (c, a, b) = (
+        common::items(b"c", 100),
+        common::items(b"a", 30),
+        common::items(b"b", 20),
+    );
+    let mut cells = r.cells(100);
+    r.encode(&mut cells, &[c.clone(), a.clone()].concat(), 1);
+    r.encode(&mut cells, &[c, b.clone()].concat(), -1);
+    for prefilter in [false, true] {
+        let how = Peel {
+            prefilter,
+            batch: !prefilter,
+        };
+        let (mut x, mut y) = r.peel(&mut cells.clone(), how).expect("stalled");
+        x.sort();
+        y.sort();
+        let (mut a, mut b) = (a.clone(), b.clone());
+        a.sort();
+        b.sort();
+        assert_eq!((x, y), (a, b));
+    }
+}

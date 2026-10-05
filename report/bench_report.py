@@ -4,6 +4,8 @@
   nix run .#bench-report -- --export bench-runs/ID results/ID
   nix run .#bench-report -- --index runs/
   BENCH --list | sed 's/: benchmark$//' | nix run .#bench-report -- --check-ids
+  riblt --list | sed 's/: benchmark$//' | nix run .#bench-report -- --riblt-plan CRITERION
+  group --list | sed 's/: benchmark$//' | nix run .#bench-report -- --group-plan CRITERION
 
 Reads criterion's <group>/<function>[/<parameter>]/new/{benchmark,estimates}.json,
 or in its place a run's compact form (--export), maps each id to facet axes
@@ -25,6 +27,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import figures
 import pandas as pd
@@ -38,12 +41,43 @@ from figures import (
     dark_twin,
     fmt_time,
     plot_elementary,
+    plot_insert,
     plot_layer,
     plot_selection,
 )
-from tables import PLAIN, Col, Grid, Row
+from tables import PLAIN, PLAIN_FACTOR, PLAIN_TIME, Col, Grid, Row
+
+
+class Load(NamedTuple):
+    """How many cells an item is inserted into: k."""
+
+    key: str  # the cost tables' column
+    label: str
+    k: float
+
+
+def mapping_degree(m: int) -> float:
+    """The cells an item maps to among the first m, on average: the RIBLT
+    mapping (src/riblt.rs) includes cell i with probability 1 / (1 + i/2),
+    which sums to 2(H_{m+1} − 1)."""
+    return 2 * sum(1 / j for j in range(2, m + 2))
+
+
+def riblt_loads(ms) -> list[Load]:
+    """A RIBLT's inserts at each of the coded-symbol counts ms."""
+    return [
+        Load(f"m={m}", f"$m = {m}$: $k = {mapping_degree(m):.2f}$", mapping_degree(m))
+        for m in ms
+    ]
+
+
+def fixed_loads(ks) -> list[Load]:
+    return [Load(f"k={k:g}", f"$k = {k:g}$", k) for k in ks]
+
 
 # the table sizes benches/riblt.rs encodes into (its MS)
+DEFAULT_MS = (5, 20, 150, 1350, 12150)
+DEFAULT_LOADS = riblt_loads(DEFAULT_MS)
 
 
 def throughput(t) -> tuple[int | None, float | None]:
@@ -239,10 +273,299 @@ def check_ids(lines) -> list[str]:
     return [i for i in (ln.strip() for ln in lines) if i and not classifiable(i)]
 
 
+def h2c_token(t: pd.DataFrame, bench: str | None) -> str | None:
+    """The h2c= parameter of benches/riblt.rs naming the construction a
+    measured hash benchmark times, or None if RIBLT has no such parameter."""
+    if bench is None:
+        return None
+    row = t[t.full_id == bench.split(", in batches of ")[0]]
+    if row.empty:
+        return None
+    row = row.iloc[0]
+    for token, (layer, op, pattern) in rules.H2C.items():
+        if (
+            row.layer == layer
+            and row.operation == op
+            and re.search(pattern, row.full_id)
+        ):
+            return token
+    return None
+
+
+def riblt_plan(
+    t: pd.DataFrame, ids, load: str = "m=1350"
+) -> dict[str, tuple[str, str]]:
+    """How benches/riblt.rs is to time each family the listed ids offer
+    under several hash constructions: (h2c, scope). The construction is the
+    one whose modeled insertion (pipeline_cost) at `load` costs least among
+    those RIBLT offers; the scope follows that cost's ratio to the least of
+    any family, by rules.RIBLT_SCOPES. A family without a model is absent,
+    and benches/riblt.rs spot-checks it under every construction."""
+    offered: dict[str, set[str]] = {}
+    for i in ids:
+        group, _, rest = i.strip().partition("/")
+        fam, _, param = rest.partition("/")
+        m = re.search(r"(?:^|,)h2c=([^,/]+)", param)
+        if group.startswith("riblt.") and m:
+            offered.setdefault(fam, set()).add(m[1])
+    model = pipeline_cost(t, [ld for ld in DEFAULT_LOADS if ld.key == load])
+    best = {}
+    for fam, tokens in sorted(offered.items()):
+        family = rules.family(fam, "riblt.encode")[0]
+        recipes = model[model.family.astype(str) == family] if len(model) else model
+        costs = {}
+        for _, r in recipes.iterrows():
+            token = h2c_token(t, r["hash bench"])
+            if token in tokens and r[load] < costs.get(token, math.inf):
+                costs[token] = r[load]
+        if costs:
+            token = min(costs, key=costs.get)
+            best[fam] = token, costs[token]
+    if not best:
+        return {}
+    least = min(cost for _, cost in best.values())
+    return {
+        fam: (
+            token,
+            next(
+                (scope for scope, ratio in rules.RIBLT_SCOPES if cost <= ratio * least),
+                "spot",
+            ),
+        )
+        for fam, (token, cost) in best.items()
+    }
+
+
+def group_plan(t: pd.DataFrame, ids, load: str = "m=1350") -> dict[str, str]:
+    """Which families of the listed benches/group.rs ids its second pass
+    (GROUP_PASS=wide) is to time, with their role: those whose modeled
+    insertion (pipeline_cost) at `load` is within rules.RIBLT_SCOPES's
+    buffer ratio of the least ("lead"), and, if none of them is over a
+    field of odd characteristic, the cheapest family that is
+    ("contrast")."""
+    offered = {}
+    for i in ids:
+        group, _, rest = i.strip().partition("/")
+        if group == "h2c" or group.startswith("group."):
+            spelled = rest.partition("/")[0]
+            offered[rules.family(spelled, group)[0]] = spelled
+    model = pipeline_cost(t, [ld for ld in DEFAULT_LOADS if ld.key == load])
+    if not len(model):
+        return {}
+    model = model[model.family.astype(str).isin(offered)]
+    cost = model.groupby(model.family.astype(str))[load].min().dropna().sort_values()
+    if cost.empty:
+        return {}
+    ratio = dict(rules.RIBLT_SCOPES)["buffer"]
+    lead = list(cost.index[cost <= ratio * cost.iloc[0]])
+    plan = {offered[f]: "lead" for f in lead}
+    odd = [f for f in cost.index if rules.FAMILIES[f][0] != "gf2_127"]
+    if odd and not set(odd) & set(lead):
+        plan[offered[odd[0]]] = "contrast"
+    return plan
+
+
+def _one(rows: pd.DataFrame, what: str):
+    """The one benchmark a cost term reads: with two, which one it reads
+    would depend on their order."""
+    if len(rows) != 1:
+        raise ValueError(f"{what}: {len(rows)} benchmarks, {list(rows.full_id)}")
+    return rows.iloc[0]
+
+
+def sum_ci(terms) -> tuple[float, float, float]:
+    """A weighted sum of independent estimates, [(benchmark or None,
+    weight)], and its interval: each side's half-widths in quadrature, a
+    weighted one scaled, being one estimate counted several times."""
+    terms = [(r, w) for r, w in terms if r is not None]
+    if not terms:
+        return (float("nan"),) * 3
+    v = sum(w * r.value_ns for r, w in terms)
+    lo = math.hypot(*(w * (r.value_ns - r.value_lo_ns) for r, w in terms))
+    hi = math.hypot(*(w * (r.value_hi_ns - r.value_ns) for r, w in terms))
+    return v, v - lo, v + hi
+
+
+def described(r) -> str | None:
+    """A term's benchmark, and its batch size if it batches."""
+    if r is None:
+        return None
+    if r["mode"] != "batch":
+        return r.full_id
+    n = r.batch_n if pd.notna(r.batch_n) else r.elements
+    return f"{r.full_id}, in batches of {n:g}"
+
+
+def comparison_recipe(row):
+    """Known measured output contracts; an unrecognized map supplies no recipe.
+
+    binary/map.rs returns Point, already binary::Accumulate::Addend.
+    Elligator2 returns the family's affine point, and SSWU returns Weier
+    affine: both feed the corresponding group.prepare operation.
+    """
+    if row.layer != rules.EXPERIMENTAL:
+        return None
+    name = str(row.function).split("/", 1)[-1].removesuffix(", batched")
+    field = re.fullmatch(r"gf2_\d+(?:-gls)?(-u|-lambda|-w)?", str(row.family))
+    if field and field[1] is None and name in ("pornin map x1", "pornin map x2"):
+        return f"Pornin {name[-2:]}: hash to addend", False
+    # the w codec's addends are λ-affine, as the λ family's are
+    addend = {"-u": "(u, v)", "-lambda": "(x, λ)", "-w": "(x, λ)"}
+    if field and field[1] and name == f"pornin map x1 to {addend[field[1]]}":
+        return "Pornin x1: hash to addend", False
+    if str(row.family).startswith(("edwards", "twisted")) and name == "elligator2 x1":
+        return "Elligator 2 x1: hash + prepare", True
+    if str(row.family).startswith("weier") and name == "sswu x1":
+        return "SSWU x1: hash + prepare", True
+    return None
+
+
+def recipe_note(recipe):
+    if recipe == "hash + prepare":
+        return ""
+    if recipe == "hash to addend":
+        return "hashed straight to $(x, \\lambda)$: no prepare"
+    if recipe == "hash is the addend":
+        return "hash output added as is: no prepare"
+    if recipe.endswith(": hash to addend"):
+        return recipe + "; output already an addend"
+    return recipe
+
+
+def pipeline_cost(t: pd.DataFrame, loads=DEFAULT_LOADS) -> pd.DataFrame:
+    """Estimate insertion cost from operations with compatible representations.
+
+    The standard recipe uses h2c, group.prepare, and k group.add updates at
+    throughput. A direct hash-to-addend measurement replaces both hashing
+    and preparation; that recipe records its preparation cost as NaN. Each
+    term is exactly one benchmark of its family, construction and mode.
+    Comparison maps retain distinct constructions and use only known output
+    contracts; an already prepared addend needs no separate conversion.
+    The references in rules.HASH_IS_ADDEND hash one item at a time and add
+    the hash output, timed by the compare suite.
+    Every item also takes the salted map digest and walks the mapping's
+    indices below m (riblt.mapping), the same for every family; with
+    either unmeasured at some load, as in runs before they were, no load
+    includes them.
+    Every time X has its interval in "X lo" and "X hi", and each term its benchmark in
+    "<term> bench".
+    """
+    per = t[(t.unit == "ns/elem") & ~t.partial_batch]
+    rows = []
+    mapped = mapping_terms(per, loads)
+
+    def emit(fam, hashing, recipes, add):
+        for recipe, hsh, prep in recipes:
+            row = {"family": fam, "hashing": hashing, "recipe": recipe}
+            sums = {
+                "hash_ns": [(hsh, 1)],
+                "prepare_ns": [(prep, 1)],
+                "add_ns": [(add, 1)],
+            }
+            sums |= {f"{ld.key} map_ns": mapped.get(ld.key, []) for ld in loads}
+            sums |= {
+                ld.key: [(hsh, 1), (prep, 1), (add, ld.k), *mapped.get(ld.key, [])]
+                for ld in loads
+            }
+            cis = {}
+            for key, terms in sums.items():
+                row[key], cis[f"{key} lo"], cis[f"{key} hi"] = sum_ci(terms)
+            benches = {
+                f"{term} bench": described(r)
+                for term, r in (("hash", hsh), ("prepare", prep), ("add", add))
+            } | {
+                f"{ld.key} map bench": "; ".join(
+                    described(r) for r, _ in mapped[ld.key]
+                )
+                for ld in loads
+                if ld.key in mapped
+            }
+            rows.append(row | cis | benches)
+
+    for fam in t.family.cat.categories:
+        f = per[per.family == fam]
+        if fam in rules.HASH_IS_ADDEND:
+            add = f[(f.group == "add") & (f.operation == "add")]
+            add = add[add["mode"] == "throughput"]
+            h = f[(f.group == "hash_to_curve") & (f["mode"] == "per-element")]
+            if not (add.empty or h.empty):
+                h = _one(h, f"{fam} hash")
+                emit(
+                    fam,
+                    "one at a time",
+                    [("hash is the addend", h, None)],
+                    _one(add, f"{fam} add"),
+                )
+            continue
+        add = f[(f.group == "group.add") & (f["mode"] == "throughput")]
+        if add.empty:
+            continue
+        add = _one(add, f"{fam} add")
+        for hashing, mode in (("one at a time", "per-element"), ("batched", "batch")):
+            h = f[(f.group == "h2c") & (f["mode"] == mode)]
+            p = f[(f.group == "group.prepare") & (f["mode"] == mode)]
+            fused = f[(f.operation == "hash to addend") & (f["mode"] == mode)]
+            recipes = []
+            if not (h.empty or p.empty):
+                h, p = _one(h, f"{fam} {mode} hash"), _one(p, f"{fam} {mode} prepare")
+                recipes.append(("hash + prepare", h, p))
+            if not fused.empty:
+                fused = _one(fused, f"{fam} {mode} hash to addend")
+                recipes.append(("hash to addend", fused, None))
+            maps = f[(f.layer == rules.EXPERIMENTAL) & (f["mode"] == mode)]
+            constructions = {}
+            for _, mapping in maps.iterrows():
+                contract = comparison_recipe(mapping)
+                if contract is None:
+                    continue
+                label, needs_prepare = contract
+                constructions.setdefault((label, needs_prepare), []).append(mapping)
+            for (label, needs_prepare), measurements in constructions.items():
+                mapping = _one(pd.DataFrame(measurements), f"{fam} {mode} {label}")
+                if needs_prepare:
+                    preparation = f[(f.group == "group.prepare") & (f["mode"] == mode)]
+                    if preparation.empty:
+                        continue
+                    prep = _one(preparation, f"{fam} {mode} prepare")
+                else:
+                    prep = None
+                recipes.append((label, mapping, prep))
+            emit(fam, hashing, recipes, add)
+    return pd.DataFrame(rows)
+
+
+def mapping_terms(per: pd.DataFrame, loads) -> dict:
+    """Each load's mapping terms, {load key: [(benchmark, 1)]}: the map
+    digest and the walk of rules.MAPPING below its m. Empty unless every
+    load has both, so that no load's estimate counts a part another's
+    leaves out."""
+    m = per[per.group == "riblt.mapping"]
+    digest = m[m.operation == "map digest"]
+    terms = {}
+    for ld in loads:
+        walk = m[m.full_id == f"riblt.mapping/{rules.MAPPING}/item,{ld.key}"]
+        if digest.empty or walk.empty:
+            return {}
+        terms[ld.key] = [
+            (_one(digest, "map digest"), 1),
+            (_one(walk, f"{ld.key} walk"), 1),
+        ]
+    return terms
+
+
 # The point stated in docs/workload.md (Cost in repeated reconciliation): a
 # namespace of n items, d of them new
 # each round, reconciled through m = 1.35 d coded symbols
+ROUND_N, ROUND_D = 10**5, 10**3
+ROUND_M = round(1.35 * ROUND_D)
 # the costs dominance compares; the regimes' estimates are sums of them
+AXES = ["add", "hash + prepare", "encode", "decode"]
+
+
+class Est(NamedTuple):
+    value_ns: float
+    value_lo_ns: float
+    value_hi_ns: float
 
 
 def selection_runs(root: Path) -> pd.DataFrame:
@@ -279,6 +602,151 @@ def selection(root: Path) -> pd.DataFrame:
         )
         .reset_index()
     )
+
+
+def decision(pipeline, elem, fixed, chosen) -> pd.DataFrame:
+    """One row per family with a batched insertion estimate: log2 rho from
+    its recorded fixture, the costs AXES names, the two regimes' estimates
+    at ROUND_N, ROUND_D, curve selection, and the families that dominate it.
+    A missing term leaves its estimates NaN rather than smaller."""
+    m, k = ROUND_M, mapping_degree(ROUND_M)
+    rho = {
+        rules.family(name)[0]: rho_bits(int(rec["r"]), rec["automorphisms"])
+        for name, rec in fixed.items()
+        if rec and "r" in rec
+    }
+    sel = chosen.set_index("family")
+    p = pipeline[pipeline.hashing == "batched"].copy()
+    if p.empty:
+        return pd.DataFrame()
+    p["hp"] = p.hash_ns + p.prepare_ns.fillna(0)
+    rows = []
+    for fam, recs in p.groupby(p.family.astype(str), sort=False):
+        r = recs.loc[recs.hp.idxmin()]
+
+        def est(key, r=r):
+            return Est(r[key], r[f"{key} lo"], r[f"{key} hi"])
+
+        hp = [(est("hash_ns"), 1)]
+        benches = {"add": r["add bench"], "hash + prepare": r["hash bench"]}
+        if pd.notna(r.prepare_ns):
+            hp.append((est("prepare_ns"), 1))
+            benches["hash + prepare"] += "; " + r["prepare bench"]
+        add = est("add_ns")
+        cell = {}
+        for op in ("encode", "decode"):
+            e = elem[(elem.curve == fam) & (elem.operation == f"{op}, batched")]
+            cell[op] = (
+                Est(*e.iloc[0][["value_ns", "value_lo_ns", "value_hi_ns"]])
+                if len(e)
+                else None
+            )
+            benches[op] = e.iloc[0].bench if len(e) else None
+        terms = {
+            "add": [(add, 1)],
+            "hash + prepare": hp,
+            "encode": [(cell["encode"], 1)],
+            "decode": [(cell["decode"], 1)],
+            "retained": [*hp, (add, k)],
+            "round": [
+                (add, ROUND_N * k),
+                *((e, w * ROUND_D) for e, w in hp),
+                (cell["encode"], m),
+                (cell["decode"], m),
+            ],
+        }
+        c = rules.curve(fam)
+        row = {
+            "family": fam,
+            "recipe": r.recipe,
+            "rho": rho.get(fam, float("nan")),
+            "counting tools": rules.COUNTING_TOOLS.get(c, ""),
+        }
+        for key, ts in terms.items():
+            if any(e is None for e, _ in ts):
+                row[key] = row[f"{key} lo"] = row[f"{key} hi"] = float("nan")
+            else:
+                row[key], row[f"{key} lo"], row[f"{key} hi"] = sum_ci(ts)
+        row |= {f"{key} bench": b for key, b in benches.items()}
+        for key in ("find", "verify"):
+            row[key] = sel.at[c, f"{key}_s"] * 1e9 if c in sel.index else float("nan")
+        row["seeds"] = sel.at[c, "seeds"] if c in sel.index else 0
+        row["method"] = sel.at[c, "method"] if c in sel.index else None
+        rows.append(row)
+    d = pd.DataFrame(rows).set_index("family")
+    # None: not compared
+    doms = dominators(d)
+    d["dominated by"] = [doms.get(f) for f in d.index]
+    return d
+
+
+def dominators(d: pd.DataFrame) -> dict[str, list[str]]:
+    """For each family, those that dominate it: log2 rho at least its own,
+    and on every one of AXES either the same measurement or faster beyond
+    both confidence intervals, faster on at least one. Overlapping
+    intervals are no evidence either way. A family missing rho, a cost or
+    an interval is not compared."""
+    need = ["rho", *AXES, *(f"{ax} {e}" for ax in AXES for e in ("lo", "hi"))]
+    full = d[d[need].map(lambda v: math.isfinite(v)).all(axis=1)].index
+
+    def faster(b, a, ax):
+        return d.at[b, f"{ax} hi"] < d.at[a, f"{ax} lo"]
+
+    def shared(b, a, ax):
+        return d.at[b, f"{ax} bench"] == d.at[a, f"{ax} bench"]
+
+    return {
+        a: [
+            b
+            for b in full
+            if b != a
+            and d.at[b, "rho"] >= d.at[a, "rho"]
+            and all(faster(b, a, ax) or shared(b, a, ax) for ax in AXES)
+            and any(faster(b, a, ax) for ax in AXES)
+        ]
+        for a in full
+    }
+
+
+def riblt_cost(t: pd.DataFrame, loads=DEFAULT_LOADS) -> pd.DataFrame:
+    """Estimate hash + k additions from each family's minimum measured costs.
+
+    This lower-bound model permits incompatible point representations and
+    omits conversion costs. It is not a measured implementation runtime.
+    """
+    per = t[(t.unit == "ns/elem") & ~t.partial_batch]
+    hashes = per[
+        ((per.layer == "hash to curve") & (per.operation == "hash to curve"))
+        | (per.layer == rules.EXPERIMENTAL)
+    ]
+    adds = per[
+        (per.layer == "group ops") & (per.operation == "add") & (per["mode"] != "batch")
+    ]
+    rows = []
+    for fam in t.family.cat.categories:
+        h, a = hashes[hashes.family == fam], adds[adds.family == fam]
+        if h.empty or a.empty:
+            continue
+        add = a.loc[a.value_ns.idxmin()]
+        variants = [
+            ("one at a time", h[h["mode"] != "batch"]),
+            ("batched", h[h["mode"] == "batch"]),
+        ]
+        for hashing, hh in variants:
+            if hh.empty:
+                continue
+            hsh = hh.loc[hh.value_ns.idxmin()]
+            row = {
+                "family": fam,
+                "hashing": hashing,
+                "hash": hsh.label,
+                "hash_ns": hsh.value_ns,
+                "add": add.label,
+                "add_ns": add.value_ns,
+            }
+            row.update({ld.key: hsh.value_ns + ld.k * add.value_ns for ld in loads})
+            rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def elementary(t: pd.DataFrame) -> pd.DataFrame:
@@ -426,9 +894,173 @@ def elementary_grid(e: pd.DataFrame, fields: bool) -> Grid:
     return Grid(cols, groups, corner="field" if fields else "curve")
 
 
+def insert_grid(p: pd.DataFrame, loads, hashing: str) -> Grid:
+    """Per-item cost of inserting into k cells, from pipeline_cost: its
+    parts, then their sums for each k. Each measured compatible map or
+    direct hash-to-addend construction gets its own recipe row."""
+    p = p[p.hashing == hashing]
+    mode = "batched" if hashing == "batched" else "alone"
+    cols = [
+        Col("hash_ns", "per item, once", f"hash ({mode})"),
+        Col("prepare_ns", "per item, once", f"prepare ({mode})"),
+        Col("add_ns", "per cell", "add (throughput)"),
+    ] + [Col(ld.key, "per item, into k cells", ld.label) for ld in loads]
+    have = set(p.family.astype(str))
+    groups = grouped(rules.CURVE_GROUPS, have)
+    for _, rows in groups:
+        for row in list(rows):
+            recs = p[p.family.astype(str) == row.label]
+            recs = recs.sort_values("recipe", key=lambda s: s != "hash + prepare")
+            at = rows.index(row)
+            for n, (_, r) in enumerate(recs.iterrows()):
+                target = row
+                if r.recipe != "hash + prepare":
+                    note = recipe_note(r.recipe)
+                    marks = row.marks | rules.OTHER_HARNESS
+                    if n:
+                        target = Row(row.label, note, marks=marks)
+                        rows.insert(at + n, target)
+                    else:
+                        row.note, row.marks = note, marks
+                target.values = {c.key: r[c.key] for c in cols}
+                target.cis = {c.key: (r[f"{c.key} lo"], r[f"{c.key} hi"]) for c in cols}
+                target.tips = {
+                    f"{term}_ns": r[f"{term} bench"]
+                    for term in ("hash", "prepare", "add")
+                    if isinstance(r[f"{term} bench"], str)
+                } | {
+                    ld.key: r[f"{ld.key} map bench"]
+                    for ld in loads
+                    if isinstance(r.get(f"{ld.key} map bench"), str)
+                }
+                if pd.isna(r.prepare_ns):
+                    target.values["prepare_ns"] = "in the hash"
+    return Grid(cols, groups, corner="curve")
+
+
 def _tex_int(n: int) -> str:
     # in math a bare comma is punctuation and spaces the digits after it
     return f"{n:,}".replace(",", "{,}")
+
+
+def dominance_label(dom: list[str] | None) -> str:
+    return "not compared" if dom is None else ", ".join(dom) or "none"
+
+
+def decision_grid(d: pd.DataFrame) -> Grid:
+    """decision's rows, grouped by field as the other tables are."""
+    k = mapping_degree(ROUND_M)
+    cols = [
+        Col("rho", "security", "$\\log_2$ rho", PLAIN),
+        Col("add", "per cell", "add"),
+        Col("encode", "per cell", "encode"),
+        Col("decode", "per cell", "decode"),
+        Col("hash + prepare", "per new item", "hash + prepare"),
+        Col("retained", "per new item", f"sums retained, $k = {k:.2f}$"),
+        Col(
+            "round",
+            "per party and round",
+            f"sums rebuilt, $n = {_tex_int(ROUND_N)}$, $d = {_tex_int(ROUND_D)}$",
+        ),
+        # means over seeds, with no interval: shown, never marked best or tied
+        Col("find", "curve selection", "find", PLAIN_TIME),
+        Col("verify", "curve selection", "verify", PLAIN_TIME),
+        Col("method", "curve selection", "measured method", PLAIN),
+        Col("counting tools", "curve selection", "available tools", PLAIN),
+        Col("dominated by", "dominated by", kind=PLAIN),
+    ]
+    groups = grouped(rules.CURVE_GROUPS, set(d.index))
+    for _, rows in groups:
+        for row in rows:
+            r = d.loc[row.label]
+            row.values = {c.key: r[c.key] for c in cols}
+            row.values["dominated by"] = dominance_label(r["dominated by"])
+            row.cis = {
+                c.key: (r[f"{c.key} lo"], r[f"{c.key} hi"])
+                for c in cols
+                if f"{c.key} lo" in r
+            }
+            if r.recipe != "hash + prepare":
+                row.note += "; " + recipe_note(r.recipe)
+            row.tips = {
+                ax: r[f"{ax} bench"] for ax in AXES if isinstance(r[f"{ax} bench"], str)
+            }
+            # the summed estimates name their terms' benchmarks too
+            bench = {ax: row.tips.get(ax, "not measured") for ax in AXES}
+            row.tips["retained"] = f"{bench['hash + prepare']}; k × ({bench['add']})"
+            row.tips["round"] = (
+                f"n k × ({bench['add']}); d × ({bench['hash + prepare']}); "
+                f"m × ({bench['encode']}; {bench['decode']})"
+            )
+            if r.seeds:
+                row.tips["find"] = f"{r.method}, mean of {r.seeds:g} seeds"
+                row.tips["verify"] = row.tips["find"]
+    return Grid(cols, groups, corner="curve")
+
+
+def batching_grid(p: pd.DataFrame, e: pd.DataFrame) -> Grid:
+    """Compare per-item batching savings for hashing, preparation, and codecs.
+
+    Normalize each saving by the measured per-item inversion saving for
+    that field. The ratio is a timing diagnostic, not an operation count.
+    """
+    inv = e[(e.layer == "field") & (e.facet == "field invert")]
+    inv = {(r.curve, r.variant): r.value_ns for r in inv.itertuples()}
+    p = p[p.recipe == "hash + prepare"]
+    one = p[p.hashing == "one at a time"].set_index("family")
+    bat = p[p.hashing == "batched"].set_index("family")
+    codec = e[(e.layer != "field") & e.facet.isin(["encode", "decode"])]
+    codec = {(r.curve, r.facet, r.variant): r.value_ns for r in codec.itertuples()}
+    steps = [
+        ("hash_ns", "hash to curve"),
+        ("prepare_ns", "prepare"),
+        ("encode", "encode"),
+        ("decode", "decode"),
+    ]
+
+    def times(step, family):
+        if step in ("encode", "decode"):
+            a = codec.get((family, step, "one at a time"))
+            b = codec.get((family, step, "batched"))
+            return a, b
+        if family in one.index and family in bat.index:
+            return one.loc[family, step], bat.loc[family, step]
+        return None, None
+
+    have = set(one.index.astype(str)) & set(bat.index.astype(str))
+    have |= {c for c, _, _ in codec}
+    groups = grouped(rules.CURVE_GROUPS, have)
+    cols = []
+    for step, head in steps:
+        if not any(
+            None not in times(step, r.label) for _, rows in groups for r in rows
+        ):
+            continue
+        cols += [
+            Col((step, "alone"), head, "alone", PLAIN_TIME),
+            Col((step, "batched"), head, "batched"),
+            Col((step, "factor"), head, "faster by", PLAIN_FACTOR),
+            Col((step, "inversions"), head, "inversions shared", PLAIN),
+        ]
+    for _, rows in groups:
+        for row in rows:
+            f = rules.FIELD_OF.get(row.label)
+            i, ib = inv.get((f, "one at a time")), inv.get((f, "batched"))
+            for step, _ in steps:
+                a, b = times(step, row.label)
+                if a is None or b is None:
+                    continue
+                row.values[(step, "alone")] = a
+                row.values[(step, "batched")] = b
+                row.values[(step, "factor")] = a / b
+                if i and ib and i > ib:
+                    n = (a - b) / (i - ib)
+                    row.values[(step, "inversions")] = round(n, 1)
+                    row.tips[(step, "inversions")] = (
+                        f"saves {fmt_time(a - b)} per item; a {f} inversion alone "
+                        f"is {fmt_time(i)}, batched {fmt_time(ib)} per item"
+                    )
+    return Grid(cols, groups, corner="curve")
 
 
 # the steps benches/group.rs times at several batch sizes
@@ -524,6 +1156,19 @@ def display_table(d: pd.DataFrame) -> pd.DataFrame:
             ],
             "unit": d.unit.str.replace("ns/", "per "),
         }
+    )
+
+
+def cost_table(c: pd.DataFrame) -> pd.DataFrame:
+    c = c.copy()
+    for col in c.columns:
+        if col.endswith("_ns") or col.startswith(("k=", "m=")):
+            # a NaN prepare: the hash's output is already the addend
+            c[col] = ["in the hash" if pd.isna(v) else fmt_time(v) for v in c[col]]
+    return c.rename(
+        columns={"hash_ns": "hash", "prepare_ns": "prepare", "add_ns": "add"}
+        if "prepare_ns" in c
+        else {"hash_ns": "hash time", "add_ns": "add time"}
     )
 
 
@@ -701,12 +1346,17 @@ def fixtures(t, meta) -> dict[str, dict]:
 
 def blocks(
     t,
+    costs,
+    loads,
     drawn,
     skipped,
     source,
     elem=None,
     elem_fig=None,
     meta=None,
+    pipeline=None,
+    insert_fig=None,
+    decided=None,
     load=None,
     runs=None,
     selection_fig=None,
@@ -717,6 +1367,8 @@ def blocks(
         "colours and tags."
     )
     b.append(("p", intro))
+    if decided is not None and len(decided):
+        b.extend(decision_blocks(decided))
     b.append(("h2", "Machine"))
     if meta:
         b.append(("table", machine_table(meta)))
@@ -739,6 +1391,59 @@ def blocks(
             )
         )
         b.append(("table", load_table(load)))
+    roles = (meta or {}).get("group_plan") or {}
+    if roles:
+        b.append(("h2", "Group benchmark plan"))
+        b.append(
+            (
+                "p",
+                (
+                    "Which families the group suite's second pass timed. Its "
+                    "first pass timed every family's core rows; from them and "
+                    "the comparison maps, bench-run chose the families whose "
+                    "modeled insertion at $m = 1350$ was within 50% of the "
+                    "cheapest (lead) and, if none of them was over a field of "
+                    "odd characteristic, the cheapest that was (contrast). The "
+                    "second pass added the batch sweep, subtraction and equality "
+                    "on pure cells "
+                    "([[methodology.md#the-group-plan|The group plan]])."
+                ),
+            )
+        )
+        b.append(
+            ("table", pd.DataFrame(list(roles.items()), columns=["family", "role"]))
+        )
+    plan = (meta or {}).get("riblt_plan") or {}
+    if plan:
+        b.append(("h2", "RIBLT benchmark plan"))
+        b.append(
+            (
+                "p",
+                (
+                    "Which RIBLT benchmarks this run generated. Before the RIBLT "
+                    "suite ran, bench-run chose from this run's group and "
+                    "hash-to-curve results, for each family below, the hash its "
+                    "RIBLT benchmarks use and their scope: every sweep (full), each "
+                    "axis's endpoints and middle (buffer), or one point of each "
+                    "benchmark (spot). The plan records what was measured, not a "
+                    "result; the XOR checksums and ristretto255 are timed in full "
+                    "regardless ([[methodology.md#the-riblt-plan|The RIBLT plan]])."
+                ),
+            )
+        )
+        b.append(
+            (
+                "table",
+                pd.DataFrame(
+                    [(f, v.get("h2c"), v.get("scope")) for f, v in plan.items()],
+                    columns=["family", "hash", "scope"],
+                ),
+            )
+        )
+    if pipeline is not None and len(pipeline):
+        b.extend(insert_blocks(pipeline, loads, insert_fig))
+        if elem is not None and len(elem):
+            b.extend(batching_blocks(pipeline, elem, batch_size_grid(t)))
     if runs is not None and len(runs):
         b.extend(selection_blocks(runs, selection_fig, t))
     if elem is not None and len(elem):
@@ -762,6 +1467,8 @@ def blocks(
         if fig:
             b.append(("details", "Figure", [("img", fig)]))
         b.append(("details", f"{len(d)} benchmarks", [("table", display_table(d))]))
+    if len(costs):
+        b.extend(lower_bound_blocks(costs, loads))
     return b
 
 
@@ -834,6 +1541,101 @@ def embedding_share(t: pd.DataFrame) -> str:
     )
 
 
+def decision_blocks(d):
+    m = ROUND_M
+    what = (
+        "Each family's nominal $\\log_2$ rho, this run's costs (addition at "
+        "throughput; hashing, preparation, encoding and decoding batched), the "
+        "two regimes of [[workload.md#cost-in-repeated-reconciliation|Cost in "
+        f"repeated reconciliation]] for a set of $n = 10^5$ items, a set difference "
+        f"of $d = 10^3$ and a sketch of $m = {m}$ cells, in which a new item updates "
+        f"$k = {mapping_degree(m):.2f}$ cells on average, and "
+        "the mean time over seeds to find a curve and verify its certificate. "
+        "Dominance is as defined in "
+        "[[methodology.md#measurement-methodology|Measurement methodology]]."
+    )
+    share = (ROUND_N * mapping_degree(m) * d["add"] / d["round"]).dropna()
+    if len(share):
+        what += (
+            f" Additions are {100 * share.min():.0f} to {100 * share.max():.0f}% "
+            "of each rebuilt estimate."
+        )
+    if d["rho"].isna().all():
+        what += " No fixture's $r$ was recorded, so no family is compared on security."
+    return [("h2", "Families compared"), ("p", what), ("grid", decision_grid(d))]
+
+
+def describe_loads(loads) -> str:
+    return "; ".join(ld.label for ld in loads)
+
+
+def insert_blocks(pipeline, loads, fig=None):
+    what = (
+        "Modeled insertion per item into a sketch of $m$ cells: a hash, a "
+        "prepare, and an addition to each of the $k$ cells the item maps to on "
+        f"average ({describe_loads(loads)}), by compatible recipes "
+        "([[methodology.md#reading-a-run-report|Reading a run report]])."
+    )
+    refs = [f for f in rules.HASH_IS_ADDEND if f in set(pipeline.family.astype(str))]
+    if refs:
+        what += (
+            f" The references ({', '.join(refs)}) have no batched hash: they hash "
+            "one item at a time, add the hash output as is, and are in the figure "
+            "and the second grid."
+        )
+    maps = [
+        ld
+        for ld in loads
+        if f"{ld.key} map_ns" in pipeline and pipeline[f"{ld.key} map_ns"].notna().any()
+    ]
+    if maps:
+        cost = ", ".join(
+            f"{fmt_time(pipeline[f'{ld.key} map_ns'].iloc[0])} at $m = {ld.key[2:]}$"
+            for ld in maps
+        )
+        what += (
+            " Each total also counts, the same for every family, the salted "
+            f"SHA-256 map digest and the {rules.MAPPING} walk through the item's "
+            f"indices below $m$ (riblt.mapping): {cost}. The key XOR and count "
+            "of each cell are not modelled; riblt.cells measures them with the "
+            "rest of the cell updates."
+        )
+    else:
+        what += (
+            " The map digest and the mapping's walk, the same for every family, "
+            "were not timed at every $m$ in this run and are not included."
+        )
+    b = [("h2", "Insertion"), ("p", what)]
+    b.append(("grid", insert_grid(pipeline, loads, "batched")))
+    if fig:
+        b.append(("img", fig))
+    b.append(
+        (
+            "details",
+            "Hashing and preparing one item at a time",
+            [("grid", insert_grid(pipeline, loads, "one at a time"))],
+        )
+    )
+    return b
+
+
+def batching_blocks(pipeline, elem, sweep=None):
+    what = (
+        "Batched against individual time per element. The inversions-shared "
+        "column divides the saving by the difference between individual and "
+        "batched field inversion; it also absorbs allocation and control flow."
+    )
+    b = [
+        ("h2", "Batching"),
+        ("p", what),
+        ("grid", batching_grid(pipeline, elem)),
+    ]
+    if sweep is not None:
+        by_size = "Time per element against batch size."
+        b += [("p", by_size), ("grid", sweep)]
+    return b
+
+
 def elementary_blocks(elem, elem_fig=None):
     what = (
         "The fastest measurement of each operation and mode per family, the "
@@ -865,6 +1667,22 @@ def elementary_blocks(elem, elem_fig=None):
     )
     b.append(("details", "Which bench each cell is", [("table", cells)]))
     return b
+
+
+def lower_bound_blocks(costs, loads):
+    what = (
+        "One hash plus an addition to each of the $k$ cells an item maps to in "
+        f"a sketch of $m$ cells ({describe_loads(loads)}), from each family's "
+        "fastest hash and addition in any representation, without conversions; "
+        "the only estimate for families without group-trait benchmarks."
+    )
+    return [
+        (
+            "details",
+            "Lower bound, every family",
+            [("p", what), ("table", cost_table(costs))],
+        )
+    ]
 
 
 def _md_cell(v) -> str:
@@ -992,7 +1810,7 @@ STYLE = (
 
 
 def analyse(
-    root: Path, out: Path, stat="typical", formats=("png", "svg")
+    root: Path, out: Path, loads=DEFAULT_LOADS, stat="typical", formats=("png", "svg")
 ) -> tuple[pd.DataFrame, list]:
     """Write a run's figures and tables into out, and return its tidy table
     and the blocks of its report, closed by the footer."""
@@ -1020,6 +1838,16 @@ def analyse(
     }
     elem = elementary(t)
     elem_fig = plot_elementary(elem, out, formats, footer) if len(elem) else {}
+    costs = riblt_cost(t, loads)
+    pipeline = pipeline_cost(t, loads)
+    decided = (
+        decision(pipeline, elem, fixtures(t, meta), selection(root))
+        if len(pipeline)
+        else None
+    )
+    insert_fig = (
+        plot_insert(pipeline, loads, out, formats, footer) if len(pipeline) else None
+    )
     runs = selection_runs(root)
     # runs whose curvegen.csv predates proving and its phases have no section
     runs = runs if "prove_count_s" in runs else None
@@ -1030,17 +1858,27 @@ def analyse(
     )
     t.to_csv(out / "tidy.csv", index=False)
     elem.to_csv(out / "elementary.csv", index=False)
+    pipeline.to_csv(out / "riblt_cost.csv", index=False)
+    costs.to_csv(out / "riblt_cost_lower_bound.csv", index=False)
+    if decided is not None and len(decided):
+        labels = decided["dominated by"].map(dominance_label)
+        decided.assign(**{"dominated by": labels}).to_csv(out / "decision.csv")
     coverage(t).to_csv(out / "coverage.csv")
     if meta:
         (out / "meta.json").write_text(published(meta))
     bs = blocks(
         t,
+        costs,
+        loads,
         drawn,
         skipped,
         run_name(root, meta),
         elem,
         elem_fig,
         meta,
+        pipeline,
+        insert_fig,
+        decided,
         machine_load(root),
         runs=runs,
         selection_fig=selection_fig,
@@ -1052,9 +1890,9 @@ def analyse(
 
 
 def report(
-    root: Path, out: Path, stat="typical", formats=("png", "svg")
+    root: Path, out: Path, loads=DEFAULT_LOADS, stat="typical", formats=("png", "svg")
 ) -> pd.DataFrame:
-    t, bs = analyse(root, out, stat=stat, formats=formats)
+    t, bs = analyse(root, out, loads, stat, formats)
     (out / "report.md").write_text(to_markdown(bs))
     (out / "report.html").write_text(to_html(bs))
     print(
@@ -1238,6 +2076,12 @@ def main(argv=None):
         help="write the compact form of the run CRITERION into OUT instead",
     )
     p.add_argument(
+        "--m",
+        default=",".join(map(str, DEFAULT_MS)),
+        help="RIBLT coded-symbol counts, each costing k(m) adds per item",
+    )
+    p.add_argument("--k", help="adds per item instead, for exploration")
+    p.add_argument(
         "--stat", default="typical", choices=["typical", "slope", "mean", "median"]
     )
     p.add_argument("--formats", default="png,svg")
@@ -1247,7 +2091,35 @@ def main(argv=None):
         help="read benchmark ids from stdin, one per line (criterion's --list), "
         "and fail if there are none, or naming those no rule in rules.py classifies",
     )
+    p.add_argument(
+        "--riblt-plan",
+        action="store_true",
+        help="read benchmark ids from stdin and print how benches/riblt.rs is to "
+        "time each RIBLT family, from the group operations CRITERION measured: "
+        "lines of family, h2c parameter and scope, tab-separated (RIBLT_PLAN)",
+    )
+    p.add_argument(
+        "--group-plan",
+        action="store_true",
+        help="read benches/group.rs ids from stdin and print the families its "
+        "second pass is to time, from the first pass CRITERION measured: lines "
+        "of family and role, tab-separated (GROUP_PLAN)",
+    )
     a = p.parse_args(argv)
+    if a.riblt_plan or a.group_plan:
+        flag = "--riblt-plan" if a.riblt_plan else "--group-plan"
+        if a.criterion is None:
+            p.error(f"{flag} reads the measurements under CRITERION")
+        t, _ = load(a.criterion)
+        if not len(t):
+            return
+        if a.riblt_plan:
+            for fam, (token, scope) in riblt_plan(tidy(t), sys.stdin).items():
+                print(f"{fam}\t{token}\t{scope}")
+        else:
+            for fam, role in group_plan(tidy(t), sys.stdin).items():
+                print(f"{fam}\t{role}")
+        return
     if a.check_ids:
         ids = [i for i in (ln.strip() for ln in sys.stdin) if i]
         if not ids:
@@ -1269,7 +2141,12 @@ def main(argv=None):
     if a.export:
         export(a.criterion, a.out)
         return
-    report(a.criterion, a.out, stat=a.stat, formats=tuple(a.formats.split(",")))
+    loads = (
+        fixed_loads(float(k) for k in a.k.split(","))
+        if a.k
+        else riblt_loads(int(m) for m in a.m.split(","))
+    )
+    report(a.criterion, a.out, loads, a.stat, tuple(a.formats.split(",")))
 
 
 if __name__ == "__main__":

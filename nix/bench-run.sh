@@ -17,7 +17,9 @@
 #
 #   meta.json    machine, toolchain, source, the group suite's certified
 #                fixtures (r, cofactor, automorphism group order), and the
-#                RIBLT plan
+#                group and RIBLT plans
+#   group-plan.tsv  with group: the families whose remaining group rows a
+#                second pass times, chosen from the first pass's
 #   riblt-plan.tsv  with riblt: each family's hash and scope, chosen from the
 #                group operations the suites before it timed
 #   load.tsv     the load averages every BENCH_LOAD_INTERVAL seconds
@@ -28,7 +30,7 @@
 #                threads runnable at the sample
 #   bins         a GC root for the executables it timed
 #   criterion/   criterion's output (CRITERION_HOME)
-#   log/SUITE    each suite's output
+#   log/SUITE    each suite's output, log/group-wide the second group pass's
 #   curvegen.csv with curvegen: single-shot searches per seed and family
 #                (examples/curvegen_times.rs), CURVEGEN_SEEDS of them
 #                (default 4 quick, 16 full); all families took about
@@ -46,7 +48,7 @@
 # Nothing builds while anything is timed, and the suites run serially:
 # don't build or bench anything else on the machine meanwhile.
 
-default_suites=(compare compare107 compare109 compare122 compare_fp2 group agm sieve curvegen)
+default_suites=(compare compare107 compare109 compare122 compare_fp2 group riblt agm sieve curvegen)
 profile=quick
 suites=()
 while (($#)); do
@@ -231,6 +233,8 @@ commit=$(<"$bins/source")
 dirty=false
 [[ $commit == *-dirty ]] && dirty=true
 group_fixtures='{}'
+group_plan='{}'
+riblt_plan='{}'
 
 # the 1, 5 and 15 minute load averages and, where the kernel reports it,
 # the threads runnable now other than the reader
@@ -282,12 +286,15 @@ meta() {
     --arg profile "$profile" \
     --arg criterion_args "$criterion_args" \
     --argjson group_fixtures "$group_fixtures" \
+    --argjson group_plan "$group_plan" \
+    --argjson riblt_plan "$riblt_plan" \
     '{id: $id, started: $started, finished: $finished, host: $host,
       os: $os, kernel: $kernel, arch: $arch, cpu: $cpu, cores: $cores,
       memory: $memory, governor: $governor, rustc: $rustc,
       target: $target, rustflags: $rustflags, bins: $bins, target_features: ($target_features | split(",")),
       commit: $commit, dirty: $dirty, suites: ($suites | split(" ")),
-      profile: $profile, criterion_args: $criterion_args, group_fixtures: $group_fixtures}
+      profile: $profile, criterion_args: $criterion_args, group_fixtures: $group_fixtures,
+      group_plan: $group_plan, riblt_plan: $riblt_plan}
      | with_entries(select(.value != ""))' >"$run/meta.json"
 }
 
@@ -302,10 +309,34 @@ trap 'rm -f "$listed"; kill "$sampler" 2>/dev/null || true' EXIT
 idle before
 
 for s in "${suites[@]}"; do
+  if [[ $s == riblt ]]; then
+    # The group operations timed so far choose each family's hash, and how
+    # much of the RIBLT sweeps it gets (report/bench_report.py riblt_plan),
+    # unless RIBLT_PLAN gives another run's riblt-plan.tsv
+    during "riblt plan"
+    if [[ -n ${RIBLT_PLAN-} ]]; then
+      cp "$RIBLT_PLAN" "$run/riblt-plan.tsv"
+    else
+      "$bins/bin/riblt" --bench --list "$@" | sed -n 's/: benchmark$//p' |
+        bench-report --riblt-plan "$CRITERION_HOME" >"$run/riblt-plan.tsv"
+    fi
+    if [[ -s $run/riblt-plan.tsv ]]; then
+      export RIBLT_PLAN=$run/riblt-plan.tsv
+      riblt_plan=$(jq -Rn '[inputs | split("\t")
+        | {key: .[0], value: {h2c: .[1], scope: .[2]}}] | from_entries' "$RIBLT_PLAN")
+      meta
+    else
+      unset RIBLT_PLAN
+      echo "bench-run: no group operations measured to plan RIBLT by;" \
+        "every family under every hash, in full" >&2
+    fi
+  fi
   echo "bench-run: $s" >&2
   during "$s"
-  # --bench, as cargo passes it: criterion times only when it's given
-  "$bins/bin/$s" --bench "$@" 2>&1 | tee "$run/log/$s"
+  # --bench, as cargo passes it: criterion times only when it's given.
+  # Only the group suite reads GROUP_PASS: this is its first pass, every
+  # family's core rows
+  GROUP_PASS=core "$bins/bin/$s" --bench "$@" 2>&1 | tee "$run/log/$s"
   if [[ $s == group ]]; then
     # Read declarations emitted by the executable whose timings were recorded.
     # Missing declarations remain unknown; source revision alone implies none.
@@ -325,6 +356,28 @@ for s in "${suites[@]}"; do
       | map(if (map(.value) | unique | length) == 1 then .[0]
             else error("conflicting group-fixture declarations") end)
       | from_entries' "$run/log/$s")
+    # The first pass and the comparison maps choose the families whose
+    # remaining rows the second pass times (report/bench_report.py
+    # group_plan), unless GROUP_PLAN gives another run's group-plan.tsv
+    during "group plan"
+    if [[ -n ${GROUP_PLAN-} ]]; then
+      cp "$GROUP_PLAN" "$run/group-plan.tsv"
+    else
+      GROUP_PASS=wide "$bins/bin/group" --bench --list "$@" | sed -n 's/: benchmark$//p' |
+        bench-report --group-plan "$CRITERION_HOME" >"$run/group-plan.tsv"
+    fi
+    if [[ -s $run/group-plan.tsv ]]; then
+      group_plan=$(jq -Rn '[inputs | split("\t") | {key: .[0], value: .[1]}]
+        | from_entries' "$run/group-plan.tsv")
+      meta
+      echo "bench-run: group, second pass" >&2
+      during "group wide"
+      GROUP_PASS=wide GROUP_PLAN=$run/group-plan.tsv "$bins/bin/group" --bench "$@" 2>&1 |
+        tee "$run/log/group-wide"
+    else
+      echo "bench-run: no group operations measured to plan the second" \
+        "group pass by" >&2
+    fi
   fi
   meta
 done

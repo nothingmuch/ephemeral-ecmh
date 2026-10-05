@@ -15,6 +15,7 @@ LAYERS = [
     (r"^field$", "field"),
     (r"^(negate|add|group\.\w+)$", "group ops"),
     (r"^(hash_to_curve|h2c|h2c_parts|on_curve)$", "hash to curve"),
+    (r"^riblt\.\w+$", "RIBLT workload"),
     (r"^digest$", "digest"),
     (r"^(curvegen/\w+|agm|zq|sieve/\w+)$", "curve generation"),
 ]
@@ -41,6 +42,9 @@ LAYER_ORDER = [layer for _, layer in LAYERS] + [OTHER]
 LAYER_ORDER.insert(LAYER_ORDER.index("hash to curve") + 1, EXPERIMENTAL)
 # what each layer is, when its benches don't say
 LAYER_NOTES = {
+    "RIBLT workload": "Ratios against Go riblt-ecmh also include the mapping "
+    "generator and the port to Rust, which are not attributed to this project "
+    "(Workload, Comparison with the reference implementations).",
     EXPERIMENTAL: "Maps from digests to points other than try-and-increment, "
     "timed beside it: Pornin's map on binary curves, Elligator 2 on Edwards "
     "curves and simplified SWU on Weierstrass curves, once, and Pornin's map "
@@ -66,9 +70,11 @@ BINARY = [(127, ""), (109, ""), (122, ""), (122, "-gls")]
 ACCUMULATORS = ["", "-lambda", "-w", "-u"]
 # Families of benchmarks that involve no curve or field: the RIBLT
 # mapping's index generators (benches/riblt.rs, riblt.mapping).
-UNGROUPED = {}
+UNGROUPED = {"mapping": ("mapping", None)}
 FAMILIES = {
+    **UNGROUPED,
     "xor": ("xor", None),
+    "xor-siphash": ("xor", None),
     **{
         f"gf2_{bits}{gls}{acc}": ("gf2_127", bits)
         for bits, gls in BINARY
@@ -123,6 +129,8 @@ SPELLINGS = {
     "twisted.64x2": "twisted64x2",
     "twisted.goldilocks2": "twisted-goldilocks2",
     "xor-sha256": "xor",
+    "xor-sha256.64": "xor",
+    "xor-siphash.64": "xor-siphash",
     "sha256": "xor",
     "gf2": "gf2_127",
     "fp": "fp127",
@@ -137,6 +145,26 @@ CONTEXT_SPELLINGS = [
 # groups whose functions name no family: agm and zq only count binary
 # curves; riblt.mapping's functions name index generators
 GROUP_FAMILIES = {"agm": "gf2_127", "zq": "gf2_127", "riblt.mapping": "mapping"}
+
+# Available point-counting tools, not the provenance of a timing. The measured
+# selection method comes from curvegen.csv; Rust also verifies every family's
+# certificate. Sage scripts cover the families without a curvegen_times runner.
+COUNTING_TOOLS = {
+    "gf2_127": "Rust (AGM), PARI",
+    "gf2_109": "Rust (AGM), PARI",
+    "gf2_122": "Rust (AGM), PARI",
+    "gf2_122-gls": "Rust (AGM), PARI",
+    "edwards127": "PARI",
+    "weier127": "PARI",
+    "edwards107": "Sage",
+    "weier107": "Sage",
+    "twisted128": "Sage",
+    "edwards61x2": "PARI",
+    "weier61x2": "PARI",
+    "twisted61x2": "PARI",
+    "twisted64x2": "PARI",
+    "twisted-goldilocks2": "PARI",
+}
 
 
 def curve(family: str) -> str:
@@ -229,6 +257,13 @@ OPERATIONS = [
     (r"^h2c_parts", r"^(?P<algo>[^/]+)/", "steps: {algo}"),
     (r"^on_curve", r"", "x on curve"),
     (r"^digest", r"", "digest"),
+    (r"^riblt\.encode", r"", "encode (hash + cells)"),
+    (r"^riblt\.cells", r"", "cell updates"),
+    (r"^riblt\.peel", r"", "peel, per difference"),
+    (r"^riblt\.stream", r"", "rateless encode and decode, per difference"),
+    (r"^riblt\.mapping", r"/next\b", "mapping, per index"),
+    (r"^riblt\.mapping", r"/item\b", "mapping, per item"),
+    (r"^riblt\.mapping", r"/digest\b", "map digest"),
     (r"^curvegen/verify_accept", r"", "accept certificate"),
     (r"^curvegen/verify_full", r"", "verify certificate"),
     (r"^curvegen/embedding", r"", "embedding-degree bound"),
@@ -315,6 +350,20 @@ ALSO = {
     ("hash to curve", "hash to curve"): ("comparison maps", "one map"),
     ("hash to curve", "hash to addend"): ("comparison maps", "one map to addend"),
 }
+# The constructions benches/riblt.rs hashes by, as its h2c= parameter names
+# them, and the rows that measure each: (layer, operation, id pattern).
+H2C = {
+    "ti": ("hash to curve", "hash to curve", r"^h2c/|try-and-increment(?! to)"),
+    "ti-addend": ("hash to curve", "hash to addend", r"try-and-increment to"),
+    "pornin": (EXPERIMENTAL, "one map", r"pornin"),
+    "pornin-addend": (EXPERIMENTAL, "one map to addend", r"pornin"),
+    "elligator2": (EXPERIMENTAL, "one map", r"elligator2"),
+    "sswu": (EXPERIMENTAL, "one map", r"sswu"),
+}
+# How much of benches/riblt.rs a family gets, by its modeled insertion's ratio
+# to the cheapest family's: every sweep for the leaders, a reduced sweep for
+# the contenders behind them, and one point for the rest ("spot")
+RIBLT_SCOPES = (("full", 1.15), ("buffer", 1.5))
 # the section's columns: fields for the field rows, each coloured as its base
 # field; curves for the rest, each -lambda beside the family it shares its
 # curves with
@@ -331,6 +380,7 @@ FIELDS = {
 }
 CURVES = [
     "xor",
+    "xor-siphash",
     "gf2_127",
     "gf2_127-lambda",
     "gf2_127-w",
@@ -380,6 +430,7 @@ CURVE_GROUPS = [
         "baseline",
         [
             ("xor", "SHA-256 digests XORed: no group, 32 bytes"),
+            ("xor-siphash", "SipHash-2-4 hashes XORed: no group, 8 bytes"),
         ],
     ),
     (
@@ -540,6 +591,10 @@ INCOMPLETE_FAMILIES = {
 }
 # the λ families' hash straight to (x, λ) is timed by the compare suites,
 # not benches/group.rs, which times every other term of an insertion
+OTHER_HARNESS = {
+    "compare suite": "timed by benches/compare*.rs's hash_to_curve group, "
+    "not benches/group.rs"
+}
 
 
 def marks(family: str) -> dict[str, str]:

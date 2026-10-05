@@ -1,7 +1,7 @@
 ---
 type: Chapter
 title: Measurement methodology
-description: How operation latency, throughput, batching, and benchmark provenance are measured and reported.
+description: What the benchmarks measure, the decision table and dominance rule, how to run checks, benchmarks and reports, and how results are published.
 tags: [benchmarks, methodology, nix]
 sources:
   - id: bibliography
@@ -14,7 +14,28 @@ status: draft
 
 # Measurement methodology
 
-The benchmarks report operation latency, throughput with independent accumulators, and batch costs. Batch size and representation conversion are part of the workload. Each result records its source revision, compiler, target features, machine, and measurement method.
+The benchmarks report operation latency, throughput with independent
+accumulators, and batch costs. Batch size and representation conversion are
+part of the workload. A component estimate such as
+
+```text
+hash + prepare + k * add
+```
+
+where $k$ is the number of coded symbols an item maps to, is a sum of separately
+measured operations. The RIBLT workload measures complete executions for
+comparison.
+
+The benchmark report opens with a decision table. For each family it gives the
+nominal rho of [Security considerations](ecc_security.md); the measured cost of
+addition, of hashing and preparation, and of encoding and decoding; the two
+estimates of cost in repeated reconciliation at $n = 10^5$ and
+$d = 10^3$; and the cost of curve selection. One family dominates another if its
+rho is at least as large and, for each of the four operations, it either reads
+the same measurement or is faster beyond both confidence intervals, and it is
+faster on at least one. Families that no other dominates are not thereby ranked
+against each other.
+
 With Nix installed, the checks run from the repository root:
 
 ```sh
@@ -27,11 +48,12 @@ The book builds with:
 nix build .#site
 ```
 
-A group measurement run:
+A group and reconciliation measurement run:
 
 ```sh
-nix run .#bench-run -- --name experiment group
+nix run .#bench-run -- group riblt
 ```
+
 Each run is identified by a fresh UUIDv7, which sorts by start time and needs no
 coordination between machines. The executables come from a Nix derivation built
 for a named target CPU: `bench-bins` is the architecture's default (apple-m4 on
@@ -76,6 +98,34 @@ to the same tables and figures, except that only the default estimate is
 available. The site build renders each run under `results/` as a chapter of
 the book's evidence, whose first paragraph states the commit, machine, build
 and start time recorded in `meta.json`.
+
+## The group plan
+
+The group suite times each family in two passes. The first times what the
+insertion model and the RIBLT plan read: hashing, preparation, encoding and
+decoding in batches of 1024, addition, negation, the identity test, and
+equality on impure cells. The second times, for the families the first pass
+singles out, batches of 8 and 64, subtraction, and equality on pure cells. A
+family is singled out when its modeled insertion at $m = 1350$ (below) is
+within 50% of the least of any family; if none of these is over a field of odd
+characteristic, the cheapest such family is added as a contrast. The plan is
+recorded in `group-plan.tsv` and `meta.json`; `GROUP_PLAN` reuses another
+run's.
+
+## The RIBLT plan
+
+The RIBLT suite times a family under one hash construction and at a scope
+chosen from the group operations of the same run, which the suites before it
+time. For each family, the construction is the one whose modeled insertion,
+`hash + prepare + k * add` or a fused hash to the addend, costs least at
+$m = 1350$ among the constructions the RIBLT benchmarks implement for it. The
+scope follows that cost's ratio to the least of any family: within 15% every
+sweep, within 50% a reduced sweep of each axis's endpoints and middle, and
+otherwise a single point of each benchmark. A new construction therefore enters
+the RIBLT measurements through its group benchmark, without a change of any
+family's default hash. The XOR checksums and ristretto255 reproduce the Go
+reference implementations and are timed in full regardless. The plan is
+recorded in `riblt-plan.tsv` and `meta.json`; `RIBLT_PLAN` reuses another run's.
 
 ## Reading a run report
 

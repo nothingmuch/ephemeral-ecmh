@@ -9,6 +9,8 @@ use ephemeral_ecmh::curvegen::{select, select_fp2, select107, select109, select1
 use ephemeral_ecmh::field::OddField;
 use ephemeral_ecmh::group::{Decode, HashToCurve, Negate};
 
+use super::h2c::Constructions;
+
 #[path = "../../tests/common/kats.rs"]
 pub(crate) mod kats;
 #[path = "../../tests/common/kats107.rs"]
@@ -85,7 +87,7 @@ impl<G> Fixture<G> {
 
 /// A statically dispatched consumer; the timed operations keep their concrete types.
 pub trait Visitor {
-    fn visit<G: HashToCurve + Negate + Decode>(&mut self, fixture: Fixture<G>);
+    fn visit<G: HashToCurve + Negate + Decode + Constructions>(&mut self, fixture: Fixture<G>);
 }
 
 macro_rules! variants {
