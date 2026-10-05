@@ -334,6 +334,7 @@ dependencies = [
  "p3-field",
  "p3-goldilocks",
  "proptest",
+ "rand_chacha",
  "rand_xoshiro",
  "secp256k1",
  "sha2 0.11.0",

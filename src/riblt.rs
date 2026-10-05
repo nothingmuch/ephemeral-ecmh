@@ -10,7 +10,9 @@
 //! The caller supplies the salt used by separate item-hashing and mapping tags.
 //! Each item's mapping is drawn from xoshiro256++ seeded by its salted map
 //! digest. Changing the salt changes both the hash namespace and the mapping
-//! inputs.
+//! inputs. [`Mcg64`], upstream's generator seeded by 64 bits of the digest,
+//! and [`ChaCha8`], riblt-ecmh's, remain available through
+//! [`Riblt::with_prng`] for comparison.
 //!
 //! One `encode` and one `peel` are one round of reconciliation. Over repeated
 //! rounds, as docs/workload.md (Cost in repeated reconciliation) models
@@ -27,8 +29,9 @@ use crate::ecmh::TAG_ITEM;
 use crate::group::{Group, HashToCurve, Negate};
 use crate::hash::Salted;
 use core::marker::PhantomData;
+use rand_chacha::ChaCha8Rng;
+use rand_chacha::rand_core::{RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 
 pub const TAG_MAP: &[u8] = b"ephemeral-ecmh/riblt-map";
 
@@ -37,6 +40,24 @@ pub const TAG_MAP: &[u8] = b"ephemeral-ecmh/riblt-map";
 pub trait Prng: Clone {
     fn seed(digest: &[u8; 32]) -> Self;
     fn next_u64(&mut self) -> u64;
+}
+
+/// The multiplicative congruential generator of yangl1996/riblt, seeded by
+/// the digest's first 8 bytes. Two items whose 64-bit seeds are equal have
+/// equal mappings, so under a known salt such a pair is found after about
+/// 2^32 hashes.
+#[derive(Clone, Copy, Debug)]
+pub struct Mcg64(pub u64);
+
+impl Prng for Mcg64 {
+    fn seed(digest: &[u8; 32]) -> Self {
+        Self(u64::from_le_bytes(digest[..8].try_into().unwrap()))
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_mul(0xda942042e4dd58b5);
+        self.0
+    }
 }
 
 /// xoshiro256++ whose state is the 32-byte digest itself, so equal states
@@ -54,6 +75,28 @@ pub struct Xoshiro256pp(Xoshiro256PlusPlus);
 impl Prng for Xoshiro256pp {
     fn seed(digest: &[u8; 32]) -> Self {
         Self(Xoshiro256PlusPlus::from_seed(*digest))
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0.next_u64()
+    }
+}
+
+/// ChaCha8 keyed by the whole 32-byte digest: the generator of riblt-ecmh,
+/// as Go's ChaCha8Rand, whose output differs from rand_chacha's.
+///
+/// A ChaCha8 block is 8 rounds of 32-bit additions, XORs and rotations and
+/// yields eight samples; rand_chacha computes four blocks per refill, so one
+/// refill covers an item's k(m) + 1 samples, 19 on average for m = 12150. A
+/// SHA-256 counter stream yields four samples per 64-round compression, with
+/// hardware support on aarch64 through the SHA-2 extension and on x86-64
+/// through SHA-NI. benches/riblt.rs (riblt.mapping) times all of them.
+#[derive(Clone, Debug)]
+pub struct ChaCha8(ChaCha8Rng);
+
+impl Prng for ChaCha8 {
+    fn seed(digest: &[u8; 32]) -> Self {
+        Self(ChaCha8Rng::from_seed(*digest))
     }
 
     fn next_u64(&mut self) -> u64 {
@@ -307,7 +350,39 @@ mod tests {
 
     #[test]
     fn mapping_density_matches_riblt() {
+        density::<Mcg64>();
+        density::<ChaCha8>();
         density::<Xoshiro256pp>();
+    }
+
+    /// How many of n mappings include each index below 101.
+    fn inclusions<P: Prng>(n: u64) -> [u64; 101] {
+        let mut hits = [0; 101];
+        for s in 0..n {
+            for i in Mapping::new(P::seed(&digest(s))).below(hits.len()) {
+                hits[i] += 1;
+            }
+        }
+        hits
+    }
+
+    /// Every generator includes each index with upstream's frequency, within
+    /// five standard deviations of the difference of two binomial counts.
+    /// The frequencies are those of the recurrence, not the idealized
+    /// 1 / (1 + i/2): index 1 follows index 0 with probability 0.64, not 2/3.
+    #[test]
+    fn mapping_inclusion_agrees_between_generators() {
+        let n = 20_000;
+        let a = inclusions::<Mcg64>(n);
+        for b in [inclusions::<ChaCha8>(n), inclusions::<Xoshiro256pp>(n)] {
+            for i in [0, 1, 2, 3, 10, 30, 100] {
+                let p = (a[i] + b[i]) as f64 / (2 * n) as f64;
+                let sd = (2.0 * n as f64 * p * (1.0 - p)).sqrt();
+                let diff = a[i].abs_diff(b[i]) as f64;
+                assert!(diff <= 5.0 * sd.max(1.0), "i {i}: {} vs {}", a[i], b[i]);
+            }
+            assert!((b[1] as f64 / n as f64 - 0.64).abs() < 0.02, "{}", b[1]);
+        }
     }
 
     fn indices<P: Prng>(d: &[u8; 32]) -> Vec<usize> {
@@ -315,13 +390,37 @@ mod tests {
     }
 
     #[test]
-    fn mapping_starts_at_0_and_increases() {}
+    fn mapping_starts_at_0_and_increases() {
+        for v in [
+            indices::<Mcg64>(&digest(12345)),
+            indices::<ChaCha8>(&digest(12345)),
+            indices::<Xoshiro256pp>(&digest(12345)),
+        ] {
+            assert_eq!(v[0], 0);
+            assert!(v.windows(2).all(|w| w[0] < w[1]));
+        }
+    }
 
     #[test]
     fn wide_mappings_depend_on_the_whole_digest() {
         let (a, mut b) = (digest(7), digest(7));
         b[31] ^= 1;
+        assert_eq!(indices::<Mcg64>(&a), indices::<Mcg64>(&b));
+        assert_ne!(indices::<ChaCha8>(&a), indices::<ChaCha8>(&b));
         assert_ne!(indices::<Xoshiro256pp>(&a), indices::<Xoshiro256pp>(&b));
+    }
+
+    #[test]
+    fn mapping_repeats_a_cell_where_upstream_does() {
+        // the state whose next r is u64::MAX: r + 1 rounds to 2^64
+        let prng: u64 = 0x747c_72fc_ab15_2a63;
+        assert_eq!(prng.wrapping_mul(0xda942042e4dd58b5), u64::MAX);
+        let mut m = Mapping {
+            prng: Mcg64(prng),
+            index: 7,
+        };
+        assert_eq!(m.advance(), 7);
+        assert!(m.advance() > 7);
     }
 
     fn item(tag: u32, i: u32) -> [u8; 36] {
@@ -440,6 +539,8 @@ mod tests {
     }
 
     fn peels_50_in_100<G: HashToCurve + Negate>(g: G) {
+        assert!(check::<G, Mcg64>(g, [3; 32], 100, 30, 20, 100).unwrap());
+        assert!(check::<G, ChaCha8>(g, [3; 32], 100, 30, 20, 100).unwrap());
         assert!(check::<G, Xoshiro256pp>(g, [3; 32], 100, 30, 20, 100).unwrap());
     }
 
