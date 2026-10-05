@@ -55,8 +55,9 @@ pub fn digest_batch<G: HashToCurve + SumBatch + Encode>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::curve::binary::lambda;
     use crate::curve::binary127;
-    use crate::group::Decode;
+    use crate::group::{Accumulate, Decode};
     use proptest::prelude::*;
 
     type Items = Vec<Vec<u8>>;
@@ -182,10 +183,52 @@ mod tests {
         Ok(())
     }
 
+    /// The λ group is `binary127`'s under another accumulator: every digest
+    /// and every running sum of prepared addends, signed, must agree.
+    fn check_lambda_matches_binary127(
+        c: binary127::Curve,
+        salt: [u8; 32],
+        xs: Items,
+        signs: Vec<bool>,
+    ) -> Result<(), TestCaseError> {
+        let l = lambda::Curve(c);
+        prop_assert_eq!(streaming(l, &salt, &xs), streaming(c, &salt, &xs));
+        prop_assert_eq!(batch(l, &salt, &xs), batch(c, &salt, &xs));
+        let h = Salted::new(TAG_ITEM, &salt);
+        let pts: Vec<_> = xs.iter().map(|x| c.hash(&h, x)).collect();
+        let (la, ca) = (l.prepare_batch(&pts), c.prepare_batch(&pts));
+        let (mut lp, mut cp) = (l.identity(), c.identity());
+        // Revisit items in reverse order with either sign to exercise doubling
+        // and cancellation to O as well as additions of distinct points.
+        let order = (0..xs.len()).chain((0..xs.len()).rev());
+        for (i, &sub) in order.zip(signs.iter().cycle()) {
+            let (a, b) = if sub {
+                (l.neg_addend(&la[i]), c.neg_addend(&ca[i]))
+            } else {
+                (la[i], ca[i])
+            };
+            lp = l.add(&lp, &a);
+            cp = c.add(&cp, &b);
+            prop_assert_eq!(l.to_affine(&lp), c.to_affine(&cp));
+            prop_assert_eq!(l.is_identity(&lp), c.is_identity(&cp));
+        }
+        Ok(())
+    }
+
     proptest! {
         #[test]
         fn binary127_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
             check_laws(c, salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary127_lambda_ecmh(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), ys in items(), perm in any::<prop::sample::Index>()) {
+            check_laws(lambda::Curve(c), salt, xs, ys, perm)?;
+        }
+
+        #[test]
+        fn binary127_lambda_matches_binary127(c in binary127::tests::curve(), salt in any::<[u8; 32]>(), xs in items(), signs in prop::collection::vec(any::<bool>(), 1..8)) {
+            check_lambda_matches_binary127(c, salt, xs, signs)?;
         }
     }
 }

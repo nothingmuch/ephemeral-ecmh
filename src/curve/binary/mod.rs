@@ -14,6 +14,8 @@
 //!   (2 M61 for `binary122`'s GLS family).
 //! - Batch sums: the affine chord law, 5M + 1S per addition and one
 //!   inversion shared by the batch.
+//! - `lambda`: the same curves with λ-projective (X : L : Z) accumulators,
+//!   8M + 2S per add with no curve constant, but not complete.
 //! - Encoding: x | Tr(y) << SIGN in `Model::Bytes`, 0 for O; hashing is
 //!   try-and-increment on the same x and sign.
 //! - `map`: Pornin's deterministic map, for the families whose modulus
@@ -29,6 +31,7 @@ mod curve;
 mod extended;
 mod hash_to_curve;
 mod impls;
+pub mod lambda;
 mod map;
 #[cfg(test)]
 pub(crate) mod tests;

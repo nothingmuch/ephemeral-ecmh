@@ -18,7 +18,7 @@ macro_rules! suite {
         use crate::ecmh::{Ecmh, digest_batch};
         use crate::field::$gf::tests::fe;
         use crate::field::batch::Invert;
-        use crate::curve::binary::Model;
+        use crate::curve::binary::{Constant, Model};
         use crate::field::{Binary, Field};
         use crate::hash::Salted;
         use proptest::prelude::*;
@@ -259,6 +259,127 @@ macro_rules! suite {
                 prop_assert_eq!(e.digest(), digest_batch(c, &salt, &refs));
                 refs.iter().rev().for_each(|x| e.remove(x));
                 prop_assert_eq!(e.digest(), M::to_bytes(0));
+            }
+        }
+
+        /// `binary::lambda` against the affine law.
+        mod lambda {
+            use super::*;
+            use crate::curve::binary::lambda::{lift_batch, normalize_batch};
+
+            type LAffine = crate::curve::binary::lambda::Affine<M>;
+            type LPoint = crate::curve::binary::lambda::Point<M>;
+
+            fn lam(p: &Affine) -> LAffine {
+                LAffine::lift(p)
+            }
+
+            proptest! {
+                #[test]
+                fn lift_roundtrip((c, ps) in curve_and_points(1)) {
+                    let p = ps[0];
+                    prop_assert_eq!(LPoint::from(lam(&p)).to_affine(), p);
+                    prop_assert_eq!(LPoint::from(lam(&p).neg()).to_affine(), p.neg());
+                    prop_assert!(lam(&Affine::IDENTITY).is_identity());
+                    prop_assert_eq!(LPoint::IDENTITY.to_affine(), Affine::IDENTITY);
+                    prop_assert!(LAffine::IDENTITY.double().is_identity());
+                    // on the λ form of the curve equation
+                    let (x, l) = (p.x, lam(&p).l);
+                    prop_assert!(Field::equals((l.square() + l + M::A) * x.square(), x.square().square() + c.big_b.gf()));
+                }
+
+                #[test]
+                fn lift_batch_matches_single((_c, mut ps) in curve_and_points(6)) {
+                    ps.push(Affine::IDENTITY);
+                    let want: Vec<LPoint> = ps.iter().map(|p| lam(p).into()).collect();
+                    let got: Vec<LPoint> = lift_batch(&ps).into_iter().map(LPoint::from).collect();
+                    for (w, g) in want.iter().zip(&got) {
+                        prop_assert!(w.equals(g));
+                    }
+                }
+
+                #[test]
+                fn mixed_matches_affine((_c, ps) in curve_and_points(3)) {
+                    let (p, q, s) = (ps[0], ps[1], ps[2]);
+                    let o = Affine::IDENTITY;
+                    let lp = LPoint::from(lam(&p));
+                    prop_assert_eq!(lp.add_affine(&lam(&q)).to_affine(), p.add(&q));
+                    prop_assert_eq!(LPoint::IDENTITY.add_affine(&lam(&q)).to_affine(), q);
+                    prop_assert_eq!(lp.add_affine(&lam(&o)).to_affine(), p);
+                    prop_assert!(LPoint::IDENTITY.add_affine(&lam(&o)).is_identity());
+                    prop_assert_eq!(lp.add_affine(&lam(&p)).to_affine(), p.add(&p));
+                    prop_assert!(lp.add_affine(&lam(&p).neg()).is_identity());
+                    prop_assert_eq!(lam(&p).double().to_affine(), p.add(&p));
+                    // the exceptional cases again with Z != 1
+                    let pq = lp.add_affine(&lam(&q));
+                    let spq = p.add(&q);
+                    prop_assert_eq!(pq.add_affine(&lam(&spq)).to_affine(), spq.add(&spq));
+                    prop_assert!(pq.add_affine(&lam(&spq).neg()).is_identity());
+                    prop_assert_eq!(pq.add_affine(&lam(&s)).to_affine(), spq.add(&s));
+                }
+
+                #[test]
+                fn chains_match_affine((_c, ps) in curve_and_points(8), ops in prop::collection::vec((0usize..8, 0u8..4), 0..48)) {
+                    // Ops 2 and 3 add or subtract the running sum, exercising
+                    // doubling and cancellation after arbitrary preceding additions.
+                    let (mut acc, mut want) = (LPoint::IDENTITY, Affine::IDENTITY);
+                    for (i, op) in ops {
+                        let a = match op {
+                            0 => ps[i],
+                            1 => ps[i].neg(),
+                            2 => want,
+                            _ => want.neg(),
+                        };
+                        acc = acc.add_affine(&lam(&a));
+                        want = want.add(&a);
+                        prop_assert_eq!(acc.to_affine(), want);
+                        prop_assert_eq!(acc.is_identity(), want.is_identity());
+                    }
+                }
+
+                #[test]
+                fn equality((_c, ps) in curve_and_points(2)) {
+                    let (p, q) = (ps[0], ps[1]);
+                    let (lp, lq) = (LPoint::from(lam(&p)), LPoint::from(lam(&q)));
+                    // same point, different representatives
+                    prop_assert!(lp.add_affine(&lam(&q)).equals(&lq.add_affine(&lam(&p))));
+                    // p and q may coincide; p and -p never do, in odd order
+                    prop_assert_eq!(lp.equals(&lq), p == q);
+                    prop_assert!(!lp.equals(&lam(&p).neg().into()) && !lp.equals(&LPoint::IDENTITY));
+                    prop_assert!(LPoint::IDENTITY.equals(&lp.add_affine(&lam(&p).neg())));
+                }
+
+                #[test]
+                fn equals_affine_is_affine_equality((_c, ps) in curve_and_points(3)) {
+                    // accumulators at Z = 1 and Z != 1 against each addend, O included
+                    let (p, q, r) = (ps[0], ps[1], ps[2]);
+                    let pq = LPoint::from(lam(&p)).add_affine(&lam(&q));
+                    let cancelled = pq.add_affine(&lam(&q).neg());
+                    let o = Affine::IDENTITY;
+                    for acc in [LPoint::from(lam(&p)), pq, cancelled, LPoint::IDENTITY] {
+                        for a in [p, q, p.add(&q), r, p.neg(), o] {
+                            prop_assert_eq!(acc.equals_affine(&lam(&a)), acc.to_affine() == a);
+                        }
+                    }
+                }
+
+                #[test]
+                fn normalize_batch_matches((_c, ps) in curve_and_points(6)) {
+                    let mut pts: Vec<LPoint> = ps.windows(2).map(|w| LPoint::from(lam(&w[0])).add_affine(&lam(&w[1]))).collect();
+                    pts.push(LPoint::IDENTITY);
+                    let want: Vec<Affine> = pts.iter().map(|p| p.to_affine()).collect();
+                    prop_assert_eq!(normalize_batch(&pts), want);
+                }
+
+                #[test]
+                fn hash_to_lambda_is_the_lift((c, _ps) in curve_and_points(0), salt in any::<[u8; 32]>(), msgs in prop::collection::vec(prop::collection::vec(any::<u8>(), 0..8), 0..12)) {
+                    let h = Salted::new(b"test", &salt);
+                    let refs: Vec<&[u8]> = msgs.iter().map(|m| m.as_slice()).collect();
+                    let want: Vec<LAffine> = refs.iter().map(|m| lam(&c.hash_to_curve(&h, m))).collect();
+                    let one: Vec<LAffine> = refs.iter().map(|m| c.hash_to_lambda(&h, m)).collect();
+                    prop_assert_eq!(&one, &want);
+                    prop_assert_eq!(c.hash_to_lambda_batch(&h, &refs), want);
+                }
             }
         }
     };

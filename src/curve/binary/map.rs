@@ -35,7 +35,7 @@
 //! ([`MapRoot`]), where try-and-increment pays an inversion to lift its
 //! point.
 
-use super::{Constant, Curve, Model, Point};
+use super::{Constant, Curve, Model, Point, lambda};
 use crate::curve::h2c::Map;
 use crate::field::batch::{Invert, invert as batch_invert};
 use crate::field::{Binary, Field};
@@ -156,6 +156,26 @@ impl<M: Pornin> Curve<M> {
             s: self.beta.mul(s),
             z: self.beta.gf(),
             t: self.beta.mul(x),
+        }
+    }
+
+    /// The map's point as the λ-affine addend (x̄, λ), a squaring and two
+    /// additions past the map's root: the roots of X^2 + d X = b differ by
+    /// d, so x̄ = x + d, and λ = w^2 + 1 + a (`wcodec`).
+    pub fn map_to_lambda(&self, c: u128) -> lambda::Affine<M> {
+        let st = Self::map_prepare(c);
+        Self::lambda_of(self.map_root(&st, st.den.inv()))
+    }
+
+    /// `map_to_lambda` on many inputs with one shared inversion.
+    pub fn map_to_lambda_batch(&self, cs: &[u128]) -> Vec<lambda::Affine<M>> {
+        self.map_batch(cs, |st, inv| Self::lambda_of(self.map_root(st, inv)))
+    }
+
+    fn lambda_of(r: MapRoot<M::F>) -> lambda::Affine<M> {
+        lambda::Affine {
+            x: r.x + r.d,
+            l: r.w.square() + M::F::ONE + M::A,
         }
     }
 
