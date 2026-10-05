@@ -10,5 +10,7 @@
 //! hashing to reusable addends, addition, subtraction, and encoding on
 //! public data.
 //!
+//! - [`group`] exposes the capabilities needed by each workload.
 //! - [`hash`] supplies domain-separated, salted SHA-256 candidate streams.
+pub mod group;
 pub mod hash;
