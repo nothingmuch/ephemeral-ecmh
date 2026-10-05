@@ -93,8 +93,8 @@ reduces to the discrete-logarithm problem in that group
 [maitin-shepard-et-al-2016]; whether the maps used here satisfy them is open
 ([Known weaknesses](docs/ecc_security.md#known-weaknesses)). The curves in use
 for this purpose have about $2^{256}$ points and about 128-bit security, and
-hashing an item to them costs far more than the SHA-256 hash of the XOR
-checksum. A shorter horizon
+hashing an item to them costs 150 to 200 times the SHA-256 hash of the XOR
+checksum (see [Preliminary findings](#preliminary-findings)). A shorter horizon
 and a failure confined to one namespace suggest that a work factor of $2^{48}$
 to $2^{64}$ suffices, provided the application detects a sketch collision by
 other means and recovers, for example by re-keying or by another reconciliation
@@ -157,6 +157,65 @@ symbols, and the item is hashed once per namespace, so additions outnumber
 hashes ([Workload](docs/workload.md)). The simulator reproduces the forgery of
 yangl1996/riblt#3 against the XOR checksum, and every curve group rejects the
 forged cells.
+
+## Preliminary findings
+
+The figures below are from run `01a10a32-10fd-76e5-bc0c-18195b7bccb0` on an
+Apple M4, of source revision 9c592abc, in the quick profile, which takes fewer
+samples than the full one; clean full-profile runs will replace them, and the
+findings will be revised against those runs. Batched hashing processes 1024
+items per batch, addition costs are throughput figures, and RIBLT encoding is
+per item, for $n = 3500$ items into a sketch of $m = 1350$ cells.
+
+Gains from the Go-to-Rust port or the mapping-generator change (xoshiro256++ in
+place of ChaCha8) are not attributed to this project; matched comparisons in the
+Rust harness measure checksum substitution ([comparison
+conditions](docs/workload.md#comparison-with-the-reference-implementations)).
+
+- The binary families over $\mathrm{GF}(2^{109})$ and $\mathrm{GF}(2^{127})$
+  lead. Their fastest representation, unscaled accumulators with Pornin's
+  complete formulas, encodes into a RIBLT sketch at 274 and 279 ns per item and
+  adds in 9.8 and 10.6 ns, against 166 ns per item for the XOR baseline and 5.92
+  µs for ristretto255. The incomplete λ-projective variants add in 11.9 and 15.0
+  ns and encode at 292 and 319 ns; the extended coordinates, also complete, at
+  315 and 326 ns.
+- $\mathrm{GF}(2^{109})$ encodes a point in 14 bytes, against 16 for
+  $\mathrm{GF}(2^{127})$, so each coded symbol's checksum is two bytes shorter,
+  at a nominal rho cost of $2^{53.8}$ against $2^{62.8}$. Both fields occupy two
+  64-bit limbs, and the smaller one is only slightly faster; [Code
+  generation](docs/codegen.md) (section 4) compares their reductions, which
+  differ by modulus.
+- Pornin's map is the faster hash, batched or not. To the unscaled addend, in
+  batches, it takes 59.1 and 57.9 ns per item over $\mathrm{GF}(2^{109})$ and
+  $\mathrm{GF}(2^{127})$, against 75.5 and 79.8 ns for try-and-increment; one
+  item at a time, 525 and 479 ns against 886 and 881 ns, mainly for the field
+  inversion. The RIBLT benchmarks therefore hash every binary family by
+  Pornin's map, as the plan derived from the group operations selects ([The
+  RIBLT plan](docs/methodology.md#the-riblt-plan)). Summing two maps costs 957
+  ns over $\mathrm{GF}(2^{127})$.
+- Over $\mathrm{GF}(2^{122})$ the GLS-shaped and dense families encode at the
+  same 302 ns; with extended coordinates the GLS family adds about 6% faster
+  (16.8 against 17.8 ns), at a nominal rho cost 0.5 bits lower ($2^{59.8}$
+  against $2^{60.3}$).
+- The prime-field families hash an item in 0.66 to 2.01 µs, mainly for the
+  square root, which batching does not share, and add in 12.4 to 45.4 ns across
+  the implemented formulas. The fastest of them in RIBLT encoding, twisted
+  Edwards over $\mathrm{GF}(p^2)$ with $p = 2^{61} - 1$, takes 917 ns per item.
+- XOR of SHA-256 digests, the insecure baseline, costs 23.5 ns per item and 0.39
+  ns per cell. ristretto255 hashes an item in 4.99 µs and secp256k1 in 4.70 µs,
+  199 to 212 times the baseline.
+- The binary-field figures require carry-less multiplication (PMULL or
+  PCLMULQDQ) to be enabled in the build; the portable backend executes 13 to 19
+  times the instructions ([Code generation](docs/codegen.md)).
+- Over four seeds, finding a $\mathrm{GF}(2^{127})$ curve took 2.4 to 24.1 ms
+  and certifying it, search included, 2.5 to 24.4 ms. Verifying a certificate
+  counts no points and takes 56 to 68 µs across the families, or up to 0.62 ms
+  when it also checks every rejected candidate. For the prime-field families the
+  implemented prover counts points with PARI.
+- The nominal rho costs of the families range from $2^{52.3}$ to $2^{63.3}$. The
+  documented attacks obtain discrete logarithms and then solve additive
+  relations; their costs and limitations are given in [Known
+  weaknesses](docs/ecc_security.md#known-weaknesses).
 
 ## License
 
