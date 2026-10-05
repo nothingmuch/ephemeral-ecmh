@@ -180,7 +180,7 @@ impl<M: Pornin> Curve<M> {
     }
 
     pub fn hash_to_curve_map1_batch(&self, h: &Salted, msgs: &[&[u8]]) -> Vec<Point<M>> {
-        let cs: Vec<u128> = msgs.iter().map(|m| halves(&h.digest(m, 0))[0]).collect();
+        let cs: Vec<u128> = msgs.iter().map(|m| h.half(m, 0, 0)).collect();
         self.map_to_curve_batch(&cs)
     }
 

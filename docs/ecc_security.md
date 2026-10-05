@@ -124,15 +124,22 @@ given table is the gap recurrence's matter, as for any generator. The generator
 need not be cryptographic: the digest is already a salted hash, and the mapping
 is public. The gap law is unchanged, and ChaCha8 (`ChaCha8`) and the 64-bit
 generator (`Mcg64`) remain as comparisons. Nor does the seed need 256 bits: a
-128-bit projection of the item's identifier under a key of the mapping's own
-([Adversary](problem.md#adversary)) puts equal seeds at about $2^{64}$
-identifiers after the salt. The
-mapping need not depend only on the public salt of the checksum: a schedule
-keyed by a secret shared between the peers prevents a third party from searching
-offline for equal seeds, even with a 64-bit generator, while the checksum's
-namespace remains public. The coincidence between honest items is unchanged by
-the key, since it does not depend on who can compute seeds. Schedules that agree
-only on a prefix delay a rateless decoder without stalling it; that delay, and
-any other a third party induces through the schedule, concerns the sketch rather
-than its checksum and is not assessed ([Questions outside this
+128-bit seed puts equal seeds at about $2^{64}$ identifiers after the salt.
+`Riblt::projected` seeds the generator with the whole projection of the item's
+identifier under keys of the mapping's own ([Adversary](problem.md#adversary)),
+in a field chosen for its cost apart from the checksum's. Its halves are a
+linear map of the identifier's halves under two keys, invertible unless a key
+is zero or the two are equal, so equal seeds require equal identifiers; under
+$\mathbb{F}_{2^{130} - 5}$, whose halves are truncated to 128 bits, they
+require a coincidence of 256 bits. Either costs about $2^{128}$. The
+projection's cost is benched, but it is not the default. The mapping need not
+depend only on the public salt
+of the checksum: a schedule keyed by a secret shared between the peers prevents
+a third party from searching offline for equal seeds, even with a 64-bit
+generator, while the checksum's namespace remains public. The coincidence
+between honest items is unchanged by the key, since it does not depend on who
+can compute seeds. Schedules that agree only on a prefix delay a rateless
+decoder without stalling it; that delay, and any other a third party induces
+through the schedule, concerns the sketch rather than its checksum and is not
+assessed ([Questions outside this
 study](problem.md#questions-outside-this-study)).

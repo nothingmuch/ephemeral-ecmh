@@ -443,6 +443,10 @@ def test_current_suite_is_fully_classified(table):
             "h2c_parts/gf2_122-gls t&i/2. test Tr(b/x) (rejected)",
             ("hash to curve", "gf2_122-gls", "steps: gf2_122-gls t&i", "per-element"),
         ),
+        (
+            "h2c.id/binary-u.127/proj=fp130,h2c=pornin-addend,mode=batch,n=1024",
+            ("hash to curve", "gf2_127-u", "ID to addend", "batch"),
+        ),
         # unclaimed: kept, under "other"
         ("mystery/thing", ("other", "other", "mystery", "per-element")),
     ],
@@ -591,6 +595,20 @@ def test_every_spelling_names_a_listed_family():
         ),
         ("riblt.mapping", "chacha8/next", "mapping", "mapping, per index"),
         ("riblt.mapping", "sha256-ctr/item,m=150", "mapping", "mapping, per item"),
+        ("riblt.mapping", "projection-fp130/keys", "mapping", "per-salt keys"),
+        ("riblt.mapping", "salted-sha256/keys", "mapping", "per-salt keys"),
+        (
+            "riblt.mapping",
+            "projection-fp127/digest of id",
+            "mapping",
+            "map digest of an ID",
+        ),
+        (
+            "riblt.encode",
+            "binary.127/m=1350,n=3500,h2c=pornin,proj=fp130,mapproj=gf2_127",
+            "gf2_127",
+            "encode (hash + cells)",
+        ),
     ],
 )
 def test_rateless_and_mapping_ids_are_classified(group, function, family, operation):
@@ -2068,18 +2086,36 @@ def test_riblt_plan_follows_the_modeled_insertion(tmp_path):
     def plan():
         return br.riblt_plan(br.tidy(br.load(root)[0]), listed)
 
+    def ids(fam, h, proj, ns):
+        bench("h2c.id", f"{fam}/proj={proj},h2c={h},mode=batch,n=1024", ns)
+
+    # the projection is chosen under the planned construction, never none,
+    # and only for the families timed beyond a spot check
+    ids("binary-u.127", "pornin-addend", "none", 10)
+    ids("binary-u.127", "pornin-addend", "fp130", 50)
+    ids("binary-u.127", "pornin-addend", "gf2_127", 40)
+    ids("binary-u.127", "ti", "fp127", 1)
+    ids("weier.127", "ti", "fp130", 1)
+
     # Pornin to (u, v) needs no prepare: 56 + 13.57 * 10 against 80 + 10 +
     # 13.57 * 10; binary.109 is within the leaders' margin, weier.127 far
     # behind. Unmeasured constructions do not compete, and edwards.127, with
-    # no model, is left to its spot check.
+    # no model, is left to its spot check. Without a timed mapping digest
+    # there are no ID-keyed rows.
     assert plan() == {
-        "binary-u.127": ("pornin-addend", "full"),
-        "binary.109": ("ti", "buffer"),
-        "weier.127": ("ti", "spot"),
+        "binary-u.127": ("pornin-addend", "full", None, None),
+        "binary.109": ("ti", "buffer", None, None),
+        "weier.127": ("ti", "spot", None, None),
     }
+    # the mapping's field is the cheapest digest of an ID, whatever the
+    # checksum's
+    bench("riblt.mapping", "projection-gf2_127/digest of id", 30)
+    bench("riblt.mapping", "projection-fp127/digest of id", 20)
+    bench("riblt.mapping", "salted-sha256/digest of id", 10)
+    assert plan()["binary-u.127"] == ("pornin-addend", "full", "gf2_127", "fp127")
     # a faster measurement changes the plan; no default does
     bench("hash_to_curve", "gf2_109/pornin map x1, batched", 20)
-    assert plan()["binary.109"] == ("pornin", "full")
+    assert plan()["binary.109"] == ("pornin", "full", None, None)
 
 
 def test_group_plan_leads_and_contrasts_by_the_modeled_insertion(tmp_path):
@@ -2124,3 +2160,48 @@ def test_group_plan_leads_and_contrasts_by_the_modeled_insertion(tmp_path):
     assert "binary.109" not in br.group_plan(
         br.tidy(br.load(root)[0]), [i for i in listed if "binary.109" not in i]
     )
+
+
+def test_lifetimes_set_each_term_beside_its_counterpart(tmp_path):
+    root = tmp_path / "criterion"
+
+    def bench(group, function, parameter, ns):
+        write_bench(root, group, function, parameter, ns, ns, ns, {"Elements": 1})
+
+    fam, h, field = "binary.127", "pornin", "fp130"
+    bench("riblt.encode", fam, "m=1350,n=3500,h2c=pornin", 900)
+    bench(
+        "riblt.encode", fam, "m=1350,n=3500,h2c=pornin,proj=fp130,mapproj=gf2_127", 600
+    )
+    bench("riblt.mapping", "sha256", "id", 100)
+    bench("riblt.mapping", "salted-sha256", "keys", 200)
+    bench("riblt.mapping", "projection-fp130", "keys", 300)
+    bench("riblt.mapping", "projection-gf2_127", "keys", 250)
+    bench("riblt.mapping", "salted-sha256", "digest of id", 110)
+    bench("riblt.mapping", "projection-fp130", "digest of id", 40)
+    bench("riblt.mapping", "projection-gf2_127", "digest of id", 20)
+    bench("h2c.id", fam, f"proj=none,h2c={h},mode=batch,n=1024", 150)
+    bench("h2c.id", fam, f"proj={field},h2c={h},mode=batch,n=1024", 60)
+    bench("group.add", fam, "mode=throughput", 5)
+    life = br.lifetimes(br.tidy(br.load(root)[0]))
+    assert len(life) == 1
+    title, table = life[0]
+    assert fam in title and h in title
+    rows = {term: (a, b) for _, term, a, b in table.itertuples(index=False)}
+
+    def times(*ns):
+        return tuple(map(br.fmt_time, ns))
+
+    assert rows["ID, the item's SHA-256"] == times(100, 100)
+    assert rows["checksum keys"] == times(200, 300)
+    assert rows["mapping keys"] == times(200, 250)
+    assert rows["hash to the addend"] == times(150, 60)
+    assert rows["mapping seed"] == times(110, 20)
+    assert rows["add"] == times(5, 5)
+    assert rows["accept the curve"] == ("not timed", "not timed")
+    measured = next(r for r in rows if r.startswith("insertion per item"))
+    assert rows[measured] == times(900, 600)
+    blocks = br.lifetime_blocks(life)
+    assert ("h2", "Costs by lifetime") in blocks
+    # without a projected encoding there is no table
+    assert br.lifetimes(br.tidy(br.load(root)[0]), m=150) == []

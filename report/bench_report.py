@@ -294,13 +294,19 @@ def h2c_token(t: pd.DataFrame, bench: str | None) -> str | None:
 
 def riblt_plan(
     t: pd.DataFrame, ids, load: str = "m=1350"
-) -> dict[str, tuple[str, str]]:
+) -> dict[str, tuple[str, str, str | None, str | None]]:
     """How benches/riblt.rs is to time each family the listed ids offer
-    under several hash constructions: (h2c, scope). The construction is the
-    one whose modeled insertion (pipeline_cost) at `load` costs least among
-    those RIBLT offers; the scope follows that cost's ratio to the least of
-    any family, by rules.RIBLT_SCOPES. A family without a model is absent,
-    and benches/riblt.rs spot-checks it under every construction."""
+    under several hash constructions: (h2c, scope, projection fields of the
+    checksum and the mapping). The construction is the one whose modeled
+    insertion (pipeline_cost) at `load` costs least among those RIBLT
+    offers; the scope follows that cost's ratio to the least of any family,
+    by rules.RIBLT_SCOPES. A family in full or buffer scope gets the field
+    whose projection hashes its IDs to the addend under that construction
+    cheapest (benches/group.rs's h2c.id), and the field whose projection
+    digests IDs cheapest (riblt.mapping), which does not depend on the
+    family; both are None unless both were timed. A family without a model
+    is absent, and benches/riblt.rs spot-checks it under every
+    construction."""
     offered: dict[str, set[str]] = {}
     for i in ids:
         group, _, rest = i.strip().partition("/")
@@ -324,16 +330,42 @@ def riblt_plan(
     if not best:
         return {}
     least = min(cost for _, cost in best.values())
-    return {
-        fam: (
-            token,
-            next(
-                (scope for scope, ratio in rules.RIBLT_SCOPES if cost <= ratio * least),
-                "spot",
-            ),
+    map_field = mapping_projection(t)
+    plan = {}
+    for fam, (token, cost) in best.items():
+        scope = next(
+            (scope for scope, ratio in rules.RIBLT_SCOPES if cost <= ratio * least),
+            "spot",
         )
-        for fam, (token, cost) in best.items()
-    }
+        field = projection(t, fam, token) if scope != "spot" else None
+        plan[fam] = (token, scope) + (
+            (field, map_field) if field and map_field else (None, None)
+        )
+    return plan
+
+
+def projection(t: pd.DataFrame, fam: str, token: str) -> str | None:
+    """The proj= field under which h2c.id times family `fam`, as ids spell
+    it, cheapest under construction `token`; None if none is timed."""
+    rows = t[(t.group == "h2c.id") & t.full_id.str.startswith(f"h2c.id/{fam}/")]
+    params = rows.full_id.str.extract(r"/proj=([^,/]+),h2c=([^,/]+)(?:,|$)")
+    rows = rows[(params[1] == token) & (params[0] != "none")]
+    if rows.empty:
+        return None
+    return params.loc[rows.value_ns.idxmin(), 0]
+
+
+def mapping_projection(t: pd.DataFrame) -> str | None:
+    """The field whose projection digests IDs cheapest in riblt.mapping, as
+    ids spell it; None if none is timed."""
+    rows = t[t.group == "riblt.mapping"]
+    fields = rows.full_id.str.extract(
+        r"^riblt\.mapping/projection-([^/]+)/digest of id$"
+    )[0]
+    rows = rows[fields.notna()]
+    if rows.empty:
+        return None
+    return fields[rows.value_ns.idxmin()]
 
 
 def group_plan(t: pd.DataFrame, ids, load: str = "m=1350") -> dict[str, str]:
@@ -1404,8 +1436,8 @@ def blocks(
                     "modeled insertion at $m = 1350$ was within 50% of the "
                     "cheapest (lead) and, if none of them was over a field of "
                     "odd characteristic, the cheapest that was (contrast). The "
-                    "second pass added the batch sweep, subtraction and equality "
-                    "on pure cells "
+                    "second pass added the batch sweep, subtraction, equality on "
+                    "pure cells and the hashes of IDs "
                     "([[methodology.md#the-group-plan|The group plan]])."
                 ),
             )
@@ -1425,9 +1457,13 @@ def blocks(
                     "hash-to-curve results, for each family below, the hash its "
                     "RIBLT benchmarks use and their scope: every sweep (full), each "
                     "axis's endpoints and middle (buffer), or one point of each "
-                    "benchmark (spot). The plan records what was measured, not a "
-                    "result; the XOR checksums and ristretto255 are timed in full "
-                    "regardless ([[methodology.md#the-riblt-plan|The RIBLT plan]])."
+                    "benchmark (spot); and for full and buffer scope, the field "
+                    "whose projection hashes the family's IDs cheapest and the one "
+                    "whose projection seeds mappings cheapest, under which it also "
+                    "encodes and peels cells keyed by IDs. The plan records "
+                    "what was measured, not a result; the XOR checksums and "
+                    "ristretto255 are timed in full regardless "
+                    "([[methodology.md#the-riblt-plan|The RIBLT plan]])."
                 ),
             )
         )
@@ -1435,8 +1471,23 @@ def blocks(
             (
                 "table",
                 pd.DataFrame(
-                    [(f, v.get("h2c"), v.get("scope")) for f, v in plan.items()],
-                    columns=["family", "hash", "scope"],
+                    [
+                        (
+                            f,
+                            v.get("h2c"),
+                            v.get("scope"),
+                            v.get("proj", ""),
+                            v.get("mapproj", ""),
+                        )
+                        for f, v in plan.items()
+                    ],
+                    columns=[
+                        "family",
+                        "hash",
+                        "scope",
+                        "projection",
+                        "mapping projection",
+                    ],
                 ),
             )
         )
@@ -1444,6 +1495,9 @@ def blocks(
         b.extend(insert_blocks(pipeline, loads, insert_fig))
         if elem is not None and len(elem):
             b.extend(batching_blocks(pipeline, elem, batch_size_grid(t)))
+    life = lifetimes(t)
+    if life:
+        b.extend(lifetime_blocks(life))
     if runs is not None and len(runs):
         b.extend(selection_blocks(runs, selection_fig, t))
     if elem is not None and len(elem):
@@ -1469,6 +1523,102 @@ def blocks(
         b.append(("details", f"{len(d)} benchmarks", [("table", display_table(d))]))
     if len(costs):
         b.extend(lower_bound_blocks(costs, loads))
+    return b
+
+
+def lifetimes(t: pd.DataFrame, m: int = 1350) -> list[tuple[str, pd.DataFrame]]:
+    """Each insertion into cells keyed by IDs that the run timed
+    (benches/riblt.rs, proj=) at m cells, as (title, table): its terms by
+    how long each stays valid, with the ID hashed by salted SHA-256 and by
+    the projections, then the insertions measured with and without IDs."""
+    value = dict(zip(t.full_id, t.value_ns))
+
+    def cell(full_id):
+        if full_id is None:
+            return "—"
+        return fmt_time(value[full_id]) if full_id in value else "not timed"
+
+    pattern = rf"riblt\.encode/([^/]+)/m={m},n=\d+,h2c=([^,/]+),proj=([^,/]+),mapproj=([^,/]+)"
+    out = []
+    for full_id in t.full_id:
+        hit = re.fullmatch(pattern, full_id)
+        if not hit:
+            continue
+        fam, token, field, map_field = hit.groups()
+        curve = rules.curve(rules.family(fam, "riblt.encode")[0])
+        h2c = f"h2c.id/{fam}/proj={{}},h2c={token},mode=batch,n=1024"
+        accept = f"curvegen/verify_accept/{curve}/0"
+        walk = f"riblt.mapping/{rules.MAPPING}/item,m={m}"
+        terms = [
+            ("per item", "ID, the item's SHA-256", *["riblt.mapping/sha256/id"] * 2),
+            ("per salt", "accept the curve", accept, accept),
+            (
+                "per salt",
+                "checksum keys",
+                "riblt.mapping/salted-sha256/keys",
+                f"riblt.mapping/projection-{field}/keys",
+            ),
+            (
+                "per salt",
+                "mapping keys",
+                "riblt.mapping/salted-sha256/keys",
+                f"riblt.mapping/projection-{map_field}/keys",
+            ),
+            ("per salt and item", "hash to the addend", h2c.format("none"))
+            + (h2c.format(field),),
+            (
+                "per salt and item",
+                "mapping seed",
+                "riblt.mapping/salted-sha256/digest of id",
+                f"riblt.mapping/projection-{map_field}/digest of id",
+            ),
+            ("per salt and item", f"mapping walk below m = {m}", walk, walk),
+        ] + [
+            ("per cell", op, f"group.{op}/{fam}/{mode}", f"group.{op}/{fam}/{mode}")
+            for op, mode in (
+                ("add", "mode=throughput"),
+                ("encode", "mode=batch,n=1024"),
+                ("decode", "mode=batch,n=1024"),
+            )
+        ]
+        terms.append(
+            (
+                "measured",
+                f"insertion per item, k = {mapping_degree(m):.2f} cells",
+                full_id.removesuffix(f",proj={field},mapproj={map_field}"),
+                full_id,
+            )
+        )
+        table = pd.DataFrame(
+            [(life, term, cell(a), cell(b)) for life, term, a, b in terms],
+            columns=["lifetime", "term", "salted SHA-256", "projection"],
+        )
+        title = (
+            f"{fam}, {token}, checksum projected in "
+            f"{rules.PROJECTIONS.get(field, field)}, mapping in "
+            f"{rules.PROJECTIONS.get(map_field, map_field)}"
+        )
+        out.append((title, table))
+    return out
+
+
+def lifetime_blocks(life):
+    what = (
+        "What an insertion into cells keyed by IDs costs by how long each part "
+        "stays valid, for each family the RIBLT suite timed so (proj=): the ID "
+        "once per item; the curve and each hash's keys once per salt; the hash "
+        "to the addend, the mapping's seed and its walk once per salt and item; "
+        "and the addition, encoding and decoding of each cell. Salted SHA-256 "
+        "hashes the ID anew under each salt; each projection, the checksum's and "
+        "the mapping's in fields chosen apart, multiplies its halves by the "
+        "salt's keys. The last row is the measured encoding of "
+        "n = 3500 items into m = 1350 cells, per item: by salted SHA-256 of the "
+        "items themselves, and by projections of their IDs, computed beforehand "
+        "([[methodology.md#costs-by-lifetime|Costs by lifetime]])."
+    )
+    b = [("h2", "Costs by lifetime"), ("p", what)]
+    for title, table in life:
+        b += [("h3", title), ("table", table)]
     return b
 
 
@@ -2096,7 +2246,8 @@ def main(argv=None):
         action="store_true",
         help="read benchmark ids from stdin and print how benches/riblt.rs is to "
         "time each RIBLT family, from the group operations CRITERION measured: "
-        "lines of family, h2c parameter and scope, tab-separated (RIBLT_PLAN)",
+        "lines of family, h2c parameter, scope, and the checksum's and the "
+        "mapping's projection fields or -, tab-separated (RIBLT_PLAN)",
     )
     p.add_argument(
         "--group-plan",
@@ -2114,8 +2265,10 @@ def main(argv=None):
         if not len(t):
             return
         if a.riblt_plan:
-            for fam, (token, scope) in riblt_plan(tidy(t), sys.stdin).items():
-                print(f"{fam}\t{token}\t{scope}")
+            for fam, (token, scope, proj, mapproj) in riblt_plan(
+                tidy(t), sys.stdin
+            ).items():
+                print(f"{fam}\t{token}\t{scope}\t{proj or '-'}\t{mapproj or '-'}")
         else:
             for fam, role in group_plan(tidy(t), sys.stdin).items():
                 print(f"{fam}\t{role}")

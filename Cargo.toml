@@ -32,6 +32,8 @@ criterion = { version = "0.8.2", default-features = false, features = [
   "rayon",
 ] }
 curve25519-dalek = { version = "5.0.0", features = ["digest"] }
+# the reference for hash.rs's F_(2^130 - 5)
+poly1305 = "0.8"
 proptest = "1"
 secp256k1 = "0.33.1"
 siphasher = "1"

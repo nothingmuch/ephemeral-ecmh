@@ -21,13 +21,16 @@
 //! family's. Batched variants share one inversion where the library has
 //! one; Elligator 2 and SSWU have none, so their batch maps each item.
 //!
-//! `RIBLT_PLAN` names a TSV of `<family>\t<token>\t<scope>` lines, the
-//! family being the RIBLT id's function component (`binary-u.127`), the
-//! scope `full`, `buffer` or `spot`: how much of each swept dimension the
-//! family measures under that construction. Several lines per family are
-//! allowed. With a plan set, a family it omits is spot-checked under every
-//! construction it has; unset, every family runs every construction in
-//! full, for exploration and for `--list`.
+//! `RIBLT_PLAN` names a TSV of `<family>\t<token>\t<scope>\t<proj>\t<mapproj>`
+//! lines, the family being the RIBLT id's function component
+//! (`binary-u.127`), the scope `full`, `buffer` or `spot`: how much of each
+//! swept dimension the family measures under that construction, and the
+//! projection fields (`PROJECTIONS`) its ID-keyed rows use for the checksum
+//! and for the mapping, or `-` in both for none. Several lines per family
+//! are allowed. With a plan set, a family it omits is spot-checked under
+//! every construction it has, with no ID-keyed rows; unset, every family
+//! runs every construction in full and under every projection, the
+//! mapping's in the checksum's field, for exploration and for `--list`.
 
 use std::collections::HashMap;
 
@@ -39,7 +42,15 @@ use ephemeral_ecmh::curve::weier::{Sswu, SswuField};
 use ephemeral_ecmh::curve::{edwards, twisted, weier};
 use ephemeral_ecmh::field::{OddField, Packed, fp61x2, fp107, fp127};
 use ephemeral_ecmh::group::{Accumulate, Group, HashToCurve, Negate};
-use ephemeral_ecmh::hash::{Salted, halves};
+use ephemeral_ecmh::hash::{Field, Salted};
+
+/// The projection fields by the token ids spell them in, `proj=<token>`
+/// and `mapproj=<token>`.
+pub const PROJECTIONS: [(&str, Field); 3] = [
+    ("fp130", Field::Fp130),
+    ("fp127", Field::Fp127),
+    ("gf2_127", Field::Gf2_127),
+];
 
 type Single<G> = Box<dyn Fn(&G, &Salted, &[u8]) -> <G as Accumulate>::Addend>;
 type Batch<G> = Box<dyn Fn(&G, &Salted, &[&[u8]]) -> Vec<<G as Accumulate>::Addend>>;
@@ -85,7 +96,7 @@ fn ti<G: Accumulate + HashToCurve>() -> Construction<G> {
 
 /// The digest half every map takes, as `map1` does.
 fn half(h: &Salted, m: &[u8]) -> u128 {
-    halves(&h.digest(m, 0))[0]
+    h.half(m, 0, 0)
 }
 
 fn halves_of(h: &Salted, ms: &[&[u8]]) -> Vec<u128> {
@@ -241,43 +252,68 @@ impl Scope {
     }
 }
 
-/// `RIBLT_PLAN`'s lines: family to (token, scope). None when unset.
-pub fn plan() -> Option<HashMap<String, Vec<(String, Scope)>>> {
+/// The projection fields of the checksum and of the mapping.
+pub type Projections = (Field, Field);
+
+/// A family's line of `RIBLT_PLAN`: (token, scope, projections).
+pub type Line = (String, Scope, Option<Projections>);
+
+/// `RIBLT_PLAN`'s lines by family. None when unset.
+pub fn plan() -> Option<HashMap<String, Vec<Line>>> {
     let path = std::env::var_os("RIBLT_PLAN")?;
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("RIBLT_PLAN={}: {e}", path.to_string_lossy()));
-    let mut out: HashMap<String, Vec<(String, Scope)>> = HashMap::new();
+    let mut out: HashMap<String, Vec<Line>> = HashMap::new();
     for line in text
         .lines()
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
     {
         let fields: Vec<&str> = line.split('\t').collect();
-        let [family, token, scope] = fields[..] else {
-            panic!("RIBLT_PLAN: expected family, token and scope in {line:?}");
+        let [family, token, scope, proj, map] = fields[..] else {
+            panic!("RIBLT_PLAN: expected family, token, scope and projections in {line:?}");
         };
         let scope = Scope::parse(scope).unwrap_or_else(|| panic!("RIBLT_PLAN: scope {scope:?}"));
+        let field = |s: &str| {
+            (s != "-").then(|| {
+                PROJECTIONS
+                    .iter()
+                    .find(|(t, _)| *t == s)
+                    .unwrap_or_else(|| panic!("RIBLT_PLAN: projection {s:?}"))
+                    .1
+            })
+        };
+        let proj = match (field(proj), field(map)) {
+            (Some(p), Some(m)) => Some((p, m)),
+            (None, None) => None,
+            _ => panic!("RIBLT_PLAN: projections {proj:?} and {map:?}, not both or neither"),
+        };
         out.entry(family.to_string())
             .or_default()
-            .push((token.to_string(), scope));
+            .push((token.to_string(), scope, proj));
     }
     Some(out)
 }
 
-/// The constructions and scopes `family` runs under `plan`. A planned
-/// token the group lacks is an error, not a silent omission.
+/// The constructions, scopes and projection fields `family` runs under
+/// `plan`. A planned token the group lacks is an error, not a silent
+/// omission.
 pub fn planned<G: Constructions>(
     group: &G,
     family: &str,
-    plan: Option<&HashMap<String, Vec<(String, Scope)>>>,
-) -> Vec<(Construction<G>, Scope)> {
+    plan: Option<&HashMap<String, Vec<Line>>>,
+) -> Vec<(Construction<G>, Scope, Vec<Projections>)> {
     let all = group.constructions();
     let Some(plan) = plan else {
-        return all.into_iter().map(|c| (c, Scope::Full)).collect();
+        let fields = PROJECTIONS.map(|(_, f)| (f, f)).to_vec();
+        return all
+            .into_iter()
+            .map(|c| (c, Scope::Full, fields.clone()))
+            .collect();
     };
     let Some(lines) = plan.get(family) else {
-        return all.into_iter().map(|c| (c, Scope::Spot)).collect();
+        return all.into_iter().map(|c| (c, Scope::Spot, vec![])).collect();
     };
-    for (t, _) in lines {
+    for (t, _, _) in lines {
         assert!(
             all.iter().any(|c| c.token == t),
             "RIBLT_PLAN: {family} has no construction {t}"
@@ -285,15 +321,17 @@ pub fn planned<G: Constructions>(
     }
     all.into_iter()
         .flat_map(|c| {
-            let scopes: Vec<Scope> = lines
+            let scopes: Vec<(Scope, Option<Projections>)> = lines
                 .iter()
-                .filter(|(t, _)| *t == c.token)
-                .map(|(_, s)| *s)
+                .filter(|(t, _, _)| *t == c.token)
+                .map(|(_, s, f)| (*s, *f))
                 .collect();
             // the construction is moved into its first planned line
             scopes
                 .into_iter()
-                .scan(Some(c), |c, s| c.take().map(|c| (c, s)))
+                .scan(Some(c), |c, (s, f)| {
+                    c.take().map(|c| (c, s, f.into_iter().collect()))
+                })
                 .collect::<Vec<_>>()
         })
         .collect()

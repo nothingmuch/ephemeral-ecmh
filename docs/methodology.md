@@ -105,12 +105,13 @@ The group suite times each family in two passes. The first times what the
 insertion model and the RIBLT plan read: hashing, preparation, encoding and
 decoding in batches of 1024, addition, negation, the identity test, and
 equality on impure cells. The second times, for the families the first pass
-singles out, batches of 8 and 64, subtraction, and equality on pure cells. A
-family is singled out when its modeled insertion at $m = 1350$ (below) is
-within 50% of the least of any family; if none of these is over a field of odd
-characteristic, the cheapest such family is added as a contrast. The plan is
-recorded in `group-plan.tsv` and `meta.json`; `GROUP_PLAN` reuses another
-run's.
+singles out, batches of 8 and 64, subtraction, equality on pure cells, and the
+hash of 32-byte IDs to addends under salted SHA-256 and under each projection
+([Adversary](problem.md#adversary)). A family is singled out when its modeled
+insertion at $m = 1350$ (below) is within 50% of the least of any family; if
+none of these is over a field of odd characteristic, the cheapest such family
+is added as a contrast. The plan is recorded in `group-plan.tsv` and
+`meta.json`; `GROUP_PLAN` reuses another run's.
 
 ## The RIBLT plan
 
@@ -123,9 +124,15 @@ scope follows that cost's ratio to the least of any family: within 15% every
 sweep, within 50% a reduced sweep of each axis's endpoints and middle, and
 otherwise a single point of each benchmark. A new construction therefore enters
 the RIBLT measurements through its group benchmark, without a change of any
-family's default hash. The XOR checksums and ristretto255 reproduce the Go
-reference implementations and are timed in full regardless. The plan is
-recorded in `riblt-plan.tsv` and `meta.json`; `RIBLT_PLAN` reuses another run's.
+family's default hash. A family timed beyond a single point also gets the field
+whose projection hashes its IDs to the addend cheapest under its construction,
+and its encoding and peeling are timed again, at the reduced sweep's points,
+with cells keyed by IDs under that projection. Their mappings are seeded by the
+projection that digests IDs cheapest, which does not depend on the family; the
+RIBLT suite times its mapping rows first to choose it. The XOR checksums and
+ristretto255 reproduce the Go reference implementations and are timed in full
+regardless. The plan is recorded in `riblt-plan.tsv` and `meta.json`;
+`RIBLT_PLAN` reuses another run's.
 
 ## Reading a run report
 
@@ -170,6 +177,20 @@ representation needs an inversion. The prime-field hashes are bound by a square
 root per item, which batching does not share. An encoder can batch all its
 source items, a decoder only the cells of the current peeling wave. The binary
 w-codec families hash to reusable addends, so their preparation is a copy.
+
+## Costs by lifetime
+
+An insertion into cells keyed by IDs is reported by how long each of its terms
+remains valid. The ID, an item's SHA-256, is computed once and outlives every
+salt. Once per salt, a curve is accepted and each hash's keys are derived. Once
+per salt and item, the ID is hashed to the addend and to the mapping's seed, and
+the seed's indices are walked below $m$. Once per cell update an addend is
+added, and once per transmitted cell a sum is encoded and decoded. Each term is
+given under salted SHA-256 of the ID and under the projections, followed by two
+measured encodings: by salted SHA-256 of the items themselves, and by
+projections of IDs computed before the timed routine. A per-salt term is
+amortized over the items inserted under that salt, a number the benchmarks do
+not fix.
 
 ## Contributing a run
 

@@ -8,6 +8,11 @@
 //!
 //! - h2c: hash one item (mode=indep), or chunks of n (mode=batch,n=...).
 //!   Preparation, encoding, and decoding use this sweep.
+//! - h2c.id: hash N 32-byte IDs to addends as one batch, under each
+//!   construction benches/common/h2c.rs lists (`h2c=<token>`) and each
+//!   per-salt hash of an ID (`proj=`): salted SHA-256 (`none`), or its
+//!   projection in F_(2^130 - 5), F_(2^127 - 1) or GF(2^127) (`fp130`,
+//!   `fp127`, `gf2_127`).
 //! - group.prepare: convert a hash output to the addend reused across cells:
 //!   extended on binary curves, lambda-affine on binary-lambda, Cached on
 //!   Edwards, and affine on Weierstrass. The binary-w and binary-u hashes
@@ -40,9 +45,9 @@
 //! none of them is over a field of odd characteristic, the cheapest that
 //! is (`contrast`). `GROUP_PASS=wide`, with `GROUP_PLAN` naming that TSV of
 //! `<family>\t<role>` lines, times the planned families' remaining rows:
-//! the batch sweep at n = 8 and 64, subtraction and the match equality
-//! mode. Unset, `GROUP_PASS` takes both passes and `GROUP_PLAN` every
-//! family, for exploration and for `--list`.
+//! the batch sweep at n = 8 and 64, subtraction, the match equality mode
+//! and h2c.id. Unset, `GROUP_PASS` takes both passes and `GROUP_PLAN`
+//! every family, for exploration and for `--list`.
 //!
 //! Curve fixtures come from known-answer-test certificates; inputs are N
 //! synthetic 36-byte items, the size of outpoints. binary.122 and binary.122-gls
@@ -58,11 +63,12 @@
 mod common;
 use common::each;
 
+use common::h2c::{Constructions, PROJECTIONS};
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main};
 use ephemeral_ecmh::ecmh::TAG_ITEM;
 use ephemeral_ecmh::group::{Decode, Group, HashToCurve, Negate};
-use ephemeral_ecmh::hash::Salted;
+use ephemeral_ecmh::hash::{self, Salted};
 use std::collections::HashSet;
 use std::hint::black_box;
 
@@ -160,7 +166,7 @@ fn accumulate<G: Group, T>(
     });
 }
 
-fn family<G: HashToCurve + Negate + Decode>(
+fn family<G: HashToCurve + Negate + Decode + Constructions>(
     c: &mut Criterion,
     pass: &Pass,
     fixture: common::families::Fixture<G>,
@@ -209,6 +215,23 @@ fn family<G: HashToCurve + Negate + Decode>(
     }
     batched(&mut g, name, sizes, &refs, |ms| group.hash_batch(&salt, ms));
     g.finish();
+
+    if wide {
+        let ids: Vec<[u8; 32]> = items.iter().map(|x| hash::id(x)).collect();
+        let ids: Vec<&[u8]> = ids.iter().map(|x| x.as_slice()).collect();
+        let hashes = [("none", Salted::new(TAG_ITEM, seed))]
+            .into_iter()
+            .chain(PROJECTIONS.map(|(t, f)| (t, Salted::projected(TAG_ITEM, seed, f))));
+        let mut g = c.benchmark_group("h2c.id");
+        g.throughput(Throughput::Elements(N as u64));
+        for (proj, h) in hashes {
+            for k in group.constructions() {
+                let id = format!("{name}/proj={proj},h2c={},mode=batch,n={N}", k.token);
+                g.bench_function(id, |bn| bn.iter(|| (k.batch)(&group, &h, black_box(&ids))));
+            }
+        }
+        g.finish();
+    }
 
     let mut g = c.benchmark_group("group.prepare");
     if core {
@@ -306,7 +329,7 @@ fn family<G: HashToCurve + Negate + Decode>(
 fn groups(c: &mut Criterion) {
     struct Bench<'a>(&'a mut Criterion, Pass);
     impl common::families::Visitor for Bench<'_> {
-        fn visit<G: HashToCurve + Negate + Decode>(
+        fn visit<G: HashToCurve + Negate + Decode + Constructions>(
             &mut self,
             fixture: common::families::Fixture<G>,
         ) {

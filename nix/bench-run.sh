@@ -20,8 +20,9 @@
 #                group and RIBLT plans
 #   group-plan.tsv  with group: the families whose remaining group rows a
 #                second pass times, chosen from the first pass's
-#   riblt-plan.tsv  with riblt: each family's hash and scope, chosen from the
-#                group operations the suites before it timed
+#   riblt-plan.tsv  with riblt: each family's hash, scope and projection
+#                fields, chosen from the group operations the suites before
+#                it timed and from the RIBLT suite's mapping rows
 #   load.tsv     the load averages every BENCH_LOAD_INTERVAL seconds
 #                (default 5, the interval at which both kernels update
 #                them), with what ran then: idle for BENCH_IDLE seconds
@@ -30,7 +31,8 @@
 #                threads runnable at the sample
 #   bins         a GC root for the executables it timed
 #   criterion/   criterion's output (CRITERION_HOME)
-#   log/SUITE    each suite's output, log/group-wide the second group pass's
+#   log/SUITE    each suite's output, log/group-wide the second group pass's,
+#                log/riblt-mapping the RIBLT suite's mapping rows
 #   curvegen.csv with curvegen: single-shot searches per seed and family
 #                (examples/curvegen_times.rs), CURVEGEN_SEEDS of them
 #                (default 4 quick, 16 full); all families took about
@@ -310,6 +312,11 @@ idle before
 
 for s in "${suites[@]}"; do
   if [[ $s == riblt ]]; then
+    # The mapping's projection field is chosen from riblt.mapping, so its
+    # rows are timed first
+    echo "bench-run: riblt mapping" >&2
+    during "riblt mapping"
+    RIBLT_PASS=mapping "$bins/bin/riblt" --bench "$@" 2>&1 | tee "$run/log/riblt-mapping"
     # The group operations timed so far choose each family's hash, and how
     # much of the RIBLT sweeps it gets (report/bench_report.py riblt_plan),
     # unless RIBLT_PLAN gives another run's riblt-plan.tsv
@@ -323,7 +330,9 @@ for s in "${suites[@]}"; do
     if [[ -s $run/riblt-plan.tsv ]]; then
       export RIBLT_PLAN=$run/riblt-plan.tsv
       riblt_plan=$(jq -Rn '[inputs | split("\t")
-        | {key: .[0], value: {h2c: .[1], scope: .[2]}}] | from_entries' "$RIBLT_PLAN")
+        | {key: .[0], value: ({h2c: .[1], scope: .[2]}
+            + if .[3] != "-" then {proj: .[3], mapproj: .[4]} else {} end)}]
+        | from_entries' "$RIBLT_PLAN")
       meta
     else
       unset RIBLT_PLAN
@@ -335,8 +344,9 @@ for s in "${suites[@]}"; do
   during "$s"
   # --bench, as cargo passes it: criterion times only when it's given.
   # Only the group suite reads GROUP_PASS: this is its first pass, every
-  # family's core rows
-  GROUP_PASS=core "$bins/bin/$s" --bench "$@" 2>&1 | tee "$run/log/$s"
+  # family's core rows. Only the RIBLT suite reads RIBLT_PASS: this is
+  # what remains after its mapping rows
+  GROUP_PASS=core RIBLT_PASS=workload "$bins/bin/$s" --bench "$@" 2>&1 | tee "$run/log/$s"
   if [[ $s == group ]]; then
     # Read declarations emitted by the executable whose timings were recorded.
     # Missing declarations remain unknown; source revision alone implies none.

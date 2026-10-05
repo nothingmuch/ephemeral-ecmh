@@ -20,20 +20,27 @@
 //! timed routine and runs once per family without the parameter.
 //!
 //! Coverage is planned from the elementary measurements, not fixed here:
-//! the TSV `RIBLT_PLAN` names gives each curve family its constructions and
-//! a scope each. `full` sweeps every dimension: encode and cells at every
-//! m, peel at every d under all four `Peel` settings, stream at every
-//! difference. `buffer` keeps each swept dimension's endpoints and the
-//! spot point, peel with the prefilter and batched hashing only. `spot`
-//! is one point per dimension: encode and cells at m = 1350 with n = 3500,
-//! the summary's insertion workload; peel at d = 1350 with the prefilter
-//! and batched hashing; stream at d = 1000. A family the plan omits is
-//! spot-checked under every construction it has; with no plan, every
-//! family runs every construction in full. The reference groups
-//! xor-sha256.64, xor-siphash.64 and ristretto255 are not planned: they
-//! have one hash each, no parameter, and keep the sweeps Go's benchmarks
-//! have, encode at every m and stream at every difference, with one point
-//! of the rest.
+//! the TSV `RIBLT_PLAN` names gives each curve family its constructions, a
+//! scope each and, for some, projection fields for the checksum and the
+//! mapping. `full` sweeps every
+//! dimension: encode and cells at every m, peel at every d under all four
+//! `Peel` settings, stream at every difference. `buffer` keeps each swept
+//! dimension's endpoints and the spot point, peel with the prefilter and
+//! batched hashing only. `spot` is one point per dimension: encode and
+//! cells at m = 1350 with n = 3500, the summary's insertion workload; peel
+//! at d = 1350 with the prefilter and batched hashing; stream at d = 1000.
+//! A family the plan omits is spot-checked under every construction it has;
+//! with no plan, every family runs every construction in full. A line with
+//! projection fields adds ID-keyed rows (`proj=<field>,mapproj=<field>`):
+//! encode and peel at the buffer points under `Riblt::projected`, over the
+//! same items' 32-byte IDs, which are computed outside the timed routine
+//! since an ID outlives every salt. The mapping's field is chosen from
+//! riblt.mapping, which bench-run times first (`RIBLT_PASS=mapping`) and
+//! the rest after it (`RIBLT_PASS=workload`); unset, `RIBLT_PASS` takes
+//! both. The reference groups xor-sha256.64, xor-siphash.64
+//! and ristretto255 are not planned: they have one hash each, no parameter,
+//! and keep the sweeps Go's benchmarks have, encode at every m and stream
+//! at every difference, with one point of the rest.
 //!
 //! - riblt.encode: allocate m cells and insert n items, including hashing,
 //!   preparation, mapping, key XOR, counts, and point updates. The expected
@@ -73,7 +80,12 @@
 //!   mapping advanced 1024 times (`next`, as Go's BenchmarkMapping), and per
 //!   item from its map digest through the indices below m (`item`), at
 //!   every m; and the salted map digest of an item, which every insertion
-//!   computes besides its hash to the curve (`salted-sha256/digest`).
+//!   computes besides its hash to the curve (`salted-sha256/digest`). Per
+//!   item, the unsalted SHA-256 ID that outlives salts (`sha256/id`), and
+//!   the per-salt map digest of that 32-byte ID: salted SHA-256, or its
+//!   projection in F_(2^130 - 5), F_(2^127 - 1) or GF(2^127)
+//!   (`<hash>/digest of id`), which is a projected mapping's seed; and per
+//!   salt, what each hash derives before its first item (`<hash>/keys`).
 //!   xoshiro256pp is the default, chacha8 riblt-ecmh's generator, mcg64
 //!   upstream's 64-bit generator, and sha256-ctr a SHA-256 counter stream
 //!   over the digest, a third wide-seed construction.
@@ -122,9 +134,9 @@ use criterion::{
     criterion_main,
 };
 use ephemeral_ecmh::group::{Accumulate, Decode, Encode, Group, HashToCurve, Negate, SumBatch};
-use ephemeral_ecmh::hash::Salted;
+use ephemeral_ecmh::hash::{self, Field, Salted};
 use ephemeral_ecmh::riblt::rateless::{Decoder, Encoder};
-use ephemeral_ecmh::riblt::{ChaCha8, Mapping, Mcg64, Peel, Prng, Riblt, Xoshiro256pp};
+use ephemeral_ecmh::riblt::{ChaCha8, Mapping, Mcg64, Peel, Prng, Riblt, TAG_MAP, Xoshiro256pp};
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use siphasher::sip::SipHasher24;
 use std::cell::Cell;
@@ -326,19 +338,37 @@ impl Prng for Sha256Ctr {
     }
 }
 
-/// Outpoint-sized (36-byte) items, distinct per tag.
-fn items(tag: u32, n: usize) -> Vec<[u8; 36]> {
-    common::items(&tag.to_le_bytes(), n)
+/// The cell keys of a workload, distinct per tag: outpoint-sized items,
+/// or for the ID-keyed rows those items' IDs.
+trait Keys: Sized {
+    fn keys(tag: u32, n: usize) -> Vec<Self>;
+}
+
+impl Keys for [u8; 36] {
+    fn keys(tag: u32, n: usize) -> Vec<Self> {
+        common::items(&tag.to_le_bytes(), n)
+    }
+}
+
+impl Keys for [u8; 32] {
+    fn keys(tag: u32, n: usize) -> Vec<Self> {
+        <[u8; 36]>::keys(tag, n)
+            .iter()
+            .map(|x| hash::id(x))
+            .collect()
+    }
 }
 
 /// `suffix` is appended to the parameter: `,h2c=<token>` for the hash
-/// construction and `,map=<generator>` for a mapping other than the default.
-fn encode<G: HashToCurve + Negate, P: Prng>(
+/// construction, `,map=<generator>` for a mapping other than the default
+/// and `,proj=<field>,mapproj=<field>` for ID-keyed cells under
+/// projections.
+fn encode<G: HashToCurve + Negate, P: Prng, const L: usize>(
     g: &mut BenchmarkGroup<WallTime>,
     name: &str,
     suffix: &str,
     r: &Riblt<G, P>,
-    xs: &[[u8; 36]],
+    xs: &[[u8; L]],
     ms: &[usize],
 ) {
     g.throughput(Throughput::Elements(xs.len() as u64));
@@ -378,15 +408,17 @@ fn cells<G: HashToCurve + Negate, P: Prng>(
 }
 
 /// d differences (half each side) over 1000 common items.
-fn peel<G: HashToCurve + Negate, P: Prng>(
+fn peel<G: HashToCurve + Negate, P: Prng, const L: usize>(
     g: &mut BenchmarkGroup<WallTime>,
     name: &str,
     suffix: &str,
     r: &Riblt<G, P>,
     ds: &[usize],
     ablation: bool,
-) {
-    let common = items(0, 1000);
+) where
+    [u8; L]: Keys + Ord,
+{
+    let common = <[u8; L]>::keys(0, 1000);
     let settings: &[Peel] = if ablation {
         &[
             Peel {
@@ -413,7 +445,7 @@ fn peel<G: HashToCurve + Negate, P: Prng>(
         }]
     };
     for &d in ds {
-        let (a, b) = (items(1, d / 2), items(2, d - d / 2));
+        let (a, b) = (<[u8; L]>::keys(1, d / 2), <[u8; L]>::keys(2, d - d / 2));
         let (a, b) = ([common.clone(), a].concat(), [common.clone(), b].concat());
         let diff = (2 * d..)
             .step_by(d / 2)
@@ -509,8 +541,15 @@ fn riblt(c: &mut Criterion) {
     // binary127's seed as the workload salt.
     let fixtures = Fixtures::new();
     let seed = fixtures.binary127.seed;
-    let xs = items(0, N);
+    let xs = <[u8; 36]>::keys(0, N);
+    let ids = <[u8; 32]>::keys(0, N);
     let plan = h2c::plan();
+    let (mapping_rows, workload) = match std::env::var("RIBLT_PASS").ok().as_deref() {
+        None => (true, true),
+        Some("mapping") => (true, false),
+        Some("workload") => (false, true),
+        Some(p) => panic!("RIBLT_PASS: {p:?}, not mapping or workload"),
+    };
 
     enum Stage {
         Encode,
@@ -523,7 +562,8 @@ fn riblt(c: &mut Criterion) {
         stage: Stage,
         seed: &'a [u8; 32],
         items: &'a [[u8; 36]],
-        plan: Option<&'a HashMap<String, Vec<(String, Scope)>>>,
+        ids: &'a [[u8; 32]],
+        plan: Option<&'a HashMap<String, Vec<h2c::Line>>>,
     }
     impl Bench<'_, '_> {
         fn measure<G: HashToCurve + Negate, P: Prng>(
@@ -536,7 +576,9 @@ fn riblt(c: &mut Criterion) {
             match self.stage {
                 Stage::Encode => encode(self.group, name, suffix, r, self.items, sweep.ms),
                 Stage::Cells => cells(self.group, name, r, self.items, sweep.cell_ms),
-                Stage::Peel => peel(self.group, name, suffix, r, sweep.ds, sweep.ablation),
+                Stage::Peel => {
+                    peel::<_, _, 36>(self.group, name, suffix, r, sweep.ds, sweep.ablation)
+                }
                 Stage::Stream => stream(self.group, name, suffix, r, sweep.stream),
             }
         }
@@ -557,6 +599,32 @@ fn riblt(c: &mut Criterion) {
             }
         }
 
+        /// ID-keyed cells, the checksum projecting in `item` and the mapping
+        /// in `map`, at the buffer points of encode and peel, the stages
+        /// that hash and seed mappings.
+        fn projected<G: HashToCurve + Negate>(
+            &mut self,
+            name: &str,
+            suffix: &str,
+            group: G,
+            (item, map): (Field, Field),
+        ) {
+            let r = Riblt::projected(group, self.seed, item, map);
+            let token = |field| {
+                h2c::PROJECTIONS
+                    .iter()
+                    .find(|(_, f)| *f == field)
+                    .unwrap()
+                    .0
+            };
+            let suffix = format!("{suffix},proj={},mapproj={}", token(item), token(map));
+            match self.stage {
+                Stage::Encode => encode(self.group, name, &suffix, &r, self.ids, BUFFER.ms),
+                Stage::Peel => peel::<_, _, 32>(self.group, name, &suffix, &r, BUFFER.ds, false),
+                Stage::Cells | Stage::Stream => {}
+            }
+        }
+
         /// A reference group: Go's sweeps and the generator rows.
         fn reference<G: HashToCurve + Negate>(&mut self, name: &str, group: G, generators: bool) {
             self.measure(name, "", &Riblt::new(group, self.seed), &PARITY);
@@ -572,7 +640,7 @@ fn riblt(c: &mut Criterion) {
         ) {
             let name = fixture.family.id();
             let planned = h2c::planned(&fixture.group, &name, self.plan);
-            for (construction, scope) in &planned {
+            for (construction, scope, fields) in &planned {
                 let hashed = Hashed {
                     group: fixture.group,
                     h2c: construction,
@@ -582,7 +650,7 @@ fn riblt(c: &mut Criterion) {
                 // row per family, under no construction, at the widest
                 // planned scope
                 if let Stage::Cells = self.stage {
-                    let widest = planned.iter().map(|(_, s)| *s).min().unwrap();
+                    let widest = planned.iter().map(|(_, s, _)| *s).min().unwrap();
                     cells(
                         self.group,
                         &name,
@@ -594,34 +662,43 @@ fn riblt(c: &mut Criterion) {
                 }
                 let suffix = format!(",h2c={}", construction.token);
                 self.measure(&name, &suffix, &Riblt::new(hashed, self.seed), sweep);
+                for &fields in fields {
+                    self.projected(&name, &suffix, hashed, fields);
+                }
                 if name == "binary.127" {
                     self.generators(&name, &suffix, hashed);
                 }
             }
         }
     }
-    for (name, stage) in [
-        ("riblt.encode", Stage::Encode),
-        ("riblt.cells", Stage::Cells),
-        ("riblt.peel", Stage::Peel),
-        ("riblt.stream", Stage::Stream),
-    ] {
-        let mut group = c.benchmark_group(name);
-        if let Stage::Stream = stage {
-            group.sample_size(10).sampling_mode(SamplingMode::Flat);
+    if workload {
+        for (name, stage) in [
+            ("riblt.encode", Stage::Encode),
+            ("riblt.cells", Stage::Cells),
+            ("riblt.peel", Stage::Peel),
+            ("riblt.stream", Stage::Stream),
+        ] {
+            let mut group = c.benchmark_group(name);
+            if let Stage::Stream = stage {
+                group.sample_size(10).sampling_mode(SamplingMode::Flat);
+            }
+            let mut bench = Bench {
+                group: &mut group,
+                stage,
+                seed: &seed,
+                items: &xs,
+                ids: &ids,
+                plan: plan.as_ref(),
+            };
+            bench.reference("xor-sha256.64", Xor64(Sha256), false);
+            bench.reference("xor-siphash.64", Xor64(Sip::new(&seed)), true);
+            bench.reference("ristretto255", common::ristretto::Ristretto255, true);
+            fixtures.visit(&mut bench);
+            group.finish();
         }
-        let mut bench = Bench {
-            group: &mut group,
-            stage,
-            seed: &seed,
-            items: &xs,
-            plan: plan.as_ref(),
-        };
-        bench.reference("xor-sha256.64", Xor64(Sha256), false);
-        bench.reference("xor-siphash.64", Xor64(Sip::new(&seed)), true);
-        bench.reference("ristretto255", common::ristretto::Ristretto255, true);
-        fixtures.visit(&mut bench);
-        group.finish();
+    }
+    if !mapping_rows {
+        return;
     }
 
     let mut group = c.benchmark_group("riblt.mapping");
@@ -635,6 +712,34 @@ fn riblt(c: &mut Criterion) {
                 .fold(0, |s, x| s ^ rx.map.digest(x, 0)[0])
         })
     });
+    // the per-salt seed of an ID, the item's unsalted SHA-256, against the
+    // ID's own cost, which every salt shares
+    group.bench_function(BenchmarkId::new("sha256", "id"), |b| {
+        b.iter(|| black_box(&xs).iter().fold(0, |s, x| s ^ hash::id(x)[0]))
+    });
+    let new = |s: &[u8; 32], field: Option<Field>| match field {
+        None => Salted::new(TAG_MAP, s),
+        Some(f) => Salted::projected(TAG_MAP, s, f),
+    };
+    let hashes = [("salted-sha256".to_string(), None)]
+        .into_iter()
+        .chain(h2c::PROJECTIONS.map(|(t, f)| (format!("projection-{t}"), Some(f))));
+    for (name, field) in hashes {
+        // what a salt costs before its first item, once per tag
+        group.throughput(Throughput::Elements(1));
+        group.bench_function(BenchmarkId::new(&name, "keys"), |b| {
+            b.iter(|| new(black_box(&seed), field))
+        });
+        let map = new(&seed, field);
+        group.throughput(Throughput::Elements(ids.len() as u64));
+        group.bench_function(BenchmarkId::new(&name, "digest of id"), |b| {
+            b.iter(|| {
+                black_box(&ids)
+                    .iter()
+                    .fold(0, |s, x| s ^ map.digest(x, 0)[0])
+            })
+        });
+    }
     mapping::<Xoshiro256pp>(&mut group, "xoshiro256pp", &digests);
     mapping::<ChaCha8>(&mut group, "chacha8", &digests);
     mapping::<Mcg64>(&mut group, "mcg64", &digests);

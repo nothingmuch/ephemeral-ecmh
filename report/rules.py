@@ -14,7 +14,7 @@ OTHER = "other"
 LAYERS = [
     (r"^field$", "field"),
     (r"^(negate|add|group\.\w+)$", "group ops"),
-    (r"^(hash_to_curve|h2c|h2c_parts|on_curve)$", "hash to curve"),
+    (r"^(hash_to_curve|h2c|h2c\.id|h2c_parts|on_curve)$", "hash to curve"),
     (r"^riblt\.\w+$", "RIBLT workload"),
     (r"^digest$", "digest"),
     (r"^(curvegen/\w+|agm|zq|sieve/\w+)$", "curve generation"),
@@ -242,6 +242,9 @@ OPERATIONS = [
     (r"^group\.encode$", r"", "encode"),
     (r"^group\.decode$", r"", "decode"),
     (r"^h2c$", r"", "hash to curve"),
+    # benches/group.rs's 32-byte IDs to the addend, under a construction
+    # (h2c=) and a per-salt hash of the ID (proj=)
+    (r"^h2c\.id$", r"", "ID to addend"),
     (r"^negate", r"", "negate"),
     # combine_keys sums the whole slice in Jacobian coordinates and
     # normalizes once: a reduction, like the tree sums, not an add
@@ -263,6 +266,12 @@ OPERATIONS = [
     (r"^riblt\.stream", r"", "rateless encode and decode, per difference"),
     (r"^riblt\.mapping", r"/next\b", "mapping, per index"),
     (r"^riblt\.mapping", r"/item\b", "mapping, per item"),
+    # the per-salt map digest of an ID (salted SHA-256 or a projection),
+    # what each hash derives once per salt, and the ID they digest, which
+    # outlives salts
+    (r"^riblt\.mapping", r"/digest of id\b", "map digest of an ID"),
+    (r"^riblt\.mapping", r"/keys\b", "per-salt keys"),
+    (r"^riblt\.mapping", r"/id\b", "item ID"),
     (r"^riblt\.mapping", r"/digest\b", "map digest"),
     (r"^curvegen/verify_accept", r"", "accept certificate"),
     (r"^curvegen/verify_full", r"", "verify certificate"),
@@ -417,6 +426,13 @@ CURVES = [
 # The index generator of every RIBLT workload row (src/riblt.rs's default),
 # whose walk the insertion estimate adds to the map digest.
 MAPPING = "xoshiro256pp"
+
+# The projection fields, as benches spell them in proj= and mapproj=
+PROJECTIONS = {
+    "fp130": "$\\mathbb{F}_{2^{130} - 5}$",
+    "fp127": "$\\mathbb{F}_{2^{127} - 1}$",
+    "gf2_127": "$\\mathrm{GF}(2^{127})$",
+}
 
 # The references whose hash output is the operand of their addition, so an
 # insertion is a hash and k additions with nothing to prepare. Neither hash

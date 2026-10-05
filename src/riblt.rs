@@ -15,6 +15,11 @@
 //! and [`ChaCha8`], riblt-ecmh's, remain available through
 //! [`Riblt::with_prng`] for comparison.
 //!
+//! [`Riblt::projected`] keys cells by items' 32-byte IDs ([`crate::hash::id`])
+//! and replaces both salted hashes by projections (`Salted::projected`), each
+//! in its own field: the checksum hashes an ID under the item keys, and a
+//! mapping is seeded by the ID's projection under the map keys.
+//!
 //! One `encode` and one `peel` are one round of reconciliation. Over repeated
 //! rounds, as docs/workload.md (Cost in repeated reconciliation) models
 //! them, the parts are counted separately.
@@ -30,7 +35,7 @@ pub mod rateless;
 
 use crate::ecmh::TAG_ITEM;
 use crate::group::{Group, HashToCurve, Negate};
-use crate::hash::Salted;
+use crate::hash::{Field, Salted};
 use core::marker::PhantomData;
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::{RngCore, SeedableRng};
@@ -197,6 +202,17 @@ impl<G: HashToCurve + Negate> Riblt<G> {
     pub fn new(group: G, salt: &[u8; 32]) -> Self {
         Self::with_prng(group, salt)
     }
+
+    /// Cells keyed by 32-byte IDs, which the checksum projects in `item` and
+    /// the mapping in `map`.
+    pub fn projected(group: G, salt: &[u8; 32], item: Field, map: Field) -> Self {
+        Self {
+            group,
+            item: Salted::projected(TAG_ITEM, salt, item),
+            map: Salted::projected(TAG_MAP, salt, map),
+            prng: PhantomData,
+        }
+    }
 }
 
 impl<G: HashToCurve + Negate, P: Prng> Riblt<G, P> {
@@ -209,8 +225,13 @@ impl<G: HashToCurve + Negate, P: Prng> Riblt<G, P> {
         }
     }
 
+    /// The seed of `item`'s mapping.
+    pub fn seed(&self, item: &[u8]) -> [u8; 32] {
+        self.map.digest(item, 0)
+    }
+
     pub fn mapping(&self, item: &[u8]) -> Mapping<P> {
-        Mapping::new(P::seed(&self.map.digest(item, 0)))
+        Mapping::new(P::seed(&self.seed(item)))
     }
 
     pub fn cells<const L: usize>(&self, m: usize) -> Vec<Cell<G, L>> {
@@ -231,6 +252,10 @@ impl<G: HashToCurve + Negate, P: Prng> Riblt<G, P> {
 
     /// Apply item `x` and its prepared checksum addend `a` to all assigned cells.
     /// The caller must supply the matching addend and a sign of +1 or -1.
+    // A call per item: inlined into encode's loop over items, the cell
+    // updates of the extended and unscaled binary accumulators run 15 to 20%
+    // slower on apple-m4 (riblt.encode, proj=).
+    #[inline(never)]
     pub fn apply<const L: usize>(
         &self,
         cells: &mut [Cell<G, L>],
@@ -345,12 +370,12 @@ mod tests {
     }
 
     /// The mean number of indices below m, against k(m) = 2(H_{m+1} - 1).
-    fn density<P: Prng>() {
+    fn density<P: Prng>(seed: impl Fn(u64) -> [u8; 32]) {
         for m in [20usize, 150, 1350] {
             let k = 2.0 * ((1..=m + 1).map(|i| 1.0 / i as f64).sum::<f64>() - 1.0);
             let n = 20_000;
             let total: usize = (0..n)
-                .map(|s| Mapping::new(P::seed(&digest(s))).below(m).count())
+                .map(|s| Mapping::new(P::seed(&seed(s))).below(m).count())
                 .sum();
             let mean = total as f64 / n as f64;
             assert!((mean / k - 1.0).abs() < 0.02, "m {m}: mean {mean}, k {k}");
@@ -359,9 +384,19 @@ mod tests {
 
     #[test]
     fn mapping_density_matches_riblt() {
-        density::<Mcg64>();
-        density::<ChaCha8>();
-        density::<Xoshiro256pp>();
+        density::<Mcg64>(digest);
+        density::<ChaCha8>(digest);
+        density::<Xoshiro256pp>(digest);
+    }
+
+    /// Projected seeds are not uniform 256-bit strings: each half's top bit
+    /// is the ID's under a 127-bit field, and below 2^130 - 5 is reduced.
+    #[test]
+    fn projected_mapping_density_matches_riblt() {
+        for field in [Field::Fp130, Field::Fp127, Field::Gf2_127] {
+            let map = Salted::projected(TAG_MAP, &[0; 32], field);
+            density::<Xoshiro256pp>(|s| map.digest(&crate::hash::id(&s.to_le_bytes()), 0));
+        }
     }
 
     /// How many of n mappings include each index below 101.
@@ -557,6 +592,36 @@ mod tests {
     #[test]
     fn peels_50_differences_in_100_cells() {
         every_group!(peels_50_in_100);
+    }
+
+    fn projected_peels_50_in_100<G: HashToCurve + Negate>(g: G) {
+        let ids =
+            |tag, n| -> Vec<[u8; 32]> { (0..n).map(|i| crate::hash::id(&item(tag, i))).collect() };
+        let sorted = |mut v: Vec<[u8; 32]>| {
+            v.sort();
+            v
+        };
+        let fields = [Field::Fp130, Field::Fp127, Field::Gf2_127];
+        for (i, &field) in fields.iter().enumerate() {
+            let r = Riblt::projected(g, &[3; 32], field, fields[(i + 1) % 3]);
+            let mut cells = r.cells(100);
+            r.encode(&mut cells, &[ids(0, 100), ids(1, 30)].concat(), 1);
+            r.encode(&mut cells, &[ids(0, 100), ids(2, 20)].concat(), -1);
+            let how = Peel {
+                prefilter: true,
+                batch: true,
+            };
+            let (a, b) = r.peel(&mut cells, how).expect("peels");
+            assert_eq!(sorted(a), sorted(ids(1, 30)), "{field:?}");
+            assert_eq!(sorted(b), sorted(ids(2, 20)), "{field:?}");
+        }
+    }
+
+    /// The same difference as 32-byte IDs, under every projection field, the
+    /// mapping's differing from the checksum's.
+    #[test]
+    fn projected_ids_peel_in_every_field() {
+        every_group!(projected_peels_50_in_100);
     }
 
     fn binary122_curves() -> (binary122::Dense, binary122::Gls) {
